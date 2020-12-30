@@ -3,4 +3,4 @@ Ride wave of streams with SQL/Python on hybrid cluster architectures (GPU, RDMA,
 
 The goal of this project is to enable scentist, analyst and who speaks SQL and python take advantage of more efficent cluster architecture on open cloud.
 
-created @Maui, Hawii, U.S.A
+created @Maui, Hawaii, U.S.A
