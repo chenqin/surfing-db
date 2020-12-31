@@ -1,6 +1,6 @@
 # tool version minimum requirement
 cmake_minimum_required(VERSION 3.14)
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
@@ -154,18 +154,28 @@ else ()
 endif ()
 
 include(ext/PGQuery_Ext.cmake)
+# add a basic gtest dependency
+include(ext/Gtest_Ext.cmake)
 
-set(SURFING-DB-MAIN MainTestLib)
+# add a dependency of glog
+include(ext/Gflags_Ext.cmake)
 
-# build nebula.ingest library
-add_library(${SURFING-DB-MAIN} STATIC
-        src/main.cpp)
-target_link_libraries(${SURFING-DB-MAIN}
-        PUBLIC ${LIBPG_QUERY_LIBRARY})
+# add a dependency of glog
+include(ext/Glog_Ext.cmake)
+
+# include rapid JSON
+include(ext/Json_Ext.cmake)
+
+# set up directory to search for headers
+include_directories(include ${GTEST_INCLUDE_DIRS})
+include_directories(include ${GMOCK_INCLUDE_DIRS})
+
+
+# build data ingestion
+include(src/parser/parser.cmake)
 
 # build test binary
-add_executable(MainTest
-        src/main.cpp)
+add_executable(MainTest src/main.cpp)
 
 target_link_libraries(MainTest
         PRIVATE ${LIBPG_QUERY_LIBRARY})
