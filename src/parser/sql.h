@@ -21,7 +21,7 @@ namespace surfingdb {
             virtual ~SQLParser() = default;
             // read sql statement in string return syntax tree in json format
             void parser(const string& sqlstatement, Document& doc) noexcept;
-            void interpret(const Document& doc) noexcept;
+            std::function<void()> interpret(const Document& doc) noexcept;
         };
     }
 }

@@ -19,7 +19,7 @@ namespace surfingdb {
             pg_query_free_parse_result(postgresSQL);
         }
 
-        void SQLParser::interpret(const Document &doc) noexcept {
+        std::function<void()> SQLParser::interpret(const Document &doc) noexcept {
             // we only need one pass to get udfs
             // table->udfs.clear();
 
@@ -226,6 +226,9 @@ namespace surfingdb {
            //     return;
             //}
             //paths = std::move(locations);
+            return [&] (void ) {
+                LOG(INFO) << "generate lamda function to apply transformations";
+            };
         }
     }
 }

@@ -18,6 +18,7 @@ add_executable(ParserTest
         ${SURFINGDB_SRC}/parser/test/TestIntegration.cpp)
 
 target_link_libraries(ParserTest
+        PRIVATE OpenMP::OpenMP_CXX
         PRIVATE ${PARSER}
         PRIVATE ${JSON_LIBRARY}
         PRIVATE ${GTEST_LIBRARY}
