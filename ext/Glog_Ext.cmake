@@ -17,7 +17,10 @@ if(APPLE)
 
   # get source dir after download step
   ExternalProject_Get_Property(glogp BINARY_DIR)
-  set(GLOG_INCLUDE_DIRS ${BINARY_DIR})
+  ExternalProject_Get_Property(glogp SOURCE_DIR)
+  set(GLOG_INCLUDE_DIRS ${SOURCE_DIR})
+  message(STATUS "GLOG_INCLUDE_DIRS=${GLOG_INCLUDE_DIRS}")
+
   set(GLOG_LIBRARY_PATH ${BINARY_DIR}/${CMAKE_FIND_LIBRARY_PREFIXES}glog.a)
 else()
   set(GLOG_INCLUDE_DIRS /usr/local/include)

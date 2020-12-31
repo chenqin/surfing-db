@@ -1,0 +1,39 @@
+find_package(Threads REQUIRED)
+
+if(APPLE)
+include(ExternalProject)
+ExternalProject_Add(flatbuffers
+    PREFIX flatbuffers
+    GIT_REPOSITORY https://github.com/google/flatbuffers.git
+    UPDATE_COMMAND ""
+    INSTALL_COMMAND ""
+    LOG_DOWNLOAD ON
+    LOG_CONFIGURE ON
+    LOG_BUILD ON)
+
+# get source dir after download step
+ExternalProject_Get_Property(flatbuffers SOURCE_DIR)
+ExternalProject_Get_Property(flatbuffers BINARY_DIR)
+set(FLATBUFFERS_INCLUDE_DIRS ${SOURCE_DIR}/include)
+
+message(STATUS "FLATBUFFERS_INCLUDE_DIRS=${FLATBUFFERS_INCLUDE_DIRS}")
+file(MAKE_DIRECTORY ${FLATBUFFERS_INCLUDE_DIRS})
+set(FLATBUFFERS_LIBRARY_PATH ${BINARY_DIR}/${CMAKE_FIND_LIBRARY_PREFIXES}flatbuffers.a)
+message(STATUS "FLATBUFFERS_LIBRARY_PATH=${FLATBUFFERS_LIBRARY_PATH}")
+else()
+set(COM_LIB_DIR /usr/lib/x86_64-linux-gnu)
+set(FLATBUFFERS_INCLUDE_DIRS /usr/include)
+set(FLATBUFFERS_LIBRARY_PATH ${COM_LIB_DIR}/libflatbuffers.a)
+endif()
+
+set(FLATBUFFERS_LIBRARY libflatbuffers)
+add_library(${FLATBUFFERS_LIBRARY} UNKNOWN IMPORTED)
+set_target_properties(${FLATBUFFERS_LIBRARY} PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS ON
+    "IMPORTED_LOCATION" "${FLATBUFFERS_LIBRARY_PATH}"
+    "IMPORTED_LINK_INTERFACE_LIBRARIES" "${CMAKE_THREAD_LIBS_INIT}"
+    "INTERFACE_INCLUDE_DIRECTORIES" "${FLATBUFFERS_INCLUDE_DIRS}")
+
+add_dependencies(${FLATBUFFERS_LIBRARY} flatbuffers)

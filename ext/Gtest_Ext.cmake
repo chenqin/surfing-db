@@ -3,7 +3,7 @@ if(APPLE)
 
     include(ExternalProject)
     SET(GTEST_OPTS
-        -DCMAKE_CXX_STANDARD=17)
+        -DCMAKE_CXX_STANDARD=20)
     ExternalProject_Add(googletest
     PREFIX gtest
     GIT_REPOSITORY https://github.com/google/googletest.git
@@ -15,8 +15,14 @@ if(APPLE)
 
     ExternalProject_Get_Property(googletest SOURCE_DIR)
     ExternalProject_Get_Property(googletest BINARY_DIR)
-    set(GTEST_INCLUDE_DIRS /usr/local/include/)
-    
+    message(STATUS "SOURCE_DIR=${SOURCE_DIR}")
+
+    set(GTEST_INCLUDE_DIRS /usr/local/include)
+    set(GMOCK_INCLUDE_DIRS /usr/local/include)
+
+    #set(GTEST_INCLUDE_DIRS ${SOURCE_DIR}/googletest/include)
+    #set(GMOCK_INCLUDE_DIRS ${SOURCE_DIR}/googlemock/include)
+
     set(gtest_root ${BINARY_DIR})
 else()
     set(googletest 1)

@@ -183,6 +183,9 @@ include(ext/Gflags_Ext.cmake)
 # add a dependency of glog
 include(ext/Glog_Ext.cmake)
 
+# include google flatbuffers
+include(ext/Gflatbuffers_Ext.cmake)
+
 # include rapid JSON
 include(ext/Json_Ext.cmake)
 
@@ -191,8 +194,11 @@ include_directories(include ${GTEST_INCLUDE_DIRS})
 include_directories(include ${GMOCK_INCLUDE_DIRS})
 
 
-# build data ingestion
+# build sql parser
 include(src/parser/parser.cmake)
+
+# build table representation
+include(src/table/table.cmake)
 
 # build test binary
 add_executable(MainTest src/main.cpp)
