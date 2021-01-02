@@ -6,13 +6,13 @@
 #define SURFING_DB_SQL_H
 #pragma once
 #include <iostream>
+#include <functional>
 #include <rapidjson/document.h>
 
 
 namespace surfingdb {
     namespace parser {
         using std::string;
-        using std::unique_ptr;
         using rapidjson::Document;
 
         class SQLParser {

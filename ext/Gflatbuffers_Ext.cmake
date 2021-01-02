@@ -1,6 +1,5 @@
 find_package(Threads REQUIRED)
 
-if(APPLE)
 include(ExternalProject)
 ExternalProject_Add(flatbuffers
     PREFIX flatbuffers
@@ -20,11 +19,6 @@ message(STATUS "FLATBUFFERS_INCLUDE_DIRS=${FLATBUFFERS_INCLUDE_DIRS}")
 file(MAKE_DIRECTORY ${FLATBUFFERS_INCLUDE_DIRS})
 set(FLATBUFFERS_LIBRARY_PATH ${BINARY_DIR}/${CMAKE_FIND_LIBRARY_PREFIXES}flatbuffers.a)
 message(STATUS "FLATBUFFERS_LIBRARY_PATH=${FLATBUFFERS_LIBRARY_PATH}")
-else()
-set(COM_LIB_DIR /usr/lib/x86_64-linux-gnu)
-set(FLATBUFFERS_INCLUDE_DIRS /usr/include)
-set(FLATBUFFERS_LIBRARY_PATH ${COM_LIB_DIR}/libflatbuffers.a)
-endif()
 
 set(FLATBUFFERS_LIBRARY libflatbuffers)
 add_library(${FLATBUFFERS_LIBRARY} UNKNOWN IMPORTED)

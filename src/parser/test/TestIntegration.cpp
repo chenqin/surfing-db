@@ -35,6 +35,7 @@ namespace surfingdb{
 for(int i = 0; i < 20 ; i++){
     c[i] = a[i] + b[i];
 }
+                    LOG(INFO) << c[0];
                 }
 #pragma omp barrier
             }

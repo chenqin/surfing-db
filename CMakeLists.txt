@@ -3,6 +3,15 @@
 cmake_minimum_required(VERSION 3.16)
 project(surfingdb LANGUAGES CXX VERSION 0.1)
 
+if(linux)
+    project (Treads)
+    #set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -std=gnu++2a -pthread" )
+    set( CMAKE_EXPORT_COMPILE_COMMANDS ON )
+    set(THREADS_PREFER_PTHREAD_FLAG TRUE)
+endif()
+
+find_package(Threads REQUIRED)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_VERBOSE_MAKEFILE ON)
@@ -212,4 +221,4 @@ install(TARGETS MainTest DESTINATION bin)
 # enable testing so that we can run "make test"
 enable_testing()
 
-file(COPY ${SURFINGDB_ROOT}/test DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+#file(COPY ${SURFINGDB_ROOT}/test DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
