@@ -35,10 +35,13 @@ IF(USE_OpenMP)
     endif()
 ENDIF()
 
+find_package(MPI REQUIRED)
+set( ENV{MPI_HOSTS} ${PROJECT_SOURCE_DIR}/host_file )
+
 set(SURFINGDB_ROOT ${PROJECT_SOURCE_DIR})
 set(SURFINGDB_SRC ${SURFINGDB_ROOT}/src)
 
-include_directories(include ${SURFINGDB_SRC})
+include_directories(include ${SURFINGDB_SRC} ${MPI_CXX_INCLUDE_PATH})
 
 # a switch to use clang or g++
 # clang or g++
@@ -213,7 +216,8 @@ include(src/table/table.cmake)
 add_executable(MainTest src/main.cpp)
 
 target_link_libraries(MainTest
-        PRIVATE ${LIBPG_QUERY_LIBRARY})
+        PRIVATE MPI::MPI_CXX
+        PRIVATE ${TABLE})
 
 # install it into local bin folder
 install(TARGETS MainTest DESTINATION bin)

@@ -8,6 +8,7 @@ add_library(${TABLE} STATIC
         ${SURFINGDB_SRC}/table/table.cpp)
 
 target_link_libraries(${TABLE}
+        PUBLIC ${MPI_CXX_INCLUDE_PATH}
         PUBLIC ${GLOG_LIBRARY}
         PUBLIC ${GFLAGS_LIBRARY}
         PUBLIC ${JSON_LIBRARY}
@@ -19,6 +20,7 @@ add_executable(TableTest
 
 target_link_libraries(TableTest
         PRIVATE OpenMP::OpenMP_CXX
+        PRIVATE MPI::MPI_CXX
         PRIVATE ${TABLE}
         PRIVATE ${JSON_LIBRARY}
         PRIVATE ${GTEST_LIBRARY}

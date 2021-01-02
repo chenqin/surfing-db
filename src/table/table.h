@@ -9,7 +9,38 @@
 
 namespace surfingdb {
     namespace table {
+        /**
+         * a bit of system information, wrap around mpi
+         */
+        class Node {
+        public:
+            Node();
+            ~Node();
+            int world;
+            int rank;
+            std::string processor;
+        };
+        /**
+         * row table is created collectively on all nodes
+         * it hold vector of flatbuffer instances read from ingestion side
+         * usually from partitioned kafka or s3 files
+         */
+        class RowTable {
+        private:
+            std::shared_ptr<Node> ptr;
+        public:
+            RowTable(const std::shared_ptr<Node>) noexcept;
+            /**
+             * @return low watermark across all partitions to infer data completeness
+             */
+            long watermark() noexcept;
+        };
+        /**
+         * columnarTable is maintained collectively to as one logical arrow table
+         */
+        class ColumnarTable {
 
+        };
     }
 }
 #endif //SURFINGDB_TABLE_H
