@@ -27,7 +27,10 @@ namespace surfingdb {
          */
         class RowTable {
         private:
+            // defines the node row table bind to
             std::shared_ptr<Node> ptr;
+            // low watermark of entire table
+            long _watermark;
         public:
             RowTable(const std::shared_ptr<Node>) noexcept;
             /**

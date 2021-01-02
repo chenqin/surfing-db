@@ -5,11 +5,15 @@
 #include "table.h"
 #include <mpi.h>
 #include <glog/logging.h>
+#include <chrono>
 
 namespace surfingdb {
     namespace table {
         long RowTable::watermark() noexcept {
-            return ptr.get()->rank;
+            _watermark = this->ptr->rank;
+            long _gLowWatermark;
+            MPI_Allreduce(&_watermark, &_gLowWatermark, 1, MPI_LONG, MPI_MIN, MPI_COMM_WORLD);
+            return _gLowWatermark;
         }
 
         RowTable::RowTable(const std::shared_ptr<Node> node) noexcept {
