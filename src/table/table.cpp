@@ -10,14 +10,14 @@
 namespace surfingdb {
     namespace table {
         /**
-         * define way to sum user defined class
+         * use class operator+ to get row count of a key
          * @tparam T
          * @param a
          * @param b
          * @param len
          */
         template<class T>
-        void summerize(void *a, void *b, int *len, MPI_Datatype *)
+        void reducer(void *a, void *b, int *len, MPI_Datatype *)
         {
             T *aa=static_cast<T *>(a);
             T *bb=static_cast<T *>(b);
@@ -27,6 +27,7 @@ namespace surfingdb {
             }
 #pragma omp barrier
         }
+
 
 
         long RowTable::watermark() noexcept {
@@ -40,7 +41,7 @@ namespace surfingdb {
             this->ptr = node;
             this->_chunks = std::make_shared<std::vector<mychunk>>();
             // create list of user defined MPI_OPs
-            MPI_Op_create(&summerize<mychunk>, true, &this->sum);
+            MPI_Op_create(&reducer<mychunk>, true, &this->sum);
         }
 
         void RowTable::send(int source, int dest, const mychunk& data) {
@@ -71,6 +72,47 @@ namespace surfingdb {
 
         RowTable::~RowTable() {
             MPI_Op_free(&this->sum);
+        }
+
+        void RowTable::shuffle(std::vector<mychunk> &chunks) {
+            std::vector<mychunk> lists[ptr->world];
+            for (size_t i = 0 ; i < chunks.size(); i++) {
+                auto shard = chunks[i].a % ptr->world;
+                lists[shard].push_back(chunks[i]);
+            }
+            chunks.clear();
+            MPI_Barrier(MPI_COMM_WORLD);
+
+            for(int j = 0 ; j < ptr->world; j++) {
+                if(j != ptr->rank) {
+                    // send to corrsponding node
+                    long size = lists[j].size();
+                    MPI_Send(&size, 1, MPI_LONG, j, 0, MPI_COMM_WORLD);
+                    if(size != 0) {
+                        MPI_Send((void *) &lists[j][0], lists[j].size(), lists[j].at(0).datatype, j, 0, MPI_COMM_WORLD);
+                    }
+                } else {
+                   for(size_t num = 0 ; num < lists[j].size(); num++) {
+                        chunks.push_back(lists[j].at(num));
+                   }
+                }
+            }
+
+            for(int j = 0 ; j < ptr->world; j++) {
+                if(j != ptr->rank) {
+                    long recv = 0;
+                    MPI_Recv(&recv, 1, MPI_LONG, j, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    if(recv > 0) {
+                        std::vector<mychunk> temp(recv);
+                        MPI_Recv((void *) &temp[0], temp.size(), temp.at(0).datatype, j, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                        for (long num = 0; num < recv; num++) {
+                            chunks.push_back(temp.at(num));
+                        }
+                    }
+                }
+            }
+            // shuffle complete in all nodes
+            MPI_Barrier(MPI_COMM_WORLD);
         }
 
         Node::Node() {

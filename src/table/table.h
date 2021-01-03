@@ -48,8 +48,10 @@ namespace surfingdb {
             friend mychunk operator+(mychunk lhs,        // passing lhs by value helps optimize chained a+b+c
                                const mychunk& rhs) // otherwise, both parameters may be const references
             {
-                lhs.a += rhs.a;
-                lhs.b += rhs.b;
+                //should read from payload and decide what to do
+                if(rhs.a == lhs.a) {
+                    lhs.b += 1;
+                }
                 return lhs; // return the result by value (uses move constructor)
             }
         };
@@ -85,6 +87,10 @@ namespace surfingdb {
             void sendAll(int, int, const std::vector<mychunk>&);
 
             void allreduce(const std::vector<mychunk>&, const MPI_Op&);
+            /**
+             * place record based on key%world
+             */
+            void shuffle(std::vector<mychunk>&);
         };
         /**
          * columnarTable is maintained collectively to as one logical arrow table

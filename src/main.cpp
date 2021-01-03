@@ -55,5 +55,6 @@ int main() {
     MPI_Barrier(MPI_COMM_WORLD);
     t2 = MPI_Wtime();
     LOG(INFO) << node->rank << " " << t2 - t1;
+    t.shuffle(chunks);
     return 0;
 }
