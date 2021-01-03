@@ -27,6 +27,9 @@ namespace surfingdb {
             int a;
             long b;
             MPI_Datatype datatype;
+            int rank(int world) {
+                return a%world;
+            }
             void reg() {
                 int count = 3;
                 int array_of_blocklengths[] = { 1, 1, 1};
@@ -43,6 +46,9 @@ namespace surfingdb {
                 MPI_Type_create_resized( tmp_type, lb, extent, &datatype );
                 MPI_Type_commit( &datatype );
                 //TODO(chenqin): free datatype
+            }
+            void unreg() {
+                MPI_Type_free(&datatype);
             }
             // friends defined inside class body are inline and are hidden from non-ADL lookup
             friend mychunk operator+(mychunk lhs,        // passing lhs by value helps optimize chained a+b+c
@@ -84,11 +90,11 @@ namespace surfingdb {
             /**
              * blocking send vector of struct mychunk
              */
-            void sendAll(int, int, const std::vector<mychunk>&);
+            void sendAll(int, int, int, const std::vector<mychunk>&);
 
             void allreduce(const std::vector<mychunk>&, const MPI_Op&);
             /**
-             * place record based on key%world
+             * shuffle and place record to rank() node
              */
             void shuffle(std::vector<mychunk>&);
         };

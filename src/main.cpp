@@ -47,7 +47,6 @@ int main() {
         chunks.push_back(c);
     }
 
-    t.sendAll(0, 1, chunks);
     MPI_Barrier(MPI_COMM_WORLD);
     double t1, t2;
     t1 = MPI_Wtime();
@@ -55,6 +54,13 @@ int main() {
     MPI_Barrier(MPI_COMM_WORLD);
     t2 = MPI_Wtime();
     LOG(INFO) << node->rank << " " << t2 - t1;
-    t.shuffle(chunks);
+    std::vector<surfingdb::table::mychunk> chunks2;
+
+    for(long i = 0 ; i < 1000000 ; i++) {
+        c.a = i;
+        chunks2.push_back(c);
+    }
+    t.shuffle(chunks2);
+    LOG(INFO) << node->rank << " " << chunks2.size();
     return 0;
 }

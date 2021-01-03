@@ -53,15 +53,18 @@ namespace surfingdb {
             }
         }
 
-        void RowTable::sendAll(int source, int dest, const std::vector<mychunk> &chunks) {
+        void RowTable::sendAll(int source, int dest, int size, const std::vector<mychunk> &chunks) {
             assert(!chunks.empty());
-
+            mychunk placeholder;
+            placeholder.reg();
             if (this->ptr->rank == source) {
-                MPI_Send((void *) &chunks[0], chunks.size(), chunks.at(0).datatype, dest, 0, MPI_COMM_WORLD);
+                MPI_Send((void *) &chunks[0], size, placeholder.datatype, dest, 0, MPI_COMM_WORLD);
             } else if (this->ptr->rank == dest) {
-                MPI_Recv((void *) &chunks[0], chunks.size(), chunks.at(0).datatype, source, 0, MPI_COMM_WORLD,
+                std::vector<mychunk> results(size);
+                MPI_Recv((void *) &results[0], size, placeholder.datatype, source, 0, MPI_COMM_WORLD,
                          MPI_STATUS_IGNORE);
             }
+            placeholder.unreg();
         }
 
         void RowTable::allreduce(const std::vector<mychunk> &chunks, const MPI_Op& op) {
@@ -75,44 +78,61 @@ namespace surfingdb {
         }
 
         void RowTable::shuffle(std::vector<mychunk> &chunks) {
-            std::vector<mychunk> lists[ptr->world];
-            for (size_t i = 0 ; i < chunks.size(); i++) {
-                auto shard = chunks[i].a % ptr->world;
-                lists[shard].push_back(chunks[i]);
+            // organize record per rank
+            std::vector<mychunk> send_buffer[ptr->world];
+            int j;
+
+            //padding
+            //for(j = 0 ; j < ptr->world ; j++) {
+            //    mychunk k;
+            //    send_buffer[j].push_back(k);
+            //}
+            
+            for (size_t ii = 0 ; ii < chunks.size(); ii++) {
+                auto shard = chunks[ii].rank(ptr->world);
+                send_buffer[shard].push_back(chunks[ii]);
             }
+
             chunks.clear();
             MPI_Barrier(MPI_COMM_WORLD);
 
-            for(int j = 0 ; j < ptr->world; j++) {
-                if(j != ptr->rank) {
-                    // send to corrsponding node
-                    long size = lists[j].size();
-                    MPI_Send(&size, 1, MPI_LONG, j, 0, MPI_COMM_WORLD);
-                    if(size != 0) {
-                        MPI_Send((void *) &lists[j][0], lists[j].size(), lists[j].at(0).datatype, j, 0, MPI_COMM_WORLD);
-                    }
-                } else {
-                   for(size_t num = 0 ; num < lists[j].size(); num++) {
-                        chunks.push_back(lists[j].at(num));
-                   }
-                }
-            }
+            //number of records send to each rank
+            int send[ptr->world];
+            //number of records recv from each rank
+            int recv[ptr->world];
+            int total_recv;
 
-            for(int j = 0 ; j < ptr->world; j++) {
-                if(j != ptr->rank) {
-                    long recv = 0;
-                    MPI_Recv(&recv, 1, MPI_LONG, j, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                    if(recv > 0) {
-                        std::vector<mychunk> temp(recv);
-                        MPI_Recv((void *) &temp[0], temp.size(), temp.at(0).datatype, j, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                        for (long num = 0; num < recv; num++) {
-                            chunks.push_back(temp.at(num));
-                        }
-                    }
+            for(j = 0 ; j < ptr->world; j++) {
+                send[j] = send_buffer[j].size();
+                if(j == ptr->rank) {
+                    recv[j] = send[j];
+                    total_recv += recv[j];
+                    continue;
                 }
+
+                MPI_Send(&send[j], 1, MPI_INT, j, 0, MPI_COMM_WORLD);
+                MPI_Recv(&recv[j], 1, MPI_INT, j, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                total_recv += recv[j];
             }
-            // shuffle complete in all nodes
-            MPI_Barrier(MPI_COMM_WORLD);
+            //LOG(INFO) << "end of size exchange";
+            //MPI_Barrier(MPI_COMM_WORLD);
+
+            // place received record in array index start with 0
+            int displ[ptr->world];
+            displ[0] = 0;
+            for(j = 1 ; j < ptr->world ; j++) {
+                displ[j] = displ[j-1] + recv[j-1];
+            }
+            mychunk placeholder;
+            placeholder.reg();
+            chunks.resize(total_recv);
+            // for each rank, gather rows shard to that rank
+            for(j = 0 ; j < ptr->world; j++) {
+                MPI_Gatherv(&send_buffer[j][0], send[j],placeholder.datatype,
+                            &chunks[0], &recv[0], &displ[0], placeholder.datatype, j,
+                            MPI_COMM_WORLD);
+            }
+            placeholder.unreg();
         }
 
         Node::Node() {
