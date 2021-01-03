@@ -27,6 +27,21 @@ int main() {
     const auto node = std::make_shared<surfingdb::table::Node>();
     // define a row table bind to each node
     surfingdb::table::RowTable t(node);
-    std::cout << "watermark is " << t.watermark() << std::endl;
+    //std::cout << "watermark is " << t.watermark() << std::endl;
+
+    surfingdb::table::mychunk c;
+    c.reg();
+
+    c.b = (long) node->rank;
+    c.a = node->rank;
+
+    t.send(0, 1, c);
+    if(node->rank == 1) {
+        std::cout << "rank 1 recv " << c.b << c.a << std::endl;
+    }
+    std::vector<surfingdb::table::mychunk> chunks;
+    chunks.push_back(c);
+    t.send(0, 1, chunks);
+
     return 0;
 }

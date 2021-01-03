@@ -20,6 +20,26 @@ namespace surfingdb {
             this->ptr = node;
         }
 
+        void RowTable::send(int source, int dest, const mychunk& data) {
+            if (this->ptr->rank == source) {
+                MPI_Send((void *) &data, 1, data.datatype, dest, 0, MPI_COMM_WORLD);
+            } else if (this->ptr->rank == dest) {
+                MPI_Recv((void *) &data, 1, data.datatype, source, 0, MPI_COMM_WORLD,
+                         MPI_STATUS_IGNORE);
+            }
+        }
+
+        void RowTable::sendAll(int source, int dest, const std::vector<mychunk> &chunks) {
+            assert(!chunks.empty());
+
+            if (this->ptr->rank == source) {
+                MPI_Send((void *) &chunks[0], chunks.size(), chunks.at(0).datatype, dest, 0, MPI_COMM_WORLD);
+            } else if (this->ptr->rank == dest) {
+                MPI_Recv((void *) &chunks[0], chunks.size(), chunks.at(0).datatype, source, 0, MPI_COMM_WORLD,
+                         MPI_STATUS_IGNORE);
+            }
+        }
+
         Node::Node() {
             // Initialize the MPI environment
             MPI_Init(NULL, NULL);

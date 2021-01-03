@@ -13,6 +13,8 @@ MPI related
 
 How to run
 
+http://kratos-wiki.cimne.upc.edu/index.php/How_to_compile_the_Boost_if_you_want_to_use_MPI
+
 - mpirun -np 12 ./MainTest
 
 created @Maui, Hawaii, U.S.A
