@@ -5,10 +5,30 @@
 #include "table.h"
 #include <mpi.h>
 #include <glog/logging.h>
-#include <chrono>
+#include <omp.h>
 
 namespace surfingdb {
     namespace table {
+        /**
+         * define way to sum user defined class
+         * @tparam T
+         * @param a
+         * @param b
+         * @param len
+         */
+        template<class T>
+        void summerize(void *a, void *b, int *len, MPI_Datatype *)
+        {
+            T *aa=static_cast<T *>(a);
+            T *bb=static_cast<T *>(b);
+#pragma omp simd
+            for (int i=0; i<*len; ++i) {
+                bb[i] = aa[i] + bb[i];
+            }
+#pragma omp barrier
+        }
+
+
         long RowTable::watermark() noexcept {
             _watermark = this->ptr->rank;
             long _gLowWatermark;
@@ -18,6 +38,9 @@ namespace surfingdb {
 
         RowTable::RowTable(const std::shared_ptr<Node> node) noexcept {
             this->ptr = node;
+            this->_chunks = std::make_shared<std::vector<mychunk>>();
+            // create list of user defined MPI_OPs
+            MPI_Op_create(&summerize<mychunk>, true, &this->sum);
         }
 
         void RowTable::send(int source, int dest, const mychunk& data) {
@@ -38,6 +61,16 @@ namespace surfingdb {
                 MPI_Recv((void *) &chunks[0], chunks.size(), chunks.at(0).datatype, source, 0, MPI_COMM_WORLD,
                          MPI_STATUS_IGNORE);
             }
+        }
+
+        void RowTable::allreduce(const std::vector<mychunk> &chunks, const MPI_Op& op) {
+            std::vector<mychunk> result(chunks.size());
+            // used to collective get quantile sketch of each columns https://datasketches.apache.org/docs/Quantiles/QuantilesCppExample.html
+            MPI_Allreduce((void *) &chunks[0], (void *) &result[0], chunks.size(), chunks.at(0).datatype, op, MPI_COMM_WORLD);
+        }
+
+        RowTable::~RowTable() {
+            MPI_Op_free(&this->sum);
         }
 
         Node::Node() {

@@ -16,6 +16,7 @@
 
 #include "../include/main.h"
 #include "table/table.h"
+#include <glog/logging.h>
 #include <iostream>
 
 /** run this program with
@@ -23,6 +24,7 @@
  * @return
  */
 int main() {
+    //google::InitGoogleLogging(argv[0]);
     // create node of cluster
     const auto node = std::make_shared<surfingdb::table::Node>();
     // define a row table bind to each node
@@ -40,8 +42,18 @@ int main() {
         std::cout << "rank 1 recv " << c.b << c.a << std::endl;
     }
     std::vector<surfingdb::table::mychunk> chunks;
-    chunks.push_back(c);
-    t.send(0, 1, chunks);
 
+    for(long i = 0 ; i < 10000000 ; i++) {
+        chunks.push_back(c);
+    }
+
+    t.sendAll(0, 1, chunks);
+    MPI_Barrier(MPI_COMM_WORLD);
+    double t1, t2;
+    t1 = MPI_Wtime();
+    t.allreduce(chunks, t.sum);
+    MPI_Barrier(MPI_COMM_WORLD);
+    t2 = MPI_Wtime();
+    LOG(INFO) << node->rank << " " << t2 - t1;
     return 0;
 }

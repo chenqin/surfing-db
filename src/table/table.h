@@ -42,7 +42,15 @@ namespace surfingdb {
                 MPI_Type_get_extent( tmp_type, &lb, &extent );
                 MPI_Type_create_resized( tmp_type, lb, extent, &datatype );
                 MPI_Type_commit( &datatype );
-
+                //TODO(chenqin): free datatype
+            }
+            // friends defined inside class body are inline and are hidden from non-ADL lookup
+            friend mychunk operator+(mychunk lhs,        // passing lhs by value helps optimize chained a+b+c
+                               const mychunk& rhs) // otherwise, both parameters may be const references
+            {
+                lhs.a += rhs.a;
+                lhs.b += rhs.b;
+                return lhs; // return the result by value (uses move constructor)
             }
         };
         /**
@@ -50,14 +58,19 @@ namespace surfingdb {
          * it hold vector of flatbuffer instances read from ingestion side
          * usually from partitioned kafka or s3 files
          */
-        class RowTable {
+
+        class RowTable{
         private:
             // defines the node row table bind to
             std::shared_ptr<Node> ptr;
+            //TODO(chenqin): use RMA , list of chunks stored,
+            std::shared_ptr<std::vector<mychunk>> _chunks;
             // low watermark of entire table
             long _watermark;
         public:
-            RowTable(const std::shared_ptr<Node>) noexcept;
+            MPI_Op sum;
+            ~RowTable();
+            explicit RowTable(const std::shared_ptr<Node>) noexcept;
             /**
              * @return low watermark across all partitions to infer data completeness
              */
@@ -70,6 +83,8 @@ namespace surfingdb {
              * blocking send vector of struct mychunk
              */
             void sendAll(int, int, const std::vector<mychunk>&);
+
+            void allreduce(const std::vector<mychunk>&, const MPI_Op&);
         };
         /**
          * columnarTable is maintained collectively to as one logical arrow table
