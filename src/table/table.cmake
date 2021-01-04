@@ -15,11 +15,13 @@ add_library(${TABLE} STATIC
         ${SURFINGDB_SRC}/table/table.cpp)
 
 target_link_libraries(${TABLE}
-        PRIVATE OpenMP::OpenMP_CXX
+        PUBLIC Threads::Threads
+        PUBLIC OpenMP::OpenMP_CXX
         PUBLIC ${MPI_CXX_INCLUDE_PATH}
         PUBLIC ${GLOG_LIBRARY}
         PUBLIC ${GFLAGS_LIBRARY}
         PUBLIC ${JSON_LIBRARY}
+        PUBLIC ${PARQUET_LIBRARY}
         PUBLIC ${ARROW_LIBRARY}
         PUBLIC ${FLATBUFFERS_LIBRARY})
 
@@ -28,6 +30,7 @@ add_executable(TableTest
         ${SURFINGDB_SRC}/table/test/TestIntegration.cpp)
 
 target_link_libraries(TableTest
+        PRIVATE Threads::Threads
         PRIVATE OpenMP::OpenMP_CXX
         PRIVATE MPI::MPI_CXX
         PRIVATE ${TABLE}
@@ -35,6 +38,7 @@ target_link_libraries(TableTest
         PRIVATE ${GTEST_LIBRARY}
         PRIVATE ${GTEST_MAIN_LIBRARY}
         PRIVATE ${ARROW_LIBRARY}
+        PRIVATE ${PARQUET_LIBRARY}
         PRIVATE ${FLATBUFFERS_LIBRARY})
 
 # discover all gtests in this module

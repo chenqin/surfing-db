@@ -62,5 +62,10 @@ int main() {
     }
     t.shuffle(chunks2);
     LOG(INFO) << node->rank << " " << chunks2.size();
+    // convert shuffled rows to columns
+    surfingdb::table::ColumnarTable columnarTable;
+    columnarTable.toTable(chunks2);
+    chunks2.clear();
+    //columnarTable.toParquet(std::to_string(node->rank));
     return 0;
 }

@@ -38,8 +38,8 @@ else ()
         set(NCFLAGS_RELEASE "-O3")
     else ()
         # this build branch is the final release version
-        set(NCXX /usr/local/bin/mpicxx)
-        set(NCC /usr/local/bin/mpicc)
+        set(NCXX /usr/bin/g++)
+        set(NCC /usr/bin/gcc)
         list(APPEND LNCFLAGS
                 "-Wall -Wextra -Werror -lstdc++ -lstdc++fs"
                 "-Wl,--no-as-needed -no-pie -ldl"

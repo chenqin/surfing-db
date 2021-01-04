@@ -6,6 +6,7 @@
 #define SURFINGDB_TABLE_H
 
 #include <flatbuffers/flatbuffers.h>
+#include <arrow/api.h>
 #include <mpi.h>
 
 namespace surfingdb {
@@ -27,6 +28,12 @@ namespace surfingdb {
             int a;
             long b;
             MPI_Datatype datatype;
+            static std::shared_ptr<arrow::Schema> getArrowSchema() {
+                std::vector<std::shared_ptr<arrow::Field>> schema_vector = {
+                        arrow::field("a", arrow::int32()), arrow::field("b", arrow::int64())};
+
+                return std::make_shared<arrow::Schema>(schema_vector);
+            }
             int rank(int world) {
                 return a%world;
             }
@@ -102,7 +109,12 @@ namespace surfingdb {
          * columnarTable is maintained collectively to as one logical arrow table
          */
         class ColumnarTable {
-
+        private:
+            std::shared_ptr<arrow::Table> tableptr;
+        public:
+            ColumnarTable();
+            void toTable(const std::vector<mychunk>&);
+            void toParquet(const std::string& path);
         };
     }
 }

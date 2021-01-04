@@ -5,6 +5,8 @@
 #include "table.h"
 #include <mpi.h>
 #include <glog/logging.h>
+#include <parquet/arrow/writer.h>
+#include <arrow/io/file.h>
 #include <omp.h>
 
 namespace surfingdb {
@@ -152,6 +154,37 @@ namespace surfingdb {
             // Finalize the MPI environment.
             MPI_Finalize();
             LOG(INFO) << "cluster finalized";
+        }
+
+        void ColumnarTable::toTable(const std::vector<mychunk>& chunks) {
+            arrow::MemoryPool* pool = arrow::default_memory_pool();
+            arrow::Int32Builder a_builder(pool);
+            arrow::Int64Builder b_builder(pool);
+            for(auto chunk : chunks) {
+                a_builder.Append(chunk.a);
+                b_builder.Append(chunk.b);
+            }
+            std::shared_ptr<arrow::Array> a_array;
+            a_builder.Finish(&a_array);
+            std::shared_ptr<arrow::Array> b_array;
+            b_builder.Finish(&b_array);
+            tableptr = arrow::Table::Make(mychunk::getArrowSchema(), {a_array, b_array});
+        }
+
+        ColumnarTable::ColumnarTable() {
+
+        }
+
+        void ColumnarTable::toParquet(const std::string &path) {
+            LOG(INFO) << path;
+            /*
+            std::shared_ptr<arrow::io::FileOutputStream> outfile;
+            PARQUET_ASSIGN_OR_THROW(
+                    outfile,
+                    arrow::io::FileOutputStream::Open(path));
+            PARQUET_THROW_NOT_OK(
+                    parquet::arrow::WriteTable(*this->tableptr.get(), arrow::default_memory_pool(), outfile, 3));
+                    */
         }
     }
 }
