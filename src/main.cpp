@@ -32,7 +32,7 @@ int main() {
     //std::cout << "watermark is " << t.watermark() << std::endl;
 
     surfingdb::table::mychunk c;
-    c.reg();
+    t.regType(c);
 
     c.b = (long) node->rank;
     c.a = node->rank;
@@ -50,22 +50,32 @@ int main() {
     MPI_Barrier(MPI_COMM_WORLD);
     double t1, t2;
     t1 = MPI_Wtime();
-    t.allreduce(chunks, t.sum);
+    t.allreduce(chunks, t.op);
     MPI_Barrier(MPI_COMM_WORLD);
     t2 = MPI_Wtime();
-    LOG(INFO) << node->rank << " " << t2 - t1;
+    if(node->rank == 0) {
+        LOG(INFO) <<  "all reduce cost " << t2 - t1;
+    }
     std::vector<surfingdb::table::mychunk> chunks2;
-
-    for(long i = 0 ; i < 1000000 ; i++) {
+    int vol = 100000000 / node->world + 1;
+    for(long i = 0 ; i < vol ; i++) {
         c.a = i;
         chunks2.push_back(c);
     }
-    t.shuffle(chunks2);
-    LOG(INFO) << node->rank << " " << chunks2.size();
+    for(int j = 0 ; j < 20 ; j++) {
+        t1 = MPI_Wtime();
+        std::function<int(const surfingdb::table::mychunk &)> partitioner =
+                [=](const surfingdb::table::mychunk &s) { return (s.a+j) % node->world; };
+        t.shuffle(chunks2, partitioner);
+        t2 = MPI_Wtime();
+        if(node->rank == 0) {
+            LOG(INFO) << j << "th shuffle " << vol * node->world << " on " << node->world << " workers costs "
+                      << t2 - t1;
+        }
+    }
     // convert shuffled rows to columns
     surfingdb::table::ColumnarTable columnarTable;
     columnarTable.toTable(chunks2);
     chunks2.clear();
-    //columnarTable.toParquet(std::to_string(node->rank));
     return 0;
 }

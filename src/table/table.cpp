@@ -43,55 +43,48 @@ namespace surfingdb {
             this->ptr = node;
             this->_chunks = std::make_shared<std::vector<mychunk>>();
             // create list of user defined MPI_OPs
-            MPI_Op_create(&reducer<mychunk>, true, &this->sum);
+            MPI_Op_create(&reducer<mychunk>, true, &this->op);
         }
 
         void RowTable::send(int source, int dest, const mychunk& data) {
             if (this->ptr->rank == source) {
-                MPI_Send((void *) &data, 1, data.datatype, dest, 0, MPI_COMM_WORLD);
+                MPI_Send((void *) &data, 1, this->type, dest, 0, MPI_COMM_WORLD);
             } else if (this->ptr->rank == dest) {
-                MPI_Recv((void *) &data, 1, data.datatype, source, 0, MPI_COMM_WORLD,
+                MPI_Recv((void *) &data, 1, this->type, source, 0, MPI_COMM_WORLD,
                          MPI_STATUS_IGNORE);
             }
         }
 
         void RowTable::sendAll(int source, int dest, int size, const std::vector<mychunk> &chunks) {
             assert(!chunks.empty());
-            mychunk placeholder;
-            placeholder.reg();
             if (this->ptr->rank == source) {
-                MPI_Send((void *) &chunks[0], size, placeholder.datatype, dest, 0, MPI_COMM_WORLD);
+                MPI_Send((void *) &chunks[0], size, this->type, dest, 0, MPI_COMM_WORLD);
             } else if (this->ptr->rank == dest) {
                 std::vector<mychunk> results(size);
-                MPI_Recv((void *) &results[0], size, placeholder.datatype, source, 0, MPI_COMM_WORLD,
+                MPI_Recv((void *) &results[0], size, this->type, source, 0, MPI_COMM_WORLD,
                          MPI_STATUS_IGNORE);
             }
-            placeholder.unreg();
         }
 
-        void RowTable::allreduce(const std::vector<mychunk> &chunks, const MPI_Op& op) {
+        void RowTable::allreduce(const std::vector<mychunk> &chunks, const MPI_Op& ops) {
             std::vector<mychunk> result(chunks.size());
             // used to collective get quantile sketch of each columns https://datasketches.apache.org/docs/Quantiles/QuantilesCppExample.html
-            MPI_Allreduce((void *) &chunks[0], (void *) &result[0], chunks.size(), chunks.at(0).datatype, op, MPI_COMM_WORLD);
+            MPI_Allreduce((void *) &chunks[0], (void *) &result[0], chunks.size(), type, ops, MPI_COMM_WORLD);
         }
 
         RowTable::~RowTable() {
-            MPI_Op_free(&this->sum);
+            MPI_Type_free(&type);
+            MPI_Op_free(&op);
         }
 
-        void RowTable::shuffle(std::vector<mychunk> &chunks) {
+
+        void RowTable::shuffle(std::vector<mychunk> &chunks, std::function<int(mychunk)> rank) {
             // organize record per rank
             std::vector<mychunk> send_buffer[ptr->world];
             int j;
-
-            //padding
-            //for(j = 0 ; j < ptr->world ; j++) {
-            //    mychunk k;
-            //    send_buffer[j].push_back(k);
-            //}
             
             for (size_t ii = 0 ; ii < chunks.size(); ii++) {
-                auto shard = chunks[ii].rank(ptr->world);
+                auto shard = rank(chunks[ii]);
                 send_buffer[shard].push_back(chunks[ii]);
             }
 
@@ -125,16 +118,13 @@ namespace surfingdb {
             for(j = 1 ; j < ptr->world ; j++) {
                 displ[j] = displ[j-1] + recv[j-1];
             }
-            mychunk placeholder;
-            placeholder.reg();
             chunks.resize(total_recv);
             // for each rank, gather rows shard to that rank
             for(j = 0 ; j < ptr->world; j++) {
-                MPI_Gatherv(&send_buffer[j][0], send[j],placeholder.datatype,
-                            &chunks[0], &recv[0], &displ[0], placeholder.datatype, j,
+                MPI_Gatherv(&send_buffer[j][0], send[j], this->type,
+                            &chunks[0], &recv[0], &displ[0], this->type, j,
                             MPI_COMM_WORLD);
             }
-            placeholder.unreg();
         }
 
         Node::Node() {
@@ -173,18 +163,6 @@ namespace surfingdb {
 
         ColumnarTable::ColumnarTable() {
 
-        }
-
-        void ColumnarTable::toParquet(const std::string &path) {
-            LOG(INFO) << path;
-            /*
-            std::shared_ptr<arrow::io::FileOutputStream> outfile;
-            PARQUET_ASSIGN_OR_THROW(
-                    outfile,
-                    arrow::io::FileOutputStream::Open(path));
-            PARQUET_THROW_NOT_OK(
-                    parquet::arrow::WriteTable(*this->tableptr.get(), arrow::default_memory_pool(), outfile, 3));
-                    */
         }
     }
 }

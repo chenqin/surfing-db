@@ -5,7 +5,6 @@
 #ifndef SURFINGDB_TABLE_H
 #define SURFINGDB_TABLE_H
 
-#include <flatbuffers/flatbuffers.h>
 #include <arrow/api.h>
 #include <mpi.h>
 
@@ -37,26 +36,6 @@ namespace surfingdb {
             int rank(int world) {
                 return a%world;
             }
-            void reg() {
-                int count = 3;
-                int array_of_blocklengths[] = { 1, 1, 1};
-                MPI_Aint array_of_displacements[] = { offsetof( mychunk, a ),
-                                                      offsetof( mychunk, b ),
-                                                      offsetof(mychunk, datatype)};
-                MPI_Datatype array_of_types[] = { MPI_INT, MPI_LONG, MPI_INT };
-                MPI_Datatype tmp_type;
-                MPI_Aint lb, extent;
-
-                MPI_Type_create_struct( count, array_of_blocklengths, array_of_displacements,
-                                        array_of_types, &tmp_type );
-                MPI_Type_get_extent( tmp_type, &lb, &extent );
-                MPI_Type_create_resized( tmp_type, lb, extent, &datatype );
-                MPI_Type_commit( &datatype );
-                //TODO(chenqin): free datatype
-            }
-            void unreg() {
-                MPI_Type_free(&datatype);
-            }
             // friends defined inside class body are inline and are hidden from non-ADL lookup
             friend mychunk operator+(mychunk lhs,        // passing lhs by value helps optimize chained a+b+c
                                const mychunk& rhs) // otherwise, both parameters may be const references
@@ -83,7 +62,27 @@ namespace surfingdb {
             // low watermark of entire table
             long _watermark;
         public:
-            MPI_Op sum;
+            MPI_Op op;
+            MPI_Datatype type = 0;
+            void regType(const mychunk&) {
+                if(type == 0) {
+                    int count = 3;
+                    int array_of_blocklengths[] = { 1, 1, 1};
+                    MPI_Aint array_of_displacements[] = { offsetof( mychunk, a ),
+                                                          offsetof( mychunk, b ),
+                                                          offsetof(mychunk, datatype)};
+                    MPI_Datatype array_of_types[] = { MPI_INT, MPI_LONG, MPI_INT };
+                    MPI_Datatype tmp_type;
+                    MPI_Aint lb, extent;
+
+                    MPI_Type_create_struct( count, array_of_blocklengths, array_of_displacements,
+                                            array_of_types, &tmp_type );
+                    MPI_Type_get_extent( tmp_type, &lb, &extent );
+                    MPI_Type_create_resized( tmp_type, lb, extent, &type );
+                    MPI_Type_commit( &type );
+                }
+            }
+
             ~RowTable();
             explicit RowTable(const std::shared_ptr<Node>) noexcept;
             /**
@@ -103,7 +102,7 @@ namespace surfingdb {
             /**
              * shuffle and place record to rank() node
              */
-            void shuffle(std::vector<mychunk>&);
+            void shuffle(std::vector<mychunk>&, std::function<int(mychunk)>);
         };
         /**
          * columnarTable is maintained collectively to as one logical arrow table
@@ -114,7 +113,6 @@ namespace surfingdb {
         public:
             ColumnarTable();
             void toTable(const std::vector<mychunk>&);
-            void toParquet(const std::string& path);
         };
     }
 }

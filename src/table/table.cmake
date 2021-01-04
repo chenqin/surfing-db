@@ -21,9 +21,8 @@ target_link_libraries(${TABLE}
         PUBLIC ${GLOG_LIBRARY}
         PUBLIC ${GFLAGS_LIBRARY}
         PUBLIC ${JSON_LIBRARY}
-        PUBLIC ${PARQUET_LIBRARY}
         PUBLIC ${ARROW_LIBRARY}
-        PUBLIC ${FLATBUFFERS_LIBRARY})
+        PUBLIC ${PARQUET_LIBRARY})
 
 # build test binary
 add_executable(TableTest
@@ -38,8 +37,7 @@ target_link_libraries(TableTest
         PRIVATE ${GTEST_LIBRARY}
         PRIVATE ${GTEST_MAIN_LIBRARY}
         PRIVATE ${ARROW_LIBRARY}
-        PRIVATE ${PARQUET_LIBRARY}
-        PRIVATE ${FLATBUFFERS_LIBRARY})
+        PRIVATE ${PARQUET_LIBRARY})
 
 # discover all gtests in this module
 include(GoogleTest)
