@@ -20,6 +20,7 @@ target_link_libraries(${TABLE}
         PUBLIC ${GLOG_LIBRARY}
         PUBLIC ${GFLAGS_LIBRARY}
         PUBLIC ${JSON_LIBRARY}
+        PUBLIC ${ARROW_LIBRARY}
         PUBLIC ${FLATBUFFERS_LIBRARY})
 
 # build test binary
@@ -33,6 +34,7 @@ target_link_libraries(TableTest
         PRIVATE ${JSON_LIBRARY}
         PRIVATE ${GTEST_LIBRARY}
         PRIVATE ${GTEST_MAIN_LIBRARY}
+        PRIVATE ${ARROW_LIBRARY}
         PRIVATE ${FLATBUFFERS_LIBRARY})
 
 # discover all gtests in this module
