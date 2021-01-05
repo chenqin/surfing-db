@@ -19,6 +19,31 @@
 #include <glog/logging.h>
 #include <iostream>
 
+class mychunk {
+  public:
+    int a;
+    long b;
+
+    static std::shared_ptr<arrow::Schema> schema() {
+        std::vector<std::shared_ptr<arrow::Field>> schema_vector = {
+                arrow::field("a", arrow::int32()),
+                arrow::field("b", arrow::int64())};
+
+        return std::make_shared<arrow::Schema>(schema_vector);
+    }
+
+    // friends defined inside class body are inline and are hidden from non-ADL lookup
+    friend mychunk operator+(mychunk lhs,        // passing lhs by value helps optimize chained a+b+c
+                             const mychunk &rhs) // otherwise, both parameters may be const references
+    {
+        //should read from payload and decide what to do
+        if (rhs.a == lhs.a) {
+            lhs.b += 1;
+        }
+        return lhs; // return the result by value (uses move constructor)
+    }
+};
+
 /** run this program with
  * mpirun -np 12 ./MainTest
  * @return
@@ -28,12 +53,12 @@ int main() {
     // create node of cluster
     const auto node = std::make_shared<surfingdb::table::Node>();
     // define a row table bind to each node
-    surfingdb::table::RowTable<surfingdb::table::mychunk> t(node);
+    surfingdb::table::RowTable<mychunk> t(node);
     //std::cout << "watermark is " << t.watermark() << std::endl;
-    auto col = std::make_shared<surfingdb::table::ColumnarTable<surfingdb::table::mychunk>>();
+    auto col = std::make_shared<surfingdb::table::ColumnarTable<mychunk>>();
 
-    surfingdb::table::mychunk c;
-    t.registerSchema(c.getArrowSchema());
+    mychunk c;
+    t.regType(c.schema());
 
     c.b = (long) node->rank;
     c.a = node->rank;
@@ -42,7 +67,7 @@ int main() {
     if(node->rank == 1) {
         std::cout << "rank 1 recv " << c.b << c.a << std::endl;
     }
-    std::vector<surfingdb::table::mychunk> chunks;
+    std::vector<mychunk> chunks;
 
     for(long i = 0 ; i < 10000000 ; i++) {
         chunks.push_back(c);
@@ -54,14 +79,13 @@ int main() {
     t1 = MPI_Wtime();
     t.allreduce(chunks);
 
-    MPI_Barrier(MPI_COMM_WORLD);
     t2 = MPI_Wtime();
     if(node->rank == 0) {
         LOG(INFO) <<  "all reduce cost " << t2 - t1;
     }
     t.flush(col);
 
-    std::vector<surfingdb::table::mychunk> chunks2;
+    std::vector<mychunk> chunks2;
     int vol = 100000000 / node->world + 1;
     for(long i = 0 ; i < vol ; i++) {
         c.a = i;
@@ -70,8 +94,8 @@ int main() {
     t.ingest(chunks2);
     for(int j = 0 ; j < 20 ; j++) {
         t1 = MPI_Wtime();
-        std::function<int(const surfingdb::table::mychunk &)> partitioner =
-                [=](const surfingdb::table::mychunk &s) { return (s.a+j) % node->world; };
+        std::function<int(const mychunk &)> partitioner =
+                [=](const mychunk &s) { return (s.a+j) % node->world; };
         t.shuffle(chunks2, partitioner);
         t2 = MPI_Wtime();
         if(node->rank == 0) {

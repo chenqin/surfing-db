@@ -15,31 +15,6 @@ namespace surfingdb {
     namespace table {
         using surfingdb::node::Node;
 
-        class mychunk {
-        public:
-            int a;
-            long b;
-
-            static std::shared_ptr<arrow::Schema> getArrowSchema() {
-                std::vector<std::shared_ptr<arrow::Field>> schema_vector = {
-                        arrow::field("a", arrow::int32()),
-                        arrow::field("b", arrow::int64())};
-
-                return std::make_shared<arrow::Schema>(schema_vector);
-            }
-
-            // friends defined inside class body are inline and are hidden from non-ADL lookup
-            friend mychunk operator+(mychunk lhs,        // passing lhs by value helps optimize chained a+b+c
-                                     const mychunk &rhs) // otherwise, both parameters may be const references
-            {
-                //should read from payload and decide what to do
-                if (rhs.a == lhs.a) {
-                    lhs.b += 1;
-                }
-                return lhs; // return the result by value (uses move constructor)
-            }
-        };
-
         /**
          * columnarTable is maintained collectively to as one logical arrow table
          */
@@ -64,7 +39,7 @@ namespace surfingdb {
                 a_builder.Finish(&a_array);
                 std::shared_ptr<arrow::Array> b_array;
                 b_builder.Finish(&b_array);
-                tableptr = arrow::Table::Make(mychunk::getArrowSchema(), {a_array, b_array});
+                tableptr = arrow::Table::Make(Row::schema(), {a_array, b_array});
             }
         };
 
@@ -101,7 +76,7 @@ namespace surfingdb {
         public:
             RowTable(const std::shared_ptr<Node> node) {
                 this->ptr = node;
-                this->_chunks = std::make_shared<std::vector<mychunk>>();
+                this->_chunks = std::make_shared<std::vector<Row>>();
             }
 
             ~RowTable() {
@@ -123,7 +98,7 @@ namespace surfingdb {
              * register MPI_struct type based on row schema
              * @param schemaptr arrow Schema
              */
-            void registerSchema(std::shared_ptr<arrow::Schema> schemaptr) {
+            void regType(std::shared_ptr<arrow::Schema> schemaptr) {
                 int count = schemaptr->num_fields();
                 int array_of_blocklengths[count];
                 MPI_Aint array_of_displacements[count];
