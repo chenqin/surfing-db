@@ -7,28 +7,13 @@
 
 #include <arrow/api.h>
 #include <mpi.h>
+#include "Node.h"
 
 #pragma once
 
-#ifndef array_of_displacement
-#define array_of_displacement(obj, member) offsetof(obj, member)
-#endif
-
 namespace surfingdb {
     namespace table {
-        /**
-         * a bit of system information, wrap around mpi
-         */
-        class Node {
-        public:
-            Node();
-
-            ~Node();
-
-            int world;
-            int rank;
-            std::string processor;
-        };
+        using surfingdb::node::Node;
 
         class mychunk {
         public:
@@ -56,52 +41,84 @@ namespace surfingdb {
         };
 
         /**
+         * columnarTable is maintained collectively to as one logical arrow table
+         */
+        template<class Row>
+        class ColumnarTable {
+        private:
+            std::shared_ptr<arrow::Table> tableptr;
+        public:
+            ColumnarTable() {
+
+            }
+
+            void toTable(std::shared_ptr<std::vector<Row>> &rowptr) {
+                arrow::MemoryPool *pool = arrow::default_memory_pool();
+                arrow::Int32Builder a_builder(pool);
+                arrow::Int64Builder b_builder(pool);
+                for (auto chunk : *rowptr.get()) {
+                    a_builder.Append(chunk.a);
+                    b_builder.Append(chunk.b);
+                }
+                std::shared_ptr<arrow::Array> a_array;
+                a_builder.Finish(&a_array);
+                std::shared_ptr<arrow::Array> b_array;
+                b_builder.Finish(&b_array);
+                tableptr = arrow::Table::Make(mychunk::getArrowSchema(), {a_array, b_array});
+            }
+        };
+
+        /**
          * use class operator+ to get row count of a key
          * @tparam T
          * @param a
          * @param b
          * @param len
          */
-        template<class T>
+        template<class T, auto op>
         void reducer(void *a, void *b, int *len, MPI_Datatype *) {
             T *aa = static_cast<T *>(a);
             T *bb = static_cast<T *>(b);
 #pragma omp simd
             for (int i = 0; i < *len; ++i) {
-                bb[i] = aa[i] + bb[i];
+                bb[i] = op(aa[i], bb[i]);
             }
 #pragma omp barrier
         }
 
         /**
-         * row table is created collectively on all nodes
-         * it hold vector of flatbuffer instances read from ingestion side
-         * usually from partitioned kafka or s3 files
+         * RowTable hold ingested chunks of Row in memory
+         * - shuffle row with other MPI ranks
+         * - join with other columnar tables
+         * - periodical flush to columnar table
          */
         template<class Row>
         class RowTable {
         private:
             // defines the node row table bind to
             std::shared_ptr<Node> ptr;
-            //TODO(chenqin): use RMA , list of chunks stored,
             std::shared_ptr<std::vector<Row>> _chunks;
-            // low watermark of entire table
-            long _watermark;
         public:
             RowTable(const std::shared_ptr<Node> node) {
                 this->ptr = node;
                 this->_chunks = std::make_shared<std::vector<mychunk>>();
-                // create list of user defined MPI_OPs
-                MPI_Op_create(&reducer<Row>, true, &this->op);
             }
 
             ~RowTable() {
-                MPI_Type_free(&type);
-                MPI_Op_free(&op);
+                MPI_Type_free(&row_type);
             }
 
-            MPI_Op op;
-            MPI_Datatype type = 0;
+            MPI_Op reducer_op;
+            MPI_Datatype row_type = 0;
+
+            void ingest(const std::vector<Row>& rows) {
+                _chunks.get()->insert(_chunks.get()->end(), rows.begin(), rows.end());
+            }
+
+            void flush(std::shared_ptr<ColumnarTable<Row>> colptr) {
+                colptr.get()->toTable(this->_chunks);
+                _chunks.get()->clear();
+            }
             /**
              * register MPI_struct type based on row schema
              * @param schemaptr arrow Schema
@@ -139,18 +156,8 @@ namespace surfingdb {
                 MPI_Type_create_struct(count, array_of_blocklengths, array_of_displacements,
                                        array_of_types, &tmp_type);
                 MPI_Type_get_extent(tmp_type, &lb, &extent);
-                MPI_Type_create_resized(tmp_type, lb, extent, &type);
-                MPI_Type_commit(&type);
-            }
-
-            /**
-             * @return low watermark across all partitions to infer data completeness
-             */
-            long watermark() noexcept {
-                _watermark = this->ptr->rank;
-                long _gLowWatermark;
-                MPI_Allreduce(&_watermark, &_gLowWatermark, 1, MPI_LONG, MPI_MIN, MPI_COMM_WORLD);
-                return _gLowWatermark;
+                MPI_Type_create_resized(tmp_type, lb, extent, &row_type);
+                MPI_Type_commit(&row_type);
             }
 
             /**
@@ -158,9 +165,9 @@ namespace surfingdb {
              */
             void send(int source, int dest, const Row &data) {
                 if (this->ptr->rank == source) {
-                    MPI_Send((void *) &data, 1, this->type, dest, 0, MPI_COMM_WORLD);
+                    MPI_Send((void *) &data, 1, this->row_type, dest, 0, MPI_COMM_WORLD);
                 } else if (this->ptr->rank == dest) {
-                    MPI_Recv((void *) &data, 1, this->type, source, 0, MPI_COMM_WORLD,
+                    MPI_Recv((void *) &data, 1, this->row_type, source, 0, MPI_COMM_WORLD,
                              MPI_STATUS_IGNORE);
                 }
             }
@@ -171,18 +178,23 @@ namespace surfingdb {
             void sendAll(int source, int dest, int size, const std::vector<Row> &chunks) {
                 assert(!chunks.empty());
                 if (this->ptr->rank == source) {
-                    MPI_Send((void *) &chunks[0], size, this->type, dest, 0, MPI_COMM_WORLD);
+                    MPI_Send((void *) &chunks[0], size, this->row_type, dest, 0, MPI_COMM_WORLD);
                 } else if (this->ptr->rank == dest) {
                     std::vector<Row> results(size);
-                    MPI_Recv((void *) &results[0], size, this->type, source, 0, MPI_COMM_WORLD,
+                    MPI_Recv((void *) &results[0], size, this->row_type, source, 0, MPI_COMM_WORLD,
                              MPI_STATUS_IGNORE);
                 }
             }
 
-            void allreduce(const std::vector<Row> &chunks, const MPI_Op &ops) {
+            void allreduce(const std::vector<Row> &chunks) {
+                // create list of user defined MPI_OPs
+                auto op = [](Row a, Row b){ return a+b;};
+
+                MPI_Op_create(&reducer<Row, +op>, true, &this->reducer_op);
                 std::vector<Row> result(chunks.size());
                 // used to collective get quantile sketch of each columns https://datasketches.apache.org/docs/Quantiles/QuantilesCppExample.html
-                MPI_Allreduce((void *) &chunks[0], (void *) &result[0], chunks.size(), type, ops, MPI_COMM_WORLD);
+                MPI_Allreduce((void *) &chunks[0], (void *) &result[0], chunks.size(), row_type, reducer_op, MPI_COMM_WORLD);
+                MPI_Op_free(&reducer_op);
             }
 
             /**
@@ -231,23 +243,11 @@ namespace surfingdb {
                 chunks.resize(total_recv);
                 // for each rank, gather rows shard to that rank
                 for (j = 0; j < ptr->world; j++) {
-                    MPI_Gatherv(&send_buffer[j][0], send[j], this->type,
-                                &chunks[0], &recv[0], &displ[0], this->type, j,
+                    MPI_Gatherv(&send_buffer[j][0], send[j], this->row_type,
+                                &chunks[0], &recv[0], &displ[0], this->row_type, j,
                                 MPI_COMM_WORLD);
                 }
             }
-        };
-
-        /**
-         * columnarTable is maintained collectively to as one logical arrow table
-         */
-        class ColumnarTable {
-        private:
-            std::shared_ptr<arrow::Table> tableptr;
-        public:
-            ColumnarTable();
-
-            void toTable(const std::vector<mychunk> &);
         };
     }
 }

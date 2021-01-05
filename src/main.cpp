@@ -30,6 +30,7 @@ int main() {
     // define a row table bind to each node
     surfingdb::table::RowTable<surfingdb::table::mychunk> t(node);
     //std::cout << "watermark is " << t.watermark() << std::endl;
+    auto col = std::make_shared<surfingdb::table::ColumnarTable<surfingdb::table::mychunk>>();
 
     surfingdb::table::mychunk c;
     t.registerSchema(c.getArrowSchema());
@@ -46,22 +47,27 @@ int main() {
     for(long i = 0 ; i < 10000000 ; i++) {
         chunks.push_back(c);
     }
+    t.ingest(chunks);
 
     MPI_Barrier(MPI_COMM_WORLD);
     double t1, t2;
     t1 = MPI_Wtime();
-    t.allreduce(chunks, t.op);
+    t.allreduce(chunks);
+
     MPI_Barrier(MPI_COMM_WORLD);
     t2 = MPI_Wtime();
     if(node->rank == 0) {
         LOG(INFO) <<  "all reduce cost " << t2 - t1;
     }
+    t.flush(col);
+
     std::vector<surfingdb::table::mychunk> chunks2;
     int vol = 100000000 / node->world + 1;
     for(long i = 0 ; i < vol ; i++) {
         c.a = i;
         chunks2.push_back(c);
     }
+    t.ingest(chunks2);
     for(int j = 0 ; j < 20 ; j++) {
         t1 = MPI_Wtime();
         std::function<int(const surfingdb::table::mychunk &)> partitioner =
@@ -73,9 +79,6 @@ int main() {
                       << t2 - t1;
         }
     }
-    // convert shuffled rows to columns
-    surfingdb::table::ColumnarTable columnarTable;
-    columnarTable.toTable(chunks2);
-    chunks2.clear();
+    t.flush(col);
     return 0;
 }
