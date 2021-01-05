@@ -28,7 +28,7 @@ int main() {
     // create node of cluster
     const auto node = std::make_shared<surfingdb::table::Node>();
     // define a row table bind to each node
-    surfingdb::table::RowTable t(node);
+    surfingdb::table::RowTable<surfingdb::table::mychunk> t(node);
     //std::cout << "watermark is " << t.watermark() << std::endl;
 
     surfingdb::table::mychunk c;

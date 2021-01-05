@@ -11,122 +11,6 @@
 
 namespace surfingdb {
     namespace table {
-        /**
-         * use class operator+ to get row count of a key
-         * @tparam T
-         * @param a
-         * @param b
-         * @param len
-         */
-        template<class T>
-        void reducer(void *a, void *b, int *len, MPI_Datatype *)
-        {
-            T *aa=static_cast<T *>(a);
-            T *bb=static_cast<T *>(b);
-#pragma omp simd
-            for (int i=0; i<*len; ++i) {
-                bb[i] = aa[i] + bb[i];
-            }
-#pragma omp barrier
-        }
-
-
-
-        long RowTable::watermark() noexcept {
-            _watermark = this->ptr->rank;
-            long _gLowWatermark;
-            MPI_Allreduce(&_watermark, &_gLowWatermark, 1, MPI_LONG, MPI_MIN, MPI_COMM_WORLD);
-            return _gLowWatermark;
-        }
-
-        RowTable::RowTable(const std::shared_ptr<Node> node) noexcept {
-            this->ptr = node;
-            this->_chunks = std::make_shared<std::vector<mychunk>>();
-            // create list of user defined MPI_OPs
-            MPI_Op_create(&reducer<mychunk>, true, &this->op);
-        }
-
-        void RowTable::send(int source, int dest, const mychunk& data) {
-            if (this->ptr->rank == source) {
-                MPI_Send((void *) &data, 1, this->type, dest, 0, MPI_COMM_WORLD);
-            } else if (this->ptr->rank == dest) {
-                MPI_Recv((void *) &data, 1, this->type, source, 0, MPI_COMM_WORLD,
-                         MPI_STATUS_IGNORE);
-            }
-        }
-
-        void RowTable::sendAll(int source, int dest, int size, const std::vector<mychunk> &chunks) {
-            assert(!chunks.empty());
-            if (this->ptr->rank == source) {
-                MPI_Send((void *) &chunks[0], size, this->type, dest, 0, MPI_COMM_WORLD);
-            } else if (this->ptr->rank == dest) {
-                std::vector<mychunk> results(size);
-                MPI_Recv((void *) &results[0], size, this->type, source, 0, MPI_COMM_WORLD,
-                         MPI_STATUS_IGNORE);
-            }
-        }
-
-        void RowTable::allreduce(const std::vector<mychunk> &chunks, const MPI_Op& ops) {
-            std::vector<mychunk> result(chunks.size());
-            // used to collective get quantile sketch of each columns https://datasketches.apache.org/docs/Quantiles/QuantilesCppExample.html
-            MPI_Allreduce((void *) &chunks[0], (void *) &result[0], chunks.size(), type, ops, MPI_COMM_WORLD);
-        }
-
-        RowTable::~RowTable() {
-            MPI_Type_free(&type);
-            MPI_Op_free(&op);
-        }
-
-
-        void RowTable::shuffle(std::vector<mychunk> &chunks, std::function<int(mychunk)> rank) {
-            // organize record per rank
-            std::vector<mychunk> send_buffer[ptr->world];
-            int j;
-            
-            for (size_t ii = 0 ; ii < chunks.size(); ii++) {
-                auto shard = rank(chunks[ii]);
-                send_buffer[shard].push_back(chunks[ii]);
-            }
-
-            chunks.clear();
-            MPI_Barrier(MPI_COMM_WORLD);
-
-            //number of records send to each rank
-            int send[ptr->world];
-            //number of records recv from each rank
-            int recv[ptr->world];
-            int total_recv;
-
-            for(j = 0 ; j < ptr->world; j++) {
-                send[j] = send_buffer[j].size();
-                if(j == ptr->rank) {
-                    recv[j] = send[j];
-                    total_recv += recv[j];
-                    continue;
-                }
-
-                MPI_Send(&send[j], 1, MPI_INT, j, 0, MPI_COMM_WORLD);
-                MPI_Recv(&recv[j], 1, MPI_INT, j, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                total_recv += recv[j];
-            }
-            //LOG(INFO) << "end of size exchange";
-            //MPI_Barrier(MPI_COMM_WORLD);
-
-            // place received record in array index start with 0
-            int displ[ptr->world];
-            displ[0] = 0;
-            for(j = 1 ; j < ptr->world ; j++) {
-                displ[j] = displ[j-1] + recv[j-1];
-            }
-            chunks.resize(total_recv);
-            // for each rank, gather rows shard to that rank
-            for(j = 0 ; j < ptr->world; j++) {
-                MPI_Gatherv(&send_buffer[j][0], send[j], this->type,
-                            &chunks[0], &recv[0], &displ[0], this->type, j,
-                            MPI_COMM_WORLD);
-            }
-        }
-
         Node::Node() {
             // Initialize the MPI environment
             MPI_Init(NULL, NULL);
@@ -146,11 +30,11 @@ namespace surfingdb {
             LOG(INFO) << "cluster finalized";
         }
 
-        void ColumnarTable::toTable(const std::vector<mychunk>& chunks) {
-            arrow::MemoryPool* pool = arrow::default_memory_pool();
+        void ColumnarTable::toTable(const std::vector<mychunk> &chunks) {
+            arrow::MemoryPool *pool = arrow::default_memory_pool();
             arrow::Int32Builder a_builder(pool);
             arrow::Int64Builder b_builder(pool);
-            for(auto chunk : chunks) {
+            for (auto chunk : chunks) {
                 a_builder.Append(chunk.a);
                 b_builder.Append(chunk.b);
             }
