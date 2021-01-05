@@ -32,7 +32,7 @@ int main() {
     //std::cout << "watermark is " << t.watermark() << std::endl;
 
     surfingdb::table::mychunk c;
-    t.regType(c);
+    t.registerSchema(c.getArrowSchema());
 
     c.b = (long) node->rank;
     c.a = node->rank;
