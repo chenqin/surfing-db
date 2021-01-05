@@ -11,8 +11,7 @@ set(Boost_USE_STATIC_RUNTIME OFF)
 find_package(Boost REQUIRED mpi serialization)
 
 # build nebula.ingest library
-add_library(${TABLE} STATIC
-        ${SURFINGDB_SRC}/table/table.cpp ${SURFINGDB_SRC}/table/Node.cpp)
+add_library(${TABLE} STATIC ${SURFINGDB_SRC}/table/Node.cpp)
 
 target_link_libraries(${TABLE}
         PUBLIC Threads::Threads

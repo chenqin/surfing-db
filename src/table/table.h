@@ -8,6 +8,7 @@
 #include <arrow/api.h>
 #include <mpi.h>
 #include "Node.h"
+#include "Operator.h"
 
 #pragma once
 
@@ -54,11 +55,11 @@ namespace surfingdb {
         void reducer(void *a, void *b, int *len, MPI_Datatype *) {
             T *aa = static_cast<T *>(a);
             T *bb = static_cast<T *>(b);
-#pragma omp simd
+//#pragma omp simd
             for (int i = 0; i < *len; ++i) {
                 bb[i] = op(aa[i], bb[i]);
             }
-#pragma omp barrier
+//#pragma omp barrier
         }
 
         /**
@@ -133,6 +134,23 @@ namespace surfingdb {
                 MPI_Type_get_extent(tmp_type, &lb, &extent);
                 MPI_Type_create_resized(tmp_type, lb, extent, &row_type);
                 MPI_Type_commit(&row_type);
+            }
+
+            template<class RowOut>
+            RowTable<RowOut> apply(Operator<Row, Row, RowOut> anOperator, std::shared_ptr<std::vector<RowOut>> output) {
+                switch (anOperator.type()) {
+                    case ParDo:
+                    case GroupByKey:
+                    case Flattern:
+                    case Partition:
+                        anOperator.process(this->_chunks, nullptr, output);
+                        break;
+                    case CoGroupByKey:
+                    case Combine:
+                        assert(false);
+                    default:
+                        assert(false);
+                }
             }
 
             /**
