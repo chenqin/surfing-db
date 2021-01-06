@@ -19,6 +19,7 @@ namespace surfingdb {
         class CombineOp : public Operator<Row, Row, Row> {
         public:
             CombineOp() : Operator<Row, Row, Row>(){
+                this->_type = OperatorType::Combine;
             }
             void process(const std::vector<Row>& rowL,const std::vector<Row>& rowR, std::vector<Row>& rowOut) {
                 rowOut.resize(rowL.size() + rowOut.size());
