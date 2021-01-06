@@ -92,17 +92,19 @@ int main() {
         chunks2.push_back(c);
     }
     t.ingest(chunks2);
-    for(int j = 0 ; j < 20 ; j++) {
-        t1 = MPI_Wtime();
-        std::function<int(const mychunk &)> partitioner =
-                [=](const mychunk &s) { return (s.a+j) % node->world; };
-        t.shuffle(chunks2, partitioner);
-        t2 = MPI_Wtime();
-        if(node->rank == 0) {
-            LOG(INFO) << j << "th shuffle " << vol * node->world << " on " << node->world << " workers costs "
-                      << t2 - t1;
-        }
+    t1 = MPI_Wtime();
+
+    std::function<int(const int&, const int&, const mychunk&)> ope =
+            [=](const int &rank, const int &world, const mychunk &s) { return (s.a + rank) % world; };
+    surfingdb::table::PartitionOp<mychunk> partitionOp(node->rank, node->world, t.row_type, ope);
+
+    t.partition(partitionOp);
+    t2 = MPI_Wtime();
+    if(node->rank == 0) {
+        LOG(INFO) << "shuffle " << vol * node->world << " on " << node->world << " workers costs "
+                  << t2 - t1;
     }
+
     t.flush(col);
     return 0;
 }

@@ -64,7 +64,7 @@ namespace surfingdb {
 
         /**
          * RowTable hold ingested chunks of Row in memory
-         * - shuffle row with other MPI ranks
+         * - shuffle row with other MPI processes
          * - join with other columnar tables
          * - periodical flush to columnar table
          */
@@ -135,22 +135,13 @@ namespace surfingdb {
                 MPI_Type_create_resized(tmp_type, lb, extent, &row_type);
                 MPI_Type_commit(&row_type);
             }
-
-            template<class RowOut>
-            RowTable<RowOut> apply(Operator<Row, Row, RowOut> anOperator, std::shared_ptr<std::vector<RowOut>> output) {
-                switch (anOperator.type()) {
-                    case ParDo:
-                    case GroupByKey:
-                    case Flattern:
-                    case Partition:
-                        anOperator.process(this->_chunks, nullptr, output);
-                        break;
-                    case CoGroupByKey:
-                    case Combine:
-                        assert(false);
-                    default:
-                        assert(false);
-                }
+            /**
+             * partition run in place shuffle
+             * @param op
+             */
+            void partition(PartitionOp<Row> &op) {
+                std::vector<Row>* payload = this->_chunks.get();
+                op.process(*payload, *payload, *payload);
             }
 
             /**
@@ -188,58 +179,6 @@ namespace surfingdb {
                 // used to collective get quantile sketch of each columns https://datasketches.apache.org/docs/Quantiles/QuantilesCppExample.html
                 MPI_Allreduce((void *) &chunks[0], (void *) &result[0], chunks.size(), row_type, reducer_op, MPI_COMM_WORLD);
                 MPI_Op_free(&reducer_op);
-            }
-
-            /**
-             * shuffle and place record to rank() node
-             */
-            void shuffle(std::vector<Row> &chunks, std::function<int(Row)> rank) {
-                // organize record per rank
-                std::vector<Row> send_buffer[ptr->world];
-                int j;
-
-                for (size_t ii = 0; ii < chunks.size(); ii++) {
-                    auto shard = rank(chunks[ii]);
-                    send_buffer[shard].push_back(chunks[ii]);
-                }
-
-                chunks.clear();
-                MPI_Barrier(MPI_COMM_WORLD);
-
-                //number of records send to each rank
-                int send[ptr->world];
-                //number of records recv from each rank
-                int recv[ptr->world];
-                int total_recv;
-
-                for (j = 0; j < ptr->world; j++) {
-                    send[j] = send_buffer[j].size();
-                    if (j == ptr->rank) {
-                        recv[j] = send[j];
-                        total_recv += recv[j];
-                        continue;
-                    }
-
-                    MPI_Send(&send[j], 1, MPI_INT, j, 0, MPI_COMM_WORLD);
-                    MPI_Recv(&recv[j], 1, MPI_INT, j, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                    total_recv += recv[j];
-                }
-                //LOG(INFO) << "end of size exchange";
-                //MPI_Barrier(MPI_COMM_WORLD);
-
-                // place received record in array index start with 0
-                int displ[ptr->world];
-                displ[0] = 0;
-                for (j = 1; j < ptr->world; j++) {
-                    displ[j] = displ[j - 1] + recv[j - 1];
-                }
-                chunks.resize(total_recv);
-                // for each rank, gather rows shard to that rank
-                for (j = 0; j < ptr->world; j++) {
-                    MPI_Gatherv(&send_buffer[j][0], send[j], this->row_type,
-                                &chunks[0], &recv[0], &displ[0], this->row_type, j,
-                                MPI_COMM_WORLD);
-                }
             }
         };
     }

@@ -10,10 +10,13 @@ set(Boost_USE_MULTITHREADED ON)
 set(Boost_USE_STATIC_RUNTIME OFF)
 find_package(Boost REQUIRED mpi serialization)
 
+include_directories(${JEMALLOC_INCLUDE_DIRS})
+
 # build nebula.ingest library
 add_library(${TABLE} STATIC ${SURFINGDB_SRC}/table/Node.cpp)
 
 target_link_libraries(${TABLE}
+        PUBLIC ${JEMALLOC_LIBRARIES}
         PUBLIC Threads::Threads
         PUBLIC OpenMP::OpenMP_CXX
         PUBLIC ${MPI_CXX_INCLUDE_PATH}

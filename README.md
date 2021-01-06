@@ -4,7 +4,7 @@ Ride wave of streams with SQL/Python on HPC architectures (NUMA, GPU, RMA)
 The goal of this project is to enable scientist, analyst and who speaks SQL and python take advantage of more efficent cluster architecture on open cloud run experiment and machine learning in sub-second latency.
 
 pre-requesite
-
+- sudo apt install libjemalloc-dev
 - install mpich2
 - https://mpitutorial.com/tutorials/installing-mpich2/
 
