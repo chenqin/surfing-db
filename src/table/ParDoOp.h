@@ -7,13 +7,13 @@
 
 #include "Operator.h"
 #include <omp.h>
-
+#include <mpi.h>
 #pragma once
 
 namespace surfingdb {
     namespace table {
         /**
-         * "map"
+         * "map" after reshuffle
          * transform list of row from L to Out
          * transform list of row from L & R to Out
          * @tparam RowInL
