@@ -11,6 +11,7 @@ set(Boost_USE_STATIC_RUNTIME OFF)
 find_package(Boost REQUIRED mpi serialization)
 
 include_directories(${JEMALLOC_INCLUDE_DIRS})
+include_directories(${DATASKETCHES_INCLUDE_DIRS})
 
 # build nebula.ingest library
 add_library(${TABLE} STATIC ${SURFINGDB_SRC}/table/Node.cpp)

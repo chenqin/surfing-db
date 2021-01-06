@@ -205,6 +205,8 @@ include(ext/Json_Ext.cmake)
 
 include(ext/Arrow_Ext.cmake)
 
+include(ext/Sketches_Ext.cmake)
+
 # set up directory to search for headers
 include_directories(include ${GTEST_INCLUDE_DIRS})
 include_directories(include ${GMOCK_INCLUDE_DIRS})
