@@ -53,17 +53,17 @@ int main() {
     // create node of cluster
     const auto node = std::make_shared<surfingdb::table::Node>();
     // define a row table bind to each node
-    surfingdb::table::RowTable<mychunk> t(node);
+    surfingdb::table::RowTable<mychunk> t_l(node), t_r(node), t_out(node);
     //std::cout << "watermark is " << t.watermark() << std::endl;
     auto col = std::make_shared<surfingdb::table::ColumnarTable<mychunk>>();
 
     mychunk c;
-    t.regType(c.schema());
+    t_l.regType(c.schema());
 
     c.b = (long) node->rank;
     c.a = node->rank;
 
-    t.send(0, 1, c);
+    t_l.send(0, 1, c);
     if(node->rank == 1) {
         std::cout << "rank 1 recv " << c.b << c.a << std::endl;
     }
@@ -72,18 +72,21 @@ int main() {
     for(long i = 0 ; i < 10000000 ; i++) {
         chunks.push_back(c);
     }
-    t.ingest(chunks);
+    t_l.ingest(chunks);
+    t_r.ingest(chunks);
+
+    t_l.combine(t_r, t_out);
 
     MPI_Barrier(MPI_COMM_WORLD);
     double t1, t2;
     t1 = MPI_Wtime();
-    t.allreduce(chunks);
+    t_l.allreduce(chunks);
 
     t2 = MPI_Wtime();
     if(node->rank == 0) {
         LOG(INFO) <<  "all reduce cost " << t2 - t1;
     }
-    t.flush(col);
+    t_l.flush(col);
 
     std::vector<mychunk> chunks2;
     int vol = 100000000 / node->world + 1;
@@ -91,20 +94,20 @@ int main() {
         c.a = i;
         chunks2.push_back(c);
     }
-    t.ingest(chunks2);
+    t_l.ingest(chunks2);
     t1 = MPI_Wtime();
 
     std::function<int(const int&, const int&, const mychunk&)> ope =
             [=](const int &rank, const int &world, const mychunk &s) { return (s.a + rank) % world; };
-    surfingdb::table::PartitionOp<mychunk> partitionOp(node->rank, node->world, t.row_type, ope);
+    surfingdb::table::PartitionOp<mychunk> partitionOp(node->rank, node->world, t_l.row_type, ope);
 
-    t.partition(partitionOp);
+    t_l.partition(partitionOp);
     t2 = MPI_Wtime();
     if(node->rank == 0) {
         LOG(INFO) << "shuffle " << vol * node->world << " on " << node->world << " workers costs "
                   << t2 - t1;
     }
 
-    t.flush(col);
+    t_l.flush(col);
     return 0;
 }

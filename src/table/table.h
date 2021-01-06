@@ -9,6 +9,8 @@
 #include <mpi.h>
 #include "Node.h"
 #include "Operator.h"
+#include "PartitionOp.h"
+#include "CombineOp.h"
 
 #pragma once
 
@@ -70,22 +72,22 @@ namespace surfingdb {
          */
         template<class Row>
         class RowTable {
-        private:
+        public:
             // defines the node row table bind to
             std::shared_ptr<Node> ptr;
             std::shared_ptr<std::vector<Row>> _chunks;
-        public:
             RowTable(const std::shared_ptr<Node> node) {
                 this->ptr = node;
                 this->_chunks = std::make_shared<std::vector<Row>>();
             }
 
             ~RowTable() {
-                MPI_Type_free(&row_type);
+                // MPI_Type_free(&row_type);
             }
 
             MPI_Op reducer_op;
             MPI_Datatype row_type = 0;
+
 
             void ingest(const std::vector<Row>& rows) {
                 _chunks.get()->insert(_chunks.get()->end(), rows.begin(), rows.end());
@@ -142,6 +144,18 @@ namespace surfingdb {
             void partition(PartitionOp<Row> &op) {
                 std::vector<Row>* payload = this->_chunks.get();
                 op.process(*payload, *payload, *payload);
+            }
+
+            /**
+             * combine two row table (left, right) into out table
+             * @param otherTable
+             */
+            void combine(const RowTable<Row>& rightTable, RowTable<Row>& outTable) {
+                CombineOp<Row> op;
+                const std::vector<Row> rowL = *(this->_chunks.get());
+                const std::vector<Row> rowR = *(rightTable._chunks.get());
+                std::vector<Row> rowOut = *(outTable._chunks.get());
+                op.process(rowL, rowR, rowOut);
             }
 
             /**
