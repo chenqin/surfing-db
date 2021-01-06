@@ -6,7 +6,7 @@
 #define SURFINGDB_PARDOOP_H
 
 #include "Operator.h"
-#include <mpi.h>
+#include <omp.h>
 
 #pragma once
 
@@ -35,8 +35,11 @@ namespace surfingdb {
             process(const std::vector<RowInL> &rowInL, const std::vector<RowInR> &rowInR, std::vector<RowOut> &rowOut) {
                 assert(rowInL.size() == rowInR.size());
                 rowOut.resize(rowInL.size());
-                // we may use omp
-                for (size_t i = 0; i < rowInL.size(); i++) {
+                size_t total = rowInL.size();
+# ifdef _OPENMP
+#pragma omp parallel for
+# endif
+                for (size_t i = 0; i < total; i++) {
                     _doFunc(rowInL.at(i), rowInR.at(i), rowOut.at(i));
                 }
             }
