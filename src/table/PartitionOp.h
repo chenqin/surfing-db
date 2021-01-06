@@ -4,6 +4,7 @@
 
 #ifndef SURFINGDB_PARTITIONOP_H
 #define SURFINGDB_PARTITIONOP_H
+
 #include "Operator.h"
 #include <mpi.h>
 
@@ -20,16 +21,19 @@ namespace surfingdb {
         protected:
             int rank;
             int world;
-            std::function<int(const int&, const int&, const Row &)> partitioner;
+            std::function<int(const int &, const int &, const Row &)> partitioner;
         public:
-            PartitionOp(const int rank, const int world, const MPI_Datatype& datatype, const std::function<int(const int&, const int&, const Row &)>& par) : Operator<Row, Row, Row>(){
+            PartitionOp(const int rank, const int world, const MPI_Datatype &datatype,
+                        const std::function<int(const int &, const int &, const Row &)> &par)
+                    : Operator<Row, Row, Row>() {
                 this->rank = rank;
                 this->world = world;
                 this->_type_out = datatype;
                 this->partitioner = par;
                 this->_type = Partition;
             }
-            void process(const std::vector<Row>& ,const std::vector<Row>& , std::vector<Row>& rowOut) {
+
+            void process(const std::vector<Row> &, const std::vector<Row> &, std::vector<Row> &rowOut) {
                 //LOG(INFO) << "output row " << rowOut.size();
                 //LOG(INFO) << "mpi datatype " << this->_type_out;
                 // organize record per rank
@@ -79,5 +83,5 @@ namespace surfingdb {
             }
         };
     }
-    }
+}
 #endif //SURFINGDB_PARTITIONOP_H

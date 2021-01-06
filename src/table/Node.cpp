@@ -26,5 +26,5 @@ namespace surfingdb {
             MPI_Finalize();
             //LOG(INFO) << "cluster finalized";
         }
-}
+    }
 }

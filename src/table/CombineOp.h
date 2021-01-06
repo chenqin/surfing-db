@@ -4,6 +4,7 @@
 
 #ifndef SURFINGDB_COMBINEOP_H
 #define SURFINGDB_COMBINEOP_H
+
 #include "Operator.h"
 #include <mpi.h>
 
@@ -18,17 +19,18 @@ namespace surfingdb {
         template<typename Row>
         class CombineOp : public Operator<Row, Row, Row> {
         public:
-            CombineOp() : Operator<Row, Row, Row>(){
+            CombineOp() : Operator<Row, Row, Row>() {
                 this->_type = OperatorType::Combine;
             }
-            void process(const std::vector<Row>& rowL,const std::vector<Row>& rowR, std::vector<Row>& rowOut) {
+
+            void process(const std::vector<Row> &rowL, const std::vector<Row> &rowR, std::vector<Row> &rowOut) {
                 rowOut.resize(rowL.size() + rowOut.size());
                 // check memory
-                if(&rowOut == &rowL) {
+                if (&rowOut == &rowL) {
                     rowOut.insert(rowOut.end(), rowR.begin(), rowR.end());
-                } else if(&rowOut == &rowR) {
+                } else if (&rowOut == &rowR) {
                     rowOut.insert(rowOut.end(), rowL.begin(), rowL.end());
-                }else {
+                } else {
                     rowOut.clear();
                     rowOut.insert(rowOut.end(), rowL.begin(), rowL.end());
                     rowOut.insert(rowOut.end(), rowR.begin(), rowR.end());

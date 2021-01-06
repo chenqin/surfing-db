@@ -17,12 +17,20 @@ namespace surfingdb{
             struct myDummy {
                 int a;
             };
-          TEST(TableTest, TestAloha) {
+          TEST(TableTest, TestPartitionAloha) {
               std::vector<myDummy> dataIn, dataInR, dataOut;
                 std::function<int(const int&, const int&, const myDummy &)> partitioner =
                         [=](const int& rank, const int& world, const myDummy &s) { return (s.a+rank) % world; };
               PartitionOp<myDummy> op1(0,1, MPI_INT, partitioner);
           }
+
+            TEST(TableTest, TestPadDoAloha) {
+                std::vector<myDummy> dataIn, dataInR;
+                std::vector<int> sum;
+                std::function<void(const myDummy&, const myDummy&, int &)> doFunc =
+                        [=](const myDummy& l, const myDummy& r, int &out) { out = l.a + r.a; };
+                ParDoOp<myDummy, myDummy, int> op1(doFunc);
+            }
 
           TEST(TableTest, TestSketchFrequency) {
                 typedef datasketches::frequent_items_sketch<std::string> frequent_strings_sketch;

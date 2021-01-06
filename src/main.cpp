@@ -75,8 +75,6 @@ int main() {
     t_l.ingest(chunks);
     t_r.ingest(chunks);
 
-    t_l.combine(t_r, t_out);
-
     MPI_Barrier(MPI_COMM_WORLD);
     double t1, t2;
     t1 = MPI_Wtime();
@@ -97,11 +95,22 @@ int main() {
     t_l.ingest(chunks2);
     t1 = MPI_Wtime();
 
+    // combine operator
+    t_l.combine(t_r, t_out);
+
+    // pardo operator
+    std::function<void(const mychunk&, const mychunk&, int &)> doFunc =
+            [=](const mychunk& l, const mychunk& r, int &out) { out = l.a + r.a; };
+    surfingdb::table::ParDoOp<mychunk, mychunk, int> parDoOp(doFunc);
+    surfingdb::table::RowTable<int> t_sum(node);
+    t_l.parDo<mychunk, int>(t_l, t_sum, parDoOp);
+
+    // partition operator
     std::function<int(const int&, const int&, const mychunk&)> ope =
             [=](const int &rank, const int &world, const mychunk &s) { return (s.a + rank) % world; };
     surfingdb::table::PartitionOp<mychunk> partitionOp(node->rank, node->world, t_l.row_type, ope);
-
     t_l.partition(partitionOp);
+
     t2 = MPI_Wtime();
     if(node->rank == 0) {
         LOG(INFO) << "shuffle " << vol * node->world << " on " << node->world << " workers costs "

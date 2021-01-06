@@ -11,6 +11,7 @@
 #include "Operator.h"
 #include "PartitionOp.h"
 #include "CombineOp.h"
+#include "ParDoOp.h"
 
 #pragma once
 
@@ -76,6 +77,7 @@ namespace surfingdb {
             // defines the node row table bind to
             std::shared_ptr<Node> ptr;
             std::shared_ptr<std::vector<Row>> _chunks;
+
             RowTable(const std::shared_ptr<Node> node) {
                 this->ptr = node;
                 this->_chunks = std::make_shared<std::vector<Row>>();
@@ -89,7 +91,7 @@ namespace surfingdb {
             MPI_Datatype row_type = 0;
 
 
-            void ingest(const std::vector<Row>& rows) {
+            void ingest(const std::vector<Row> &rows) {
                 _chunks.get()->insert(_chunks.get()->end(), rows.begin(), rows.end());
             }
 
@@ -97,6 +99,7 @@ namespace surfingdb {
                 colptr.get()->toTable(this->_chunks);
                 _chunks.get()->clear();
             }
+
             /**
              * register MPI_struct type based on row schema
              * @param schemaptr arrow Schema
@@ -137,12 +140,13 @@ namespace surfingdb {
                 MPI_Type_create_resized(tmp_type, lb, extent, &row_type);
                 MPI_Type_commit(&row_type);
             }
+
             /**
              * partition run in place shuffle
              * @param op
              */
             void partition(PartitionOp<Row> &op) {
-                std::vector<Row>* payload = this->_chunks.get();
+                std::vector<Row> *payload = this->_chunks.get();
                 op.process(*payload, *payload, *payload);
             }
 
@@ -150,11 +154,28 @@ namespace surfingdb {
              * combine two row table (left, right) into out table
              * @param otherTable
              */
-            void combine(const RowTable<Row>& rightTable, RowTable<Row>& outTable) {
+            void combine(const RowTable<Row> &rightTable, RowTable<Row> &outTable) {
                 CombineOp<Row> op;
                 const std::vector<Row> rowL = *(this->_chunks.get());
                 const std::vector<Row> rowR = *(rightTable._chunks.get());
                 std::vector<Row> rowOut = *(outTable._chunks.get());
+                op.process(rowL, rowR, rowOut);
+            }
+
+            /**
+             * vectorized "map"
+             * @tparam RowInR
+             * @tparam RowOut
+             * @param rightTable
+             * @param outTable
+             * @param op
+             */
+            template<class RowInR, class RowOut>
+            void parDo(const RowTable<RowInR> &rightTable, RowTable<int> &outTable, ParDoOp<Row, RowInR, RowOut> &op) {
+                assert(op.Optype() == OperatorType::ParDo);
+                const std::vector<Row> rowL = *(this->_chunks.get());
+                const std::vector<RowInR> rowR = *(rightTable._chunks.get());
+                std::vector<RowOut> rowOut = *(outTable._chunks.get());
                 op.process(rowL, rowR, rowOut);
             }
 
@@ -186,12 +207,13 @@ namespace surfingdb {
 
             void allreduce(const std::vector<Row> &chunks) {
                 // create list of user defined MPI_OPs
-                auto op = [](Row a, Row b){ return a+b;};
+                auto op = [](Row a, Row b) { return a + b; };
 
                 MPI_Op_create(&reducer<Row, +op>, true, &this->reducer_op);
                 std::vector<Row> result(chunks.size());
                 // used to collective get quantile sketch of each columns https://datasketches.apache.org/docs/Quantiles/QuantilesCppExample.html
-                MPI_Allreduce((void *) &chunks[0], (void *) &result[0], chunks.size(), row_type, reducer_op, MPI_COMM_WORLD);
+                MPI_Allreduce((void *) &chunks[0], (void *) &result[0], chunks.size(), row_type, reducer_op,
+                              MPI_COMM_WORLD);
                 MPI_Op_free(&reducer_op);
             }
         };

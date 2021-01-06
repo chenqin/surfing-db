@@ -8,16 +8,16 @@
 namespace surfingdb {
     namespace node {
 
-class Node {
-    public:
-        Node();
+        class Node {
+        public:
+            Node();
 
-        ~Node();
+            ~Node();
 
-        int world;
-        int rank;
-        std::string processor;
-};
+            int world;
+            int rank;
+            std::string processor;
+        };
     }
 }
 #endif //SURFINGDB_NODE_H
