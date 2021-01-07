@@ -6,18 +6,18 @@
 #ifndef SURFINGDB_NODE_H
 #define SURFINGDB_NODE_H
 namespace surfingdb {
-    namespace node {
+namespace node {
 
-        class Node {
-        public:
-            Node();
+class Node {
+public:
+  Node();
 
-            ~Node();
+  ~Node();
 
-            int world;
-            int rank;
-            std::string processor;
-        };
-    }
-}
+  int world;
+  int rank;
+  std::string processor;
+};
+} // namespace node
+} // namespace surfingdb
 #endif //SURFINGDB_NODE_H

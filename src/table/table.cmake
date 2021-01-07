@@ -13,8 +13,11 @@ find_package(Boost REQUIRED mpi serialization)
 include_directories(${JEMALLOC_INCLUDE_DIRS})
 include_directories(${DATASKETCHES_INCLUDE_DIRS})
 
-# build nebula.ingest library
-add_library(${TABLE} STATIC ${SURFINGDB_SRC}/table/Node.cpp)
+include_directories( ${SURFINGDB_SRC}/table/gen-cpp)
+
+add_library(${TABLE} STATIC
+        ${SURFINGDB_SRC}/table/gen-cpp
+        ${SURFINGDB_SRC}/table/Node.cpp)
 
 target_link_libraries(${TABLE}
         PUBLIC ${JEMALLOC_LIBRARIES}
