@@ -19,6 +19,26 @@
 #include <glog/logging.h>
 #include <iostream>
 
+/**
+ * build a continous memory buffer
+ */
+class buffer {
+private:
+    std::unique_ptr<uint8_t> _payload;
+public:
+    buffer(u_int64_t size) {
+        _payload = std::make_unique<uint8_t>(size);
+    }
+
+    std::shared_ptr<arrow::Schema> schema() {
+        std::vector<std::shared_ptr<arrow::Field>> schema_vector = {
+                arrow::field("a", arrow::int32()),
+                arrow::field("b", arrow::int64())};
+        arrow::field("c", arrow::fixed_size_binary(100));
+        return std::make_shared<arrow::Schema>(schema_vector);
+    }
+};
+
 class mychunk {
   public:
     int a;
@@ -49,6 +69,7 @@ class mychunk {
  * @return
  */
 int main() {
+    buffer b(128);
     //google::InitGoogleLogging(argv[0]);
     // create node of cluster
     const auto node = std::make_shared<surfingdb::table::Node>();
