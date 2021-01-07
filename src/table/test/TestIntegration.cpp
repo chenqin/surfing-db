@@ -14,14 +14,8 @@
 namespace surfingdb{
     namespace table {
         namespace test {
-            class myDummy {
-            public:
+            struct myDummy {
                 int a;
-                static std::shared_ptr<arrow::Schema> schema() {
-                    std::vector<std::shared_ptr<arrow::Field>> schema_vector = {
-                            arrow::field("a", arrow::int32())};
-                    return std::make_shared<arrow::Schema>(schema_vector);
-                }
             };
           TEST(TableTest, TestPartitionAloha) {
               std::vector<myDummy> dataIn, dataInR, dataOut;
@@ -31,22 +25,11 @@ namespace surfingdb{
           }
 
             TEST(TableTest, TestPadDoAloha) {
-                std::function<void(const shared_ptr<Schema>, const shared_ptr<Schema>, const shared_ptr<Schema>,
-                                   const std::shared_ptr<arrow::Buffer>, const std::shared_ptr<arrow::Buffer>,
-                                   std::shared_ptr<arrow::Buffer>)> doFunc =
-                        [=](const shared_ptr<Schema>, const shared_ptr<Schema>, const shared_ptr<Schema>,
-                            const std::shared_ptr<arrow::Buffer> rL, const std::shared_ptr<arrow::Buffer>,
-                            std::shared_ptr<arrow::Buffer> rOut) {
-                            assert(rOut->is_mutable());
-                            assert(rOut->size() == sizeof(int));
-                            auto abuf = arrow::SliceMutableBuffer(rL, 0, sizeof(int));
-                            const int* a = (int*) abuf.get()->mutable_address();
-
-                            abuf = arrow::SliceMutableBuffer(rOut, 0, sizeof(int));
-                            int* aa = (int*) abuf.get()->mutable_address();
-                            *aa = *a;
-                        };
-                ParDoOp op(myDummy::schema(), myDummy::schema(), myDummy::schema(), doFunc);
+                std::vector<myDummy> dataIn, dataInR;
+                std::vector<int> sum;
+                std::function<void(const myDummy&, const myDummy&, int &)> doFunc =
+                        [=](const myDummy& l, const myDummy& r, int &out) { out = l.a + r.a; };
+                ParDoOp<myDummy, myDummy, int> op1(doFunc);
             }
 
           TEST(TableTest, TestSketchFrequency) {

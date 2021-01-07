@@ -79,35 +79,8 @@ int main() {
         t_buf.ingest(c.getBuffer());
     }
     t_buf.send(0, 1, c.getBuffer());
-    /**
-     * obviously using arrow::Buffer adds complexity to user code when it comes to encoding/decoding
-     * we should have util
-     */
-    std::function<void(const shared_ptr<Schema>, const shared_ptr<Schema>, const shared_ptr<Schema>,
-                       const std::shared_ptr<arrow::Buffer>, const std::shared_ptr<arrow::Buffer>,
-                       std::shared_ptr<arrow::Buffer>)> doFunc =
-            [=](const shared_ptr<Schema>, const shared_ptr<Schema>, const shared_ptr<Schema>,
-                const std::shared_ptr<arrow::Buffer> rL, const std::shared_ptr<arrow::Buffer>,
-                std::shared_ptr<arrow::Buffer> rOut) {
-        assert(rOut->is_mutable());
-        assert(rOut->size() == sizeof(int) + sizeof(long));
-        auto abuf = arrow::SliceMutableBuffer(rL, 0, sizeof(int));
-        auto bbuf = arrow::SliceMutableBuffer(rL, sizeof(int), sizeof(long));
-        const int* a = (int*) abuf.get()->mutable_address();
-        const long* b = (long*) bbuf.get()->mutable_address();
 
-        abuf = arrow::SliceMutableBuffer(rOut, 0, sizeof(int));
-        bbuf = arrow::SliceMutableBuffer(rOut, sizeof(int), sizeof(long));
-        int* aa = (int*) abuf.get()->mutable_address();
-        long* bb = (long*) bbuf.get()->mutable_address();
-        *aa = *a;
-        *bb = *b;
-    };
-    ParDoOp op(c.schema(), c.schema(), c.schema(), doFunc);
-    t_buf.parDo(t_buf, t_buf, op);
-    t_buf.combine(t_buf, t_buf);
 
-/*
     t_l.regType(c.schema());
 
     c.b = (long) node->rank;
@@ -164,6 +137,5 @@ int main() {
     }
 
     t_l.flush(col);
-    */
     return 0;
 }

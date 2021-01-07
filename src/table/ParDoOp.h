@@ -8,14 +8,10 @@
 #include "Operator.h"
 #include <omp.h>
 #include <mpi.h>
-
 #pragma once
 
 namespace surfingdb {
     namespace table {
-        using namespace arrow;
-        using namespace std;
-
         /**
          * "map" after reshuffle
          * transform list of row from L to Out
@@ -24,40 +20,27 @@ namespace surfingdb {
          * @tparam RowInR
          * @tparam RowOut
          */
-        class ParDoOp : public Operator<arrow::Buffer, arrow::Buffer, arrow::Buffer> {
+        template<class RowInL, class RowInR, class RowOut>
+        class ParDoOp : public Operator<RowInL, RowInR, RowOut> {
         private:
-            shared_ptr<Schema> rL, rR, rOut;
-            function<void(const shared_ptr<Schema>, const shared_ptr<Schema>, const shared_ptr<Schema>,
-                          const std::shared_ptr<arrow::Buffer>, const std::shared_ptr<arrow::Buffer>,
-                          std::shared_ptr<arrow::Buffer>)> _doFunc;
+            std::function<void(const RowInL &, const RowInR &, RowOut &)> _doFunc;
         public:
-            ParDoOp(const shared_ptr<Schema> rowL, const shared_ptr<Schema> rowR, const shared_ptr<Schema> rowOut,
-                    std::function<void(const shared_ptr<Schema>, const shared_ptr<Schema>, const shared_ptr<Schema>,
-                                       const shared_ptr<arrow::Buffer>, const std::shared_ptr<arrow::Buffer>,
-                                       shared_ptr<arrow::Buffer>)> &doFunc)
-                    : Operator<arrow::Buffer, arrow::Buffer, arrow::Buffer>() {
-                rL = rowL;
-                rR = rowR;
-                rOut = rowOut;
+            ParDoOp(std::function<void(const RowInL &, const RowInR &, RowOut &)> &doFunc)
+                    : Operator<RowInL, RowInR, RowOut>() {
                 this->_doFunc = doFunc;
                 this->_type = ParDo;
             }
 
-            void process(const std::vector<arrow::Buffer> &rowInL, const std::vector<arrow::Buffer> &rowInR,
-                         std::vector<arrow::Buffer> &rowOut) {
-                LOG(INFO) << rowInL.size() << rowOut.size() << rowInR.size();
-            }
-
-            void process(const std::vector<std::shared_ptr<arrow::Buffer>> rowInL,
-                         const std::vector<std::shared_ptr<arrow::Buffer>> rowInR,
-                         std::vector<std::shared_ptr<arrow::Buffer>> rowOut) {
+            void
+            process(const std::vector<RowInL> &rowInL, const std::vector<RowInR> &rowInR, std::vector<RowOut> &rowOut) {
                 assert(rowInL.size() == rowInR.size());
+                rowOut.resize(rowInL.size());
                 size_t total = rowInL.size();
-                rowOut.resize(total);
-
-#pragma omp parallel for private(rL, rR, rOut)
+# ifdef _OPENMP
+#pragma omp parallel for
+# endif
                 for (size_t i = 0; i < total; i++) {
-                    _doFunc(rL, rR, rOut, rowInL.at(i), rowInR.at(i), rowOut.at(i));
+                    _doFunc(rowInL.at(i), rowInR.at(i), rowOut.at(i));
                 }
             }
         };
