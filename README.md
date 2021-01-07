@@ -5,7 +5,8 @@ The goal of this project is to enable scientist, analyst and who speaks SQL and 
 
 ## unified memory model with arrow
 Row schema & ser/desr were managed as arrow buffer and shared_ptr to minimize data copy in/out of surfing-db
-After row land to columnar table, it is saved as columnar format to maximize query speed
+
+After row land to columnar table, it is saved as columnar format to maximize query speed.
 
 ## unified computation architecture with MPI
 Unlike other big data engines, surfing-db treats data science and machine learning as first class citizen. 

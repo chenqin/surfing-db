@@ -12,29 +12,37 @@
 
 namespace surfingdb {
     namespace table {
+        using namespace arrow;
+        using namespace std;
         /**
          * combine two same typed rows into one
          * @tparam Row
          */
-        template<typename Row>
-        class CombineOp : public Operator<Row, Row, Row> {
+        class CombineOp : public Operator<arrow::Buffer, arrow::Buffer, arrow::Buffer> {
         public:
-            CombineOp() : Operator<Row, Row, Row>() {
+            CombineOp() : Operator<arrow::Buffer, arrow::Buffer, arrow::Buffer>() {
                 this->_type = OperatorType::Combine;
             }
 
-            void process(const std::vector<Row> &rowL, const std::vector<Row> &rowR, std::vector<Row> &rowOut) {
-                rowOut.resize(rowL.size() + rowOut.size());
+            void process(const std::vector<std::shared_ptr<arrow::Buffer>> rowInL,
+                         const std::vector<std::shared_ptr<arrow::Buffer>> rowInR,
+                         std::vector<std::shared_ptr<arrow::Buffer>> rowOut) {
+                rowOut.resize(rowInR.size() + rowInL.size());
                 // check memory
-                if (&rowOut == &rowL) {
-                    rowOut.insert(rowOut.end(), rowR.begin(), rowR.end());
-                } else if (&rowOut == &rowR) {
-                    rowOut.insert(rowOut.end(), rowL.begin(), rowL.end());
+                if (rowOut == rowInL) {
+                    rowOut.insert(rowOut.end(), rowInR.begin(), rowInR.end());
+                } else if (rowOut == rowInR) {
+                    rowOut.insert(rowOut.end(), rowInL.begin(), rowInL.end());
                 } else {
                     rowOut.clear();
-                    rowOut.insert(rowOut.end(), rowL.begin(), rowL.end());
-                    rowOut.insert(rowOut.end(), rowR.begin(), rowR.end());
+                    rowOut.insert(rowOut.end(), rowInL.begin(), rowInL.end());
+                    rowOut.insert(rowOut.end(), rowInR.begin(), rowInR.end());
                 }
+            }
+
+            void process(const std::vector<arrow::Buffer> &rowInL, const std::vector<arrow::Buffer> &rowInR,
+                         std::vector<arrow::Buffer> &rowOut) {
+                LOG(INFO) << rowInL.size() << rowOut.size() << rowInR.size();
             }
         };
     }

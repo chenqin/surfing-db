@@ -167,10 +167,13 @@ namespace surfingdb {
              * @param otherTable
              */
             void combine(const RowTable<Row> &rightTable, RowTable<Row> &outTable) {
-                CombineOp<Row> op;
-                const std::vector<Row> rowL = *(this->_chunks.get());
-                const std::vector<Row> rowR = *(rightTable._chunks.get());
-                std::vector<Row> rowOut = *(outTable._chunks.get());
+                assert(this->_schema == rightTable._schema);
+                assert(this->_schema == outTable._schema);
+
+                CombineOp op;
+                const auto rowL = this->_data;
+                const auto rowR = rightTable._data;
+                auto rowOut = outTable._data;
                 op.process(rowL, rowR, rowOut);
             }
 
@@ -182,12 +185,11 @@ namespace surfingdb {
              * @param outTable
              * @param op
              */
-            template<class RowInR, class RowOut>
-            void parDo(const RowTable<RowInR> &rightTable, RowTable<int> &outTable, ParDoOp<Row, RowInR, RowOut> &op) {
+            void parDo(const RowTable<arrow::Buffer> &rightTable, RowTable<arrow::Buffer> &outTable, ParDoOp &op) {
                 assert(op.Optype() == OperatorType::ParDo);
-                const std::vector<Row> rowL = *(this->_chunks.get());
-                const std::vector<RowInR> rowR = *(rightTable._chunks.get());
-                std::vector<RowOut> rowOut = *(outTable._chunks.get());
+                const auto rowL = this->_data;
+                const auto rowR = rightTable._data;
+                auto rowOut = outTable._data;
                 op.process(rowL, rowR, rowOut);
             }
 
