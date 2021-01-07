@@ -32,17 +32,6 @@ class mychunk {
         return std::make_shared<arrow::Schema>(schema_vector);
     }
 
-    std::shared_ptr<arrow::Buffer> getBuffer() {
-        arrow::BufferBuilder builder;
-        builder.Append(&a, sizeof(int));
-        builder.Append(&b, sizeof(long));
-        std::shared_ptr<arrow::Buffer> buffer;
-        if (!builder.Finish(&buffer).ok()) {
-            // ... handle buffer allocation error
-        }
-        return buffer;
-    }
-
     // friends defined inside class body are inline and are hidden from non-ADL lookup
     friend mychunk operator+(mychunk lhs,        // passing lhs by value helps optimize chained a+b+c
                              const mychunk &rhs) // otherwise, both parameters may be const references
@@ -54,7 +43,7 @@ class mychunk {
         return lhs; // return the result by value (uses move constructor)
     }
 };
-using namespace surfingdb::table;
+
 /** run this program with
  * mpirun -np 12 ./MainTest
  * @return
@@ -62,30 +51,22 @@ using namespace surfingdb::table;
 int main() {
     //google::InitGoogleLogging(argv[0]);
     // create node of cluster
-    const auto node = std::make_shared<Node>();
+    const auto node = std::make_shared<surfingdb::table::Node>();
     // define a row table bind to each node
-    RowTable<mychunk> t_l(node), t_r(node), t_out(node);
+    surfingdb::table::RowTable<mychunk> t_l(node), t_r(node), t_out(node);
     //std::cout << "watermark is " << t.watermark() << std::endl;
-    auto col = std::make_shared<ColumnarTable<mychunk>>();
+    auto col = std::make_shared<surfingdb::table::ColumnarTable<mychunk>>();
 
     mychunk c;
-
-    /**
-     * prototype unified memory model with arrow buffer
-     */
-    RowTable<arrow::Buffer> t_buf(node, c.schema());
-    for(long i = 0 ; i < 100 ; i++) {
-        assert(c.getBuffer()->is_mutable());
-        t_buf.ingest(c.getBuffer());
-    }
-    t_buf.send(0, 1, c.getBuffer());
-
-
     t_l.regType(c.schema());
 
     c.b = (long) node->rank;
     c.a = node->rank;
 
+    t_l.send(0, 1, c);
+    if(node->rank == 1) {
+        std::cout << "rank 1 recv " << c.b << c.a << std::endl;
+    }
     std::vector<mychunk> chunks;
 
     for(long i = 0 ; i < 10000000 ; i++) {

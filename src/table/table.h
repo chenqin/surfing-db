@@ -78,17 +78,9 @@ namespace surfingdb {
             std::shared_ptr<Node> ptr;
             std::shared_ptr<std::vector<Row>> _chunks;
 
-            std::shared_ptr<arrow::Schema> _schema;
-            arrow::BufferVector _data;
             RowTable(const std::shared_ptr<Node> node) {
                 this->ptr = node;
                 this->_chunks = std::make_shared<std::vector<Row>>();
-            }
-
-            RowTable(const std::shared_ptr<Node> node, const std::shared_ptr<arrow::Schema> schema) {
-                this->ptr = node;
-                this->_schema = schema;
-                this->regType(_schema);
             }
 
             ~RowTable() {
@@ -101,10 +93,6 @@ namespace surfingdb {
 
             void ingest(const std::vector<Row> &rows) {
                 _chunks.get()->insert(_chunks.get()->end(), rows.begin(), rows.end());
-            }
-
-            void ingest(const std::shared_ptr<arrow::Buffer> bufptr){
-                _data.push_back(bufptr);
             }
 
             void flush(std::shared_ptr<ColumnarTable<Row>> colptr) {
@@ -194,11 +182,11 @@ namespace surfingdb {
             /**
              * blocking send chunk of data to another node
              */
-            void send(int source, int dest, const std::shared_ptr<Row> dataptr) {
+            void send(int source, int dest, const Row &data) {
                 if (this->ptr->rank == source) {
-                    MPI_Send((void *) dataptr.get(), 1, this->row_type, dest, 0, MPI_COMM_WORLD);
+                    MPI_Send((void *) &data, 1, this->row_type, dest, 0, MPI_COMM_WORLD);
                 } else if (this->ptr->rank == dest) {
-                    MPI_Recv((void *) dataptr.get(), 1, this->row_type, source, 0, MPI_COMM_WORLD,
+                    MPI_Recv((void *) &data, 1, this->row_type, source, 0, MPI_COMM_WORLD,
                              MPI_STATUS_IGNORE);
                 }
             }
