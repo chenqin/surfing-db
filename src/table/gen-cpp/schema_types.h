@@ -33,13 +33,13 @@ struct RowType {
 extern const std::map<int, const char*> _RowType_VALUES_TO_NAMES;
 
 typedef struct _Field__isset {
-  _Field__isset() : list_type(true), list_unit_size(false), map_key_type(true), map_value_type(true), map_key_unit_size(false), map_value_unit_size(false) {}
+  _Field__isset() : list_type(true), max_list_unit_size(false), map_key_type(true), map_value_type(true), max_map_key_unit_size(false), max_map_value_unit_size(false) {}
   bool list_type;
-  bool list_unit_size;
+  bool max_list_unit_size;
   bool map_key_type;
   bool map_value_type;
-  bool map_key_unit_size;
-  bool map_value_unit_size;
+  bool max_map_key_unit_size;
+  bool max_map_value_unit_size;
 } _Field__isset;
 
 class Field {
@@ -48,7 +48,7 @@ class Field {
   static const char* ascii_fingerprint; // = "56EDE1E97BD242B68F0241975FE25DEA";
   static const uint8_t binary_fingerprint[16]; // = {0x56,0xED,0xE1,0xE9,0x7B,0xD2,0x42,0xB6,0x8F,0x02,0x41,0x97,0x5F,0xE2,0x5D,0xEA};
 
-  Field() : name(), type((RowType::type)0), unit_size(0), list_type((RowType::type)0), list_unit_size(0), map_key_type((RowType::type)0), map_value_type((RowType::type)0), map_key_unit_size(0), map_value_unit_size(0) {
+  Field() : name(), type((RowType::type)0), max_unit_size(0), list_type((RowType::type)0), max_list_unit_size(0), map_key_type((RowType::type)0), map_value_type((RowType::type)0), max_map_key_unit_size(0), max_map_value_unit_size(0) {
     list_type = (RowType::type)0;
 
     map_key_type = (RowType::type)0;
@@ -61,13 +61,13 @@ class Field {
 
   std::string name;
   RowType::type type;
-  int64_t unit_size;
+  int64_t max_unit_size;
   RowType::type list_type;
-  int64_t list_unit_size;
+  int64_t max_list_unit_size;
   RowType::type map_key_type;
   RowType::type map_value_type;
-  int64_t map_key_unit_size;
-  int64_t map_value_unit_size;
+  int64_t max_map_key_unit_size;
+  int64_t max_map_value_unit_size;
 
   _Field__isset __isset;
 
@@ -79,8 +79,8 @@ class Field {
     type = val;
   }
 
-  void __set_unit_size(const int64_t val) {
-    unit_size = val;
+  void __set_max_unit_size(const int64_t val) {
+    max_unit_size = val;
   }
 
   void __set_list_type(const RowType::type val) {
@@ -88,9 +88,9 @@ class Field {
     __isset.list_type = true;
   }
 
-  void __set_list_unit_size(const int64_t val) {
-    list_unit_size = val;
-    __isset.list_unit_size = true;
+  void __set_max_list_unit_size(const int64_t val) {
+    max_list_unit_size = val;
+    __isset.max_list_unit_size = true;
   }
 
   void __set_map_key_type(const RowType::type val) {
@@ -103,14 +103,14 @@ class Field {
     __isset.map_value_type = true;
   }
 
-  void __set_map_key_unit_size(const int64_t val) {
-    map_key_unit_size = val;
-    __isset.map_key_unit_size = true;
+  void __set_max_map_key_unit_size(const int64_t val) {
+    max_map_key_unit_size = val;
+    __isset.max_map_key_unit_size = true;
   }
 
-  void __set_map_value_unit_size(const int64_t val) {
-    map_value_unit_size = val;
-    __isset.map_value_unit_size = true;
+  void __set_max_map_value_unit_size(const int64_t val) {
+    max_map_value_unit_size = val;
+    __isset.max_map_value_unit_size = true;
   }
 
   bool operator == (const Field & rhs) const
@@ -119,15 +119,15 @@ class Field {
       return false;
     if (!(type == rhs.type))
       return false;
-    if (!(unit_size == rhs.unit_size))
+    if (!(max_unit_size == rhs.max_unit_size))
       return false;
     if (__isset.list_type != rhs.__isset.list_type)
       return false;
     else if (__isset.list_type && !(list_type == rhs.list_type))
       return false;
-    if (__isset.list_unit_size != rhs.__isset.list_unit_size)
+    if (__isset.max_list_unit_size != rhs.__isset.max_list_unit_size)
       return false;
-    else if (__isset.list_unit_size && !(list_unit_size == rhs.list_unit_size))
+    else if (__isset.max_list_unit_size && !(max_list_unit_size == rhs.max_list_unit_size))
       return false;
     if (__isset.map_key_type != rhs.__isset.map_key_type)
       return false;
@@ -137,13 +137,13 @@ class Field {
       return false;
     else if (__isset.map_value_type && !(map_value_type == rhs.map_value_type))
       return false;
-    if (__isset.map_key_unit_size != rhs.__isset.map_key_unit_size)
+    if (__isset.max_map_key_unit_size != rhs.__isset.max_map_key_unit_size)
       return false;
-    else if (__isset.map_key_unit_size && !(map_key_unit_size == rhs.map_key_unit_size))
+    else if (__isset.max_map_key_unit_size && !(max_map_key_unit_size == rhs.max_map_key_unit_size))
       return false;
-    if (__isset.map_value_unit_size != rhs.__isset.map_value_unit_size)
+    if (__isset.max_map_value_unit_size != rhs.__isset.max_map_value_unit_size)
       return false;
-    else if (__isset.map_value_unit_size && !(map_value_unit_size == rhs.map_value_unit_size))
+    else if (__isset.max_map_value_unit_size && !(max_map_value_unit_size == rhs.max_map_value_unit_size))
       return false;
     return true;
   }

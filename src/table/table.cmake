@@ -42,6 +42,7 @@ add_executable(TableTest
 
 target_link_libraries(TableTest
         PRIVATE ${THRIFT_LIBRARY}
+        PRIVATE ${JEMALLOC_LIBRARIES}
         PRIVATE Threads::Threads
         PRIVATE OpenMP::OpenMP_CXX
         PRIVATE MPI::MPI_CXX

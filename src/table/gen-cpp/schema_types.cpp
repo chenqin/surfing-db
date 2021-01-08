@@ -48,7 +48,7 @@ uint32_t Field::read(::apache::thrift::protocol::TProtocol* iprot) {
 
   bool isset_name = false;
   bool isset_type = false;
-  bool isset_unit_size = false;
+  bool isset_max_unit_size = false;
 
   while (true)
   {
@@ -78,8 +78,8 @@ uint32_t Field::read(::apache::thrift::protocol::TProtocol* iprot) {
         break;
       case 3:
         if (ftype == ::apache::thrift::protocol::T_I64) {
-          xfer += iprot->readI64(this->unit_size);
-          isset_unit_size = true;
+          xfer += iprot->readI64(this->max_unit_size);
+          isset_max_unit_size = true;
         } else {
           xfer += iprot->skip(ftype);
         }
@@ -96,8 +96,8 @@ uint32_t Field::read(::apache::thrift::protocol::TProtocol* iprot) {
         break;
       case 5:
         if (ftype == ::apache::thrift::protocol::T_I64) {
-          xfer += iprot->readI64(this->list_unit_size);
-          this->__isset.list_unit_size = true;
+          xfer += iprot->readI64(this->max_list_unit_size);
+          this->__isset.max_list_unit_size = true;
         } else {
           xfer += iprot->skip(ftype);
         }
@@ -124,16 +124,16 @@ uint32_t Field::read(::apache::thrift::protocol::TProtocol* iprot) {
         break;
       case 8:
         if (ftype == ::apache::thrift::protocol::T_I64) {
-          xfer += iprot->readI64(this->map_key_unit_size);
-          this->__isset.map_key_unit_size = true;
+          xfer += iprot->readI64(this->max_map_key_unit_size);
+          this->__isset.max_map_key_unit_size = true;
         } else {
           xfer += iprot->skip(ftype);
         }
         break;
       case 9:
         if (ftype == ::apache::thrift::protocol::T_I64) {
-          xfer += iprot->readI64(this->map_value_unit_size);
-          this->__isset.map_value_unit_size = true;
+          xfer += iprot->readI64(this->max_map_value_unit_size);
+          this->__isset.max_map_value_unit_size = true;
         } else {
           xfer += iprot->skip(ftype);
         }
@@ -151,7 +151,7 @@ uint32_t Field::read(::apache::thrift::protocol::TProtocol* iprot) {
     throw TProtocolException(TProtocolException::INVALID_DATA);
   if (!isset_type)
     throw TProtocolException(TProtocolException::INVALID_DATA);
-  if (!isset_unit_size)
+  if (!isset_max_unit_size)
     throw TProtocolException(TProtocolException::INVALID_DATA);
   return xfer;
 }
@@ -168,8 +168,8 @@ uint32_t Field::write(::apache::thrift::protocol::TProtocol* oprot) const {
   xfer += oprot->writeI32((int32_t)this->type);
   xfer += oprot->writeFieldEnd();
 
-  xfer += oprot->writeFieldBegin("unit_size", ::apache::thrift::protocol::T_I64, 3);
-  xfer += oprot->writeI64(this->unit_size);
+  xfer += oprot->writeFieldBegin("max_unit_size", ::apache::thrift::protocol::T_I64, 3);
+  xfer += oprot->writeI64(this->max_unit_size);
   xfer += oprot->writeFieldEnd();
 
   if (this->__isset.list_type) {
@@ -177,9 +177,9 @@ uint32_t Field::write(::apache::thrift::protocol::TProtocol* oprot) const {
     xfer += oprot->writeI32((int32_t)this->list_type);
     xfer += oprot->writeFieldEnd();
   }
-  if (this->__isset.list_unit_size) {
-    xfer += oprot->writeFieldBegin("list_unit_size", ::apache::thrift::protocol::T_I64, 5);
-    xfer += oprot->writeI64(this->list_unit_size);
+  if (this->__isset.max_list_unit_size) {
+    xfer += oprot->writeFieldBegin("max_list_unit_size", ::apache::thrift::protocol::T_I64, 5);
+    xfer += oprot->writeI64(this->max_list_unit_size);
     xfer += oprot->writeFieldEnd();
   }
   if (this->__isset.map_key_type) {
@@ -192,14 +192,14 @@ uint32_t Field::write(::apache::thrift::protocol::TProtocol* oprot) const {
     xfer += oprot->writeI32((int32_t)this->map_value_type);
     xfer += oprot->writeFieldEnd();
   }
-  if (this->__isset.map_key_unit_size) {
-    xfer += oprot->writeFieldBegin("map_key_unit_size", ::apache::thrift::protocol::T_I64, 8);
-    xfer += oprot->writeI64(this->map_key_unit_size);
+  if (this->__isset.max_map_key_unit_size) {
+    xfer += oprot->writeFieldBegin("max_map_key_unit_size", ::apache::thrift::protocol::T_I64, 8);
+    xfer += oprot->writeI64(this->max_map_key_unit_size);
     xfer += oprot->writeFieldEnd();
   }
-  if (this->__isset.map_value_unit_size) {
-    xfer += oprot->writeFieldBegin("map_value_unit_size", ::apache::thrift::protocol::T_I64, 9);
-    xfer += oprot->writeI64(this->map_value_unit_size);
+  if (this->__isset.max_map_value_unit_size) {
+    xfer += oprot->writeFieldBegin("max_map_value_unit_size", ::apache::thrift::protocol::T_I64, 9);
+    xfer += oprot->writeI64(this->max_map_value_unit_size);
     xfer += oprot->writeFieldEnd();
   }
   xfer += oprot->writeFieldStop();
@@ -211,13 +211,13 @@ void swap(Field &a, Field &b) {
   using ::std::swap;
   swap(a.name, b.name);
   swap(a.type, b.type);
-  swap(a.unit_size, b.unit_size);
+  swap(a.max_unit_size, b.max_unit_size);
   swap(a.list_type, b.list_type);
-  swap(a.list_unit_size, b.list_unit_size);
+  swap(a.max_list_unit_size, b.max_list_unit_size);
   swap(a.map_key_type, b.map_key_type);
   swap(a.map_value_type, b.map_value_type);
-  swap(a.map_key_unit_size, b.map_key_unit_size);
-  swap(a.map_value_unit_size, b.map_value_unit_size);
+  swap(a.max_map_key_unit_size, b.max_map_key_unit_size);
+  swap(a.max_map_value_unit_size, b.max_map_value_unit_size);
   swap(a.__isset, b.__isset);
 }
 

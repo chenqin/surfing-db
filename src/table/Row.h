@@ -9,6 +9,7 @@
 
 #include <glog/logging.h>
 #include <iostream>
+#include <jemalloc/jemalloc.h>
 #include <stdlib.h>
 
 #pragma once
@@ -42,9 +43,14 @@ struct FieldHasher {
  */
 class RowBuffer {
 private:
+  Field header;
+  std::shared_ptr<std::unordered_map<Field, uint64_t, FieldHasher>> _offsets;
+
+  /**
+   * those fields will be send to other processes as a Row
+   * **/
   uint8_t* _payload; // consider using vector std::vector<uint8_t>
   size_t _size;
-  std::shared_ptr<std::unordered_map<Field, uint64_t, FieldHasher>> _offsets;
 
   inline void _pwrite(const Field& f, const void* data, const uint64_t& offset) {
     switch (f.type) {
@@ -73,11 +79,12 @@ private:
     case RowType::STRING: {
       // be careful here with truncation, char* requires extra char \0 to end
       char* str_ptr = (char*)data;
-      assert(strlen(str_ptr) <= sizeof(char) * f.unit_size - 1);
+      CHECK_LE(strlen(str_ptr), sizeof(char) * f.max_unit_size - 1);
+
       size_t length = strlen(str_ptr);
       memcpy((int64_t*)(_payload + offset), &(length), sizeof(int64_t));
       memcpy((char*)(_payload + offset + sizeof(int64_t)), data, length + 1);
-      memset((char*)(_payload + offset + sizeof(int64_t) + length + 1), 0, f.unit_size - length - 1);
+      memset((char*)(_payload + offset + sizeof(int64_t) + length + 1), 0, f.max_unit_size - length - 1);
       break;
     }
     case RowType::LIST: {
@@ -89,7 +96,7 @@ private:
     }
   }
 
-  size_t _pread(const Field& f, void* dataptr, const uint64_t& offset) {
+  inline size_t _pread(const Field& f, void* dataptr, const uint64_t& offset) {
     switch (f.type) {
     case surfingdb::table::schema::RowType::VOID: {
       assert(false);
@@ -115,6 +122,7 @@ private:
       return sizeof(double);
     }
     case RowType::STRING: {
+      // TODO(chenqin): use header
       int64_t* len = (int64_t*)(_payload + offset);
       char* char_ptr = (char*)(_payload + offset + sizeof(int64_t));
       //avoid truncation
@@ -132,10 +140,7 @@ private:
     return 0;
   }
 
-  inline size_t getSize(const Field& f) {
-    Field header;
-    header.type = RowType::LONG;
-
+  inline size_t getFieldSize(const Field& f) {
     switch (f.type) {
 
     case RowType::VOID: {
@@ -156,20 +161,20 @@ private:
     //  |size|string|
     case RowType::STRING: {
       // max support string column 512 character
-      return sizeof(char) * 512 + getSize(header);
+      return sizeof(char) * 512 + header.max_unit_size;
     }
       //  |size|array|
     case RowType::LIST: {
       Field l;
       l.type = f.list_type;
-      return getSize(l) * f.unit_size + getSize(header);
+      return getFieldSize(l) * f.max_unit_size + header.max_unit_size;
     }
       // | size | key val key val|
     case RowType::MAP: {
       Field k, v;
       k.type = f.map_key_type;
       v.type = f.map_value_type;
-      return getSize(k) * f.map_key_unit_size + getSize(v) * v.map_value_unit_size + getSize(header);
+      return getFieldSize(k) * f.max_map_key_unit_size + getFieldSize(v) * v.max_map_value_unit_size + header.max_unit_size;
     }
     }
     assert(false);
@@ -177,13 +182,20 @@ private:
 
 public:
   explicit RowBuffer(const RowSchema& schema) {
+    header.type = RowType::LONG;
+    header.max_unit_size = getFieldSize(header);
+
+    CHECK_EQ(sizeof(uint64_t), getFieldSize(header));
+
     _offsets = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
     _size = 0;
     for (size_t i = 0; i < schema.fields.size(); i++) {
       auto f = schema.fields.at(i);
       this->_offsets.get()->emplace(f, _size);
-      _size += getSize(f);
+      _size += getFieldSize(f);
     }
+
+    CHECK_GT(_size, 0);
     _payload = static_cast<uint8_t*>(malloc(_size));
   }
 
@@ -192,6 +204,16 @@ public:
     _offsets->clear();
     free(_payload);
   }
+
+  /**
+  * copy read RowBuffer of given field
+  * @param f
+  * @param v
+  */
+  void read(const Field& f, Value& v) {
+    uint64_t offset = _offsets->at(f);
+    read(f, v, offset);
+  }
   /**
    * copy value into row buffer
    * @param f
@@ -199,6 +221,10 @@ public:
    */
   void write(const Field& f, const Value& v) {
     uint64_t offset = _offsets->at(f);
+    write(f, v, offset);
+  }
+
+  inline void write(const Field& f, const Value& v, uint64_t& offset) {
     switch (f.type) {
     case surfingdb::table::schema::RowType::VOID: {
       assert(false);
@@ -217,7 +243,7 @@ public:
       break;
     }
     case RowType::DOUBLE: {
-      _pwrite(f, &v.p_val.long_val, offset);
+      _pwrite(f, &v.p_val.double_val, offset);
       break;
     }
     case RowType::STRING: {
@@ -226,9 +252,8 @@ public:
     }
     case RowType::LIST: {
       //guard overflow
-      assert(v.list_value.size() <= (size_t)f.list_unit_size);
-      Field header;
-      header.type = RowType::LONG;
+      CHECK_LE(v.list_value.size(), (size_t)f.max_list_unit_size);
+
       int64_t size = v.list_value.size();
       _pwrite(header, &size, offset);
       offset += sizeof(int64_t);
@@ -236,11 +261,13 @@ public:
       //  |size|string|
       Field listField;
       listField.type = f.list_type;
-      listField.unit_size = getSize(listField);
+      listField.max_unit_size = getFieldSize(listField);
       for (auto pv : v.list_value) {
         //hard code
-        _pwrite(listField, &(pv.double_val), offset);
-        offset += listField.unit_size;
+        Value item;
+        item.p_val = pv;
+        write(listField, item, offset);
+        offset += listField.max_unit_size;
       }
       break;
     }
@@ -250,13 +277,7 @@ public:
     }
   }
 
-  /**
- * copy read RowBuffer of given field
- * @param f
- * @param v
- */
-  void read(const Field& f, Value& v) {
-    uint64_t offset = _offsets->at(f);
+  inline void read(const Field& f, Value& v, uint64_t& offset) {
     switch (f.type) {
     case surfingdb::table::schema::RowType::VOID: {
       break;
@@ -278,7 +299,7 @@ public:
       break;
     }
     case RowType::STRING: {
-      std::vector<char> buff(f.unit_size);
+      std::vector<char> buff(f.max_unit_size);
       size_t strlen = _pread(f, &buff[0], offset);
       buff.resize(strlen);
       v.p_val.string_val = std::string(buff.data());
@@ -293,16 +314,12 @@ public:
 
       Field listItem;
       listItem.type = f.list_type;
-      for(int i = 0 ; i < len ; i++) {
-        //hack
-        double p;
-        _pread(listItem, &p, offset);
-        PValue temp;
-        temp.double_val = p;
-        v.list_value.push_back(temp);
-        offset += getSize(listItem);
+      for (int i = 0; i < len; i++) {
+        Value item;
+        read(listItem, item, offset);
+        v.list_value.push_back(item.p_val);
+        offset += (size_t)getFieldSize(listItem);
       }
-      LOG(INFO) << "list size " << len;
       break;
     }
     case RowType::MAP: {
