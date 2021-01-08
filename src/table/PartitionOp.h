@@ -74,6 +74,7 @@ public:
     for (j = 1; j < world; j++) {
       displ[j] = displ[j - 1] + recv[j - 1];
     }
+    rowOut.clear();
     rowOut.resize(total_recv);
     // for each process, gather rows shard to that process
     for (j = 0; j < world; j++) {

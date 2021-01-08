@@ -9,6 +9,7 @@
 #include <random>
 #include "frequent_items_sketch.hpp"
 #include "table/Operator.h"
+#include "table/Row.h"
 #include "table/table.h"
 
 namespace surfingdb {
