@@ -18,6 +18,7 @@ namespace surfingdb {
 namespace table {
 
 #define MAX_STR_LEN 128
+#define HEADER_SIZE sizeof(long)
 /**
  * build a continous memory buffer
  */
@@ -32,13 +33,72 @@ struct FieldHasher {
     using std::size_t;
     using std::string;
 
-    return ((hash<string>()(k.name)
-             ^ (hash<int>()(k.type) << 1))
-            >> 1)
-           ^ (hash<int>()(k.list_type) << 1);
+    return (hash<string>()(k.name));
   }
 };
 
+/**
+ * valid if schema is accepted
+ * @param rowSchema
+ */
+void validSchema(const RowSchema &rowSchema) {
+  CHECK_GT(rowSchema.fields.size(), 0);
+  std::set<std::string> name_set;
+  for(auto& field : rowSchema.fields) {
+    CHECK(name_set.find(field.name) ==name_set.end());
+
+    name_set.insert(field.name);
+
+    if(field.type == RowType::LIST || field.type == RowType::MAP) {
+      CHECK(field.list_type != RowType::LIST);
+      CHECK(field.list_type != RowType::MAP);
+    } else {
+      CHECK(field.list_type == RowType::VOID);
+      CHECK(field.map_key_type == RowType::VOID);
+      CHECK(field.map_value_type == RowType::VOID);
+    }
+  }
+}
+
+inline size_t getFieldSize(const Field& f) {
+  switch (f.type) {
+
+  case RowType::VOID: {
+    return 0;
+  }
+  case RowType::BOOL: {
+    return sizeof(bool);
+  }
+  case RowType::INT: {
+    return sizeof(int);
+  }
+  case RowType::LONG: {
+    return sizeof(long);
+  }
+  case RowType::DOUBLE: {
+    return sizeof(double);
+  }
+    //  |size|string|
+  case RowType::STRING: {
+    // max support string column MAX_STR_LEN character
+    return sizeof(char) * MAX_STR_LEN + HEADER_SIZE;
+  }
+    //  |size|array|
+  case RowType::LIST: {
+    Field l;
+    l.type = f.list_type;
+    return getFieldSize(l) * f.max_unit_size + HEADER_SIZE;
+  }
+    // | size | key val key val|
+  case RowType::MAP: {
+    Field k, v;
+    k.type = f.map_key_type;
+    v.type = f.map_value_type;
+    return getFieldSize(k) * f.max_map_key_unit_size + getFieldSize(v) * v.max_map_value_unit_size + HEADER_SIZE;
+  }
+  }
+  assert(false);
+}
 /**
  * helper function to init a primitive field
  * @param field
@@ -175,48 +235,9 @@ private:
     return 0;
   }
 
-  inline size_t getFieldSize(const Field& f) {
-    switch (f.type) {
-
-    case RowType::VOID: {
-      return 0;
-    }
-    case RowType::BOOL: {
-      return sizeof(bool);
-    }
-    case RowType::INT: {
-      return sizeof(int);
-    }
-    case RowType::LONG: {
-      return sizeof(long);
-    }
-    case RowType::DOUBLE: {
-      return sizeof(double);
-    }
-    //  |size|string|
-    case RowType::STRING: {
-      // max support string column MAX_STR_LEN character
-      return sizeof(char) * MAX_STR_LEN + header.max_unit_size;
-    }
-      //  |size|array|
-    case RowType::LIST: {
-      Field l;
-      l.type = f.list_type;
-      return getFieldSize(l) * f.max_unit_size + header.max_unit_size;
-    }
-      // | size | key val key val|
-    case RowType::MAP: {
-      Field k, v;
-      k.type = f.map_key_type;
-      v.type = f.map_value_type;
-      return getFieldSize(k) * f.max_map_key_unit_size + getFieldSize(v) * v.max_map_value_unit_size + header.max_unit_size;
-    }
-    }
-    assert(false);
-  }
-
 public:
   explicit RowBuffer(const RowSchema& schema) {
+    validSchema(schema);
     header.type = RowType::LONG;
     header.max_unit_size = getFieldSize(header);
 
