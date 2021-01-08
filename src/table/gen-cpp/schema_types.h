@@ -19,11 +19,11 @@ namespace surfingdb { namespace table { namespace schema {
 
 struct RowType {
   enum type {
-    BOOL = 0,
-    INT = 1,
-    LONG = 2,
-    DOUBLE = 3,
-    BINARY = 4,
+    VOID = 0,
+    BOOL = 1,
+    INT = 2,
+    LONG = 3,
+    DOUBLE = 4,
     STRING = 5,
     LIST = 6,
     MAP = 7
@@ -32,34 +32,89 @@ struct RowType {
 
 extern const std::map<int, const char*> _RowType_VALUES_TO_NAMES;
 
+typedef struct _Field__isset {
+  _Field__isset() : name(false), list_type(true), map_key_type(true), map_value_type(true) {}
+  bool name;
+  bool list_type;
+  bool map_key_type;
+  bool map_value_type;
+} _Field__isset;
 
 class Field {
  public:
 
-  static const char* ascii_fingerprint; // = "6E7DD25E88B43484CFC93FCB15DCA1AF";
-  static const uint8_t binary_fingerprint[16]; // = {0x6E,0x7D,0xD2,0x5E,0x88,0xB4,0x34,0x84,0xCF,0xC9,0x3F,0xCB,0x15,0xDC,0xA1,0xAF};
+  static const char* ascii_fingerprint; // = "CDBF959729A8343113587F1AACDBE771";
+  static const uint8_t binary_fingerprint[16]; // = {0xCD,0xBF,0x95,0x97,0x29,0xA8,0x34,0x31,0x13,0x58,0x7F,0x1A,0xAC,0xDB,0xE7,0x71};
 
-  Field() : type((RowType::type)0), len(0) {
+  Field() : name(), type((RowType::type)0), unit_size(0), list_type((RowType::type)0), map_key_type((RowType::type)0), map_value_type((RowType::type)0) {
+    list_type = (RowType::type)0;
+
+    map_key_type = (RowType::type)0;
+
+    map_value_type = (RowType::type)0;
+
   }
 
   virtual ~Field() throw() {}
 
+  std::string name;
   RowType::type type;
-  int64_t len;
+  int64_t unit_size;
+  RowType::type list_type;
+  RowType::type map_key_type;
+  RowType::type map_value_type;
+
+  _Field__isset __isset;
+
+  void __set_name(const std::string& val) {
+    name = val;
+    __isset.name = true;
+  }
 
   void __set_type(const RowType::type val) {
     type = val;
   }
 
-  void __set_len(const int64_t val) {
-    len = val;
+  void __set_unit_size(const int64_t val) {
+    unit_size = val;
+  }
+
+  void __set_list_type(const RowType::type val) {
+    list_type = val;
+    __isset.list_type = true;
+  }
+
+  void __set_map_key_type(const RowType::type val) {
+    map_key_type = val;
+    __isset.map_key_type = true;
+  }
+
+  void __set_map_value_type(const RowType::type val) {
+    map_value_type = val;
+    __isset.map_value_type = true;
   }
 
   bool operator == (const Field & rhs) const
   {
+    if (__isset.name != rhs.__isset.name)
+      return false;
+    else if (__isset.name && !(name == rhs.name))
+      return false;
     if (!(type == rhs.type))
       return false;
-    if (!(len == rhs.len))
+    if (!(unit_size == rhs.unit_size))
+      return false;
+    if (__isset.list_type != rhs.__isset.list_type)
+      return false;
+    else if (__isset.list_type && !(list_type == rhs.list_type))
+      return false;
+    if (__isset.map_key_type != rhs.__isset.map_key_type)
+      return false;
+    else if (__isset.map_key_type && !(map_key_type == rhs.map_key_type))
+      return false;
+    if (__isset.map_value_type != rhs.__isset.map_value_type)
+      return false;
+    else if (__isset.map_value_type && !(map_value_type == rhs.map_value_type))
       return false;
     return true;
   }
@@ -199,6 +254,50 @@ class PValue {
 
 void swap(PValue &a, PValue &b);
 
+
+class Pair {
+ public:
+
+  static const char* ascii_fingerprint; // = "162D4FF8DA8E23E60F6499A7616E1ED9";
+  static const uint8_t binary_fingerprint[16]; // = {0x16,0x2D,0x4F,0xF8,0xDA,0x8E,0x23,0xE6,0x0F,0x64,0x99,0xA7,0x61,0x6E,0x1E,0xD9};
+
+  Pair() {
+  }
+
+  virtual ~Pair() throw() {}
+
+  PValue key;
+  PValue value;
+
+  void __set_key(const PValue& val) {
+    key = val;
+  }
+
+  void __set_value(const PValue& val) {
+    value = val;
+  }
+
+  bool operator == (const Pair & rhs) const
+  {
+    if (!(key == rhs.key))
+      return false;
+    if (!(value == rhs.value))
+      return false;
+    return true;
+  }
+  bool operator != (const Pair &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const Pair & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+void swap(Pair &a, Pair &b);
+
 typedef struct _Value__isset {
   _Value__isset() : p_val(false), list_value(false), map_value(false) {}
   bool p_val;
@@ -209,8 +308,8 @@ typedef struct _Value__isset {
 class Value {
  public:
 
-  static const char* ascii_fingerprint; // = "0C3E1FA8A21C734546641C1B5D12B2FE";
-  static const uint8_t binary_fingerprint[16]; // = {0x0C,0x3E,0x1F,0xA8,0xA2,0x1C,0x73,0x45,0x46,0x64,0x1C,0x1B,0x5D,0x12,0xB2,0xFE};
+  static const char* ascii_fingerprint; // = "6B1EC8F1C00CA805C8229F6FEEA9C3E8";
+  static const uint8_t binary_fingerprint[16]; // = {0x6B,0x1E,0xC8,0xF1,0xC0,0x0C,0xA8,0x05,0xC8,0x22,0x9F,0x6F,0xEE,0xA9,0xC3,0xE8};
 
   Value() {
   }
@@ -219,7 +318,7 @@ class Value {
 
   PValue p_val;
   std::vector<PValue>  list_value;
-  std::map<Field, PValue>  map_value;
+  std::vector<Pair>  map_value;
 
   _Value__isset __isset;
 
@@ -233,7 +332,7 @@ class Value {
     __isset.list_value = true;
   }
 
-  void __set_map_value(const std::map<Field, PValue> & val) {
+  void __set_map_value(const std::vector<Pair> & val) {
     map_value = val;
     __isset.map_value = true;
   }
@@ -271,8 +370,8 @@ void swap(Value &a, Value &b);
 class RowSchema {
  public:
 
-  static const char* ascii_fingerprint; // = "EFDB30DD9CF5CAC5B8C25E1D79058D2E";
-  static const uint8_t binary_fingerprint[16]; // = {0xEF,0xDB,0x30,0xDD,0x9C,0xF5,0xCA,0xC5,0xB8,0xC2,0x5E,0x1D,0x79,0x05,0x8D,0x2E};
+  static const char* ascii_fingerprint; // = "98B371D2445C9E752C834F86BCBAF966";
+  static const uint8_t binary_fingerprint[16]; // = {0x98,0xB3,0x71,0xD2,0x44,0x5C,0x9E,0x75,0x2C,0x83,0x4F,0x86,0xBC,0xBA,0xF9,0x66};
 
   RowSchema() {
   }

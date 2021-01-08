@@ -13,13 +13,16 @@ find_package(Boost REQUIRED mpi serialization)
 include_directories(${JEMALLOC_INCLUDE_DIRS})
 include_directories(${DATASKETCHES_INCLUDE_DIRS})
 
-include_directories( ${SURFINGDB_SRC}/table/gen-cpp)
+include_directories(${THRIFT_INCLUDE_DIR})
+include_directories(${SURFINGDB_SRC}/table/gen-cpp)
+
 
 add_library(${TABLE} STATIC
         ${SURFINGDB_SRC}/table/gen-cpp
         ${SURFINGDB_SRC}/table/Node.cpp)
 
 target_link_libraries(${TABLE}
+        PUBLIC ${THRIFT_LIBRARY}
         PUBLIC ${JEMALLOC_LIBRARIES}
         PUBLIC Threads::Threads
         PUBLIC OpenMP::OpenMP_CXX
@@ -35,6 +38,7 @@ add_executable(TableTest
         ${SURFINGDB_SRC}/table/test/TestIntegration.cpp)
 
 target_link_libraries(TableTest
+        PRIVATE ${THRIFT_LIBRARY}
         PRIVATE Threads::Threads
         PRIVATE OpenMP::OpenMP_CXX
         PRIVATE MPI::MPI_CXX

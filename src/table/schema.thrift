@@ -1,19 +1,25 @@
 namespace cpp surfingdb.table.schema //
 
 enum RowType {
-    BOOL
+    VOID,
+    BOOL,
     INT,
     LONG,
     DOUBLE,
-    BINARY,
     STRING,
     LIST,
     MAP
 }
 
+const map<RowType,i64> Type_Size = {RowType.BOOL: 1, RowType.INT: 4}
+
 struct Field {
-    1: required RowType type
-    2: required i64    len // (sum of all nested value size)
+    1: optional string name
+    2: required RowType type
+    3: required i64    unit_size // size of single unit or max size of list/map
+    4: optional RowType list_type = RowType.VOID //type within list
+    5: optional RowType map_key_type = RowType.VOID //map key type
+    6: optional RowType map_value_type = RowType.VOID //map value type
 }
 
 struct PValue {
@@ -27,10 +33,15 @@ struct PValue {
     8: optional string string_val;
 }
 
+struct Pair {
+    1: required PValue key;
+    2: required PValue value;
+}
+
 struct Value {
     1: optional PValue p_val;
     2: optional list<PValue> list_value;
-    3: optional map<Field, PValue> map_value;
+    3: optional list<Pair> map_value; //index to value
 }
 
 struct RowSchema {

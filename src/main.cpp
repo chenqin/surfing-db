@@ -18,75 +18,9 @@
 #include <glog/logging.h>
 #include <iostream>
 #include "table/table.h"
-/**
- * build a continous memory buffer
- */
+
 using namespace surfingdb::table::schema;
-/**
- * fixed memory layout buffer per schema
- */
-class buffer {
-private:
-  std::unique_ptr<uint8_t> _payload;
-  std::unordered_map<Field, uint64_t> _offsets;
-public:
-  buffer(const RowSchema& schema) {
-    uint64_t size = 0;
-    for(size_t i = 0 ; i < schema.fields.size(); i++) {
-      auto f = schema.fields.at(i);
-      _offsets.emplace(f, size);
-      size+= schema.fields.at(i).len;
-    }
-    _payload = std::make_unique<uint8_t>(size);
-  }
 
-  void read(Field& f, Value &v) {
-    uint64_t offset = _offsets.at(f);
-    switch (f.type) {
-    case surfingdb::table::schema::RowType::INT:
-      std::shared_ptr<int> a ((int*)(_payload.get() + offset));
-      v.p_val.int_val = *a.get();
-      break;
-    case RowType::BOOL: break;
-    case RowType::LONG: break;
-    case RowType::DOUBLE: break;
-    case RowType::BINARY: break;
-    case RowType::STRING: break;
-    case RowType::LIST: break;
-    case RowType::MAP: break;
-    }
-  }
-
-  void write(Field& f, Value &v) {
-    uint64_t offset = _offsets.at(f);
-    switch (f.type) {
-    case surfingdb::table::schema::RowType::INT:
-      std::shared_ptr<int> int_ptr((int*)(_payload.get() + offset));
-      memcpy((int*)(_payload.get() + offset), &(v.p_val.int_val), sizeof(int));
-      break;
-    case surfingdb::table::schema::RowType::BOOL:
-      std::shared_ptr<bool> bool_ptr((bool*)(_payload.get() + offset));
-      memcpy((bool*)(_payload.get() + offset), &(v.p_val.bool_val), sizeof(bool));
-      break;
-    case RowType::LONG: break;
-    case RowType::DOUBLE: break;
-    case RowType::BINARY: break;
-    case RowType::STRING: break;
-    case RowType::LIST: break;
-    case RowType::MAP: break;
-    }
-  }
-
-
-  std::shared_ptr<arrow::Schema> schema() {
-    std::vector<std::shared_ptr<arrow::Field>> schema_vector = {
-      arrow::field("a", arrow::int32()),
-      arrow::field("b", arrow::int64())
-    };
-    arrow::field("c", arrow::fixed_size_binary(100));
-    return std::make_shared<arrow::Schema>(schema_vector);
-  }
-};
 
 class mychunk {
 public:
@@ -119,21 +53,6 @@ public:
  * @return
  */
 int main() {
-  RowSchema r;
-  r.fields = std::vector<surfingdb::table::schema::Field>();
-  r.values = std::vector<surfingdb::table::schema::Value>();
-
-  Field field;
-  field.type = RowType::INT;
-  field.len = sizeof(int);
-  r.fields.push_back(field);
-  Value v;
-  v.p_val.int_val = 3;
-  r.values.push_back(v);
-
-  // build continuous buffer with fixed fields offsets
-  buffer b(r);
-
   //google::InitGoogleLogging(argv[0]);
   // create node of cluster
   const auto node = std::make_shared<surfingdb::table::Node>();

@@ -17,6 +17,34 @@ namespace test {
 struct myDummy {
   int a;
 };
+
+TEST(TableTest, testRowBuffer) {
+  RowSchema r;
+  r.fields = std::vector<surfingdb::table::schema::Field>();
+  r.values = std::vector<surfingdb::table::schema::Value>();
+
+  Field field1, field2;
+  field1.type = RowType::INT;
+  field1.unit_size = sizeof(int);
+  r.fields.push_back(field1);
+
+  field2.type = RowType::LONG;
+  field2.unit_size = sizeof(long);
+  r.fields.push_back(field2);
+
+  Value v1, v2, v3, v4;
+  v1.p_val.int_val = 3;
+  r.values.push_back(v1);
+  v2.p_val.long_val = 4;
+  r.values.push_back(v2);
+
+  // build continuous buffer with fixed fields offsets
+  surfingdb::table::RowBuffer b(r);
+  b.write(field1, v1);
+  b.write(field2, v2);
+  b.read(field1, v3);
+  b.read(field2, v4);
+}
 TEST(TableTest, TestPartitionAloha) {
   std::vector<myDummy> dataIn, dataInR, dataOut;
   std::function<int(const int&, const int&, const myDummy&)> partitioner =

@@ -11,6 +11,9 @@ namespace surfingdb { namespace table { namespace schema {
 const schemaConstants g_schema_constants;
 
 schemaConstants::schemaConstants() {
+  Type_Size.insert(std::make_pair((RowType::type)1, 1LL));
+  Type_Size.insert(std::make_pair((RowType::type)2, 4LL));
+
 }
 
 }}} // namespace

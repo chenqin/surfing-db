@@ -15,6 +15,7 @@ class schemaConstants {
  public:
   schemaConstants();
 
+  std::map<RowType::type, int64_t>  Type_Size;
 };
 
 extern const schemaConstants g_schema_constants;

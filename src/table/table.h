@@ -6,9 +6,11 @@
 #define SURFINGDB_TABLE_H
 
 #include "table/gen-cpp/schema_types.h"
+#include "table/gen-cpp/schema_constants.h"
 
 #include <arrow/api.h>
 #include <mpi.h>
+#include "Row.h"
 #include "CombineOp.h"
 #include "Node.h"
 #include "Operator.h"
