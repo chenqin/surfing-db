@@ -25,35 +25,20 @@ TEST(TableTest, testRowBuffer) {
   r.fields = std::vector<surfingdb::table::schema::Field>();
 
   Field field1, field2, field3, field4, field5, field6;
-  field1.name = "a";
-  field1.type = RowType::INT;
-  field1.max_unit_size = sizeof(int);
+
+  initField(field1, "a", RowType::INT, sizeof(int));
+  initField(field2, "b", RowType::LONG, sizeof(long));
+  initField(field3, "c", RowType::BOOL, sizeof(bool));
+  initField(field4, "d", RowType::DOUBLE, sizeof(double));
+  initField(field5, "e", RowType::STRING, MAX_STR_LEN);
+
+  initListField(field6, "l", RowType::DOUBLE, 3, sizeof(double));
+
   r.fields.push_back(field1);
-
-  field2.name = "b";
-  field2.type = RowType::LONG;
-  field2.max_unit_size = sizeof(long);
   r.fields.push_back(field2);
-
-  field3.name = "c";
-  field3.type = RowType::BOOL;
-  field3.max_unit_size = sizeof(bool);
   r.fields.push_back(field3);
-
-  field4.name = "d";
-  field4.type = RowType::DOUBLE;
-  field4.max_unit_size = sizeof(double);
   r.fields.push_back(field4);
-
-  field5.name = "e";
-  field5.type = RowType::STRING;
-  field5.max_unit_size = sizeof("hello") + 1;
   r.fields.push_back(field5);
-
-  field6.name = "l";
-  field6.type = RowType::LIST;
-  field6.max_list_unit_size = 3;
-  field6.list_type = RowType::DOUBLE;
   r.fields.push_back(field6);
 
   Value v1, v2, v3, v4, v5, v6;
@@ -119,7 +104,7 @@ TEST(TableTest, TestSketchFrequency) {
     sketch1.update("a");
     sketch1.update("d");
     sketch1.update("a");
-    std::ofstream os1("freq_str_sketch1.bin");
+    std::ofstream os1("/temp/freq_str_sketch1.bin");
     sketch1.serialize(os1);
 
     frequent_strings_sketch sketch2(64);
@@ -131,16 +116,16 @@ TEST(TableTest, TestSketchFrequency) {
     sketch2.update("g");
     sketch2.update("a");
     sketch2.update("f");
-    std::ofstream os2("freq_str_sketch2.bin");
+    std::ofstream os2("/temp/freq_str_sketch2.bin");
     sketch2.serialize(os2);
   }
 
   // this section deserializes the sketches, produces a union and prints the result
   {
-    std::ifstream is1("freq_str_sketch1.bin");
+    std::ifstream is1("/temp/freq_str_sketch1.bin");
     frequent_strings_sketch sketch1 = frequent_strings_sketch::deserialize(is1);
 
-    std::ifstream is2("freq_str_sketch2.bin");
+    std::ifstream is2("/temp/freq_str_sketch2.bin");
     frequent_strings_sketch sketch2 = frequent_strings_sketch::deserialize(is2);
 
     // we could merge sketch2 into sketch1 or the other way around

@@ -16,6 +16,8 @@
 
 namespace surfingdb {
 namespace table {
+
+#define MAX_STR_LEN 128
 /**
  * build a continous memory buffer
  */
@@ -36,6 +38,39 @@ struct FieldHasher {
            ^ (hash<int>()(k.list_type) << 1);
   }
 };
+
+/**
+ * helper function to init a primitive field
+ * @param field
+ * @param name
+ * @param type
+ * @param max_size
+ */
+inline void initField(Field& field, const std::string& name, const RowType::type type, const uint64_t& max_size) {
+  field.name = name;
+  field.type = type;
+  field.max_unit_size = max_size;
+  CHECK(type != RowType::LIST);
+  CHECK(type != RowType::MAP);
+}
+
+/**
+ * helper function to init a list field
+ * @param field
+ * @param name
+ * @param type
+ * @param max_size
+ */
+inline void initListField(Field& field, const std::string& name, const RowType::type list_type, const uint64_t& max_list_size, const uint64_t& max_element_size) {
+  field.name = name;
+  field.type = RowType::LIST;
+  field.list_type = list_type;
+  field.max_unit_size = max_list_size;
+  field.max_list_unit_size = max_element_size;
+  CHECK(list_type != RowType::LIST);
+  CHECK(list_type != RowType::MAP);
+}
+
 /**
  * a large piece of memory to store all fields in a row
  * RowSchema is superset of normal row schema allow each field place in fixed
@@ -160,8 +195,8 @@ private:
     }
     //  |size|string|
     case RowType::STRING: {
-      // max support string column 512 character
-      return sizeof(char) * 512 + header.max_unit_size;
+      // max support string column MAX_STR_LEN character
+      return sizeof(char) * MAX_STR_LEN + header.max_unit_size;
     }
       //  |size|array|
     case RowType::LIST: {
