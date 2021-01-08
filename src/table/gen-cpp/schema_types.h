@@ -33,20 +33,22 @@ struct RowType {
 extern const std::map<int, const char*> _RowType_VALUES_TO_NAMES;
 
 typedef struct _Field__isset {
-  _Field__isset() : name(false), list_type(true), map_key_type(true), map_value_type(true) {}
-  bool name;
+  _Field__isset() : list_type(true), list_unit_size(false), map_key_type(true), map_value_type(true), map_key_unit_size(false), map_value_unit_size(false) {}
   bool list_type;
+  bool list_unit_size;
   bool map_key_type;
   bool map_value_type;
+  bool map_key_unit_size;
+  bool map_value_unit_size;
 } _Field__isset;
 
 class Field {
  public:
 
-  static const char* ascii_fingerprint; // = "CDBF959729A8343113587F1AACDBE771";
-  static const uint8_t binary_fingerprint[16]; // = {0xCD,0xBF,0x95,0x97,0x29,0xA8,0x34,0x31,0x13,0x58,0x7F,0x1A,0xAC,0xDB,0xE7,0x71};
+  static const char* ascii_fingerprint; // = "56EDE1E97BD242B68F0241975FE25DEA";
+  static const uint8_t binary_fingerprint[16]; // = {0x56,0xED,0xE1,0xE9,0x7B,0xD2,0x42,0xB6,0x8F,0x02,0x41,0x97,0x5F,0xE2,0x5D,0xEA};
 
-  Field() : name(), type((RowType::type)0), unit_size(0), list_type((RowType::type)0), map_key_type((RowType::type)0), map_value_type((RowType::type)0) {
+  Field() : name(), type((RowType::type)0), unit_size(0), list_type((RowType::type)0), list_unit_size(0), map_key_type((RowType::type)0), map_value_type((RowType::type)0), map_key_unit_size(0), map_value_unit_size(0) {
     list_type = (RowType::type)0;
 
     map_key_type = (RowType::type)0;
@@ -61,14 +63,16 @@ class Field {
   RowType::type type;
   int64_t unit_size;
   RowType::type list_type;
+  int64_t list_unit_size;
   RowType::type map_key_type;
   RowType::type map_value_type;
+  int64_t map_key_unit_size;
+  int64_t map_value_unit_size;
 
   _Field__isset __isset;
 
   void __set_name(const std::string& val) {
     name = val;
-    __isset.name = true;
   }
 
   void __set_type(const RowType::type val) {
@@ -84,6 +88,11 @@ class Field {
     __isset.list_type = true;
   }
 
+  void __set_list_unit_size(const int64_t val) {
+    list_unit_size = val;
+    __isset.list_unit_size = true;
+  }
+
   void __set_map_key_type(const RowType::type val) {
     map_key_type = val;
     __isset.map_key_type = true;
@@ -94,11 +103,19 @@ class Field {
     __isset.map_value_type = true;
   }
 
+  void __set_map_key_unit_size(const int64_t val) {
+    map_key_unit_size = val;
+    __isset.map_key_unit_size = true;
+  }
+
+  void __set_map_value_unit_size(const int64_t val) {
+    map_value_unit_size = val;
+    __isset.map_value_unit_size = true;
+  }
+
   bool operator == (const Field & rhs) const
   {
-    if (__isset.name != rhs.__isset.name)
-      return false;
-    else if (__isset.name && !(name == rhs.name))
+    if (!(name == rhs.name))
       return false;
     if (!(type == rhs.type))
       return false;
@@ -108,6 +125,10 @@ class Field {
       return false;
     else if (__isset.list_type && !(list_type == rhs.list_type))
       return false;
+    if (__isset.list_unit_size != rhs.__isset.list_unit_size)
+      return false;
+    else if (__isset.list_unit_size && !(list_unit_size == rhs.list_unit_size))
+      return false;
     if (__isset.map_key_type != rhs.__isset.map_key_type)
       return false;
     else if (__isset.map_key_type && !(map_key_type == rhs.map_key_type))
@@ -115,6 +136,14 @@ class Field {
     if (__isset.map_value_type != rhs.__isset.map_value_type)
       return false;
     else if (__isset.map_value_type && !(map_value_type == rhs.map_value_type))
+      return false;
+    if (__isset.map_key_unit_size != rhs.__isset.map_key_unit_size)
+      return false;
+    else if (__isset.map_key_unit_size && !(map_key_unit_size == rhs.map_key_unit_size))
+      return false;
+    if (__isset.map_value_unit_size != rhs.__isset.map_value_unit_size)
+      return false;
+    else if (__isset.map_value_unit_size && !(map_value_unit_size == rhs.map_value_unit_size))
       return false;
     return true;
   }
@@ -254,50 +283,6 @@ class PValue {
 
 void swap(PValue &a, PValue &b);
 
-
-class Pair {
- public:
-
-  static const char* ascii_fingerprint; // = "162D4FF8DA8E23E60F6499A7616E1ED9";
-  static const uint8_t binary_fingerprint[16]; // = {0x16,0x2D,0x4F,0xF8,0xDA,0x8E,0x23,0xE6,0x0F,0x64,0x99,0xA7,0x61,0x6E,0x1E,0xD9};
-
-  Pair() {
-  }
-
-  virtual ~Pair() throw() {}
-
-  PValue key;
-  PValue value;
-
-  void __set_key(const PValue& val) {
-    key = val;
-  }
-
-  void __set_value(const PValue& val) {
-    value = val;
-  }
-
-  bool operator == (const Pair & rhs) const
-  {
-    if (!(key == rhs.key))
-      return false;
-    if (!(value == rhs.value))
-      return false;
-    return true;
-  }
-  bool operator != (const Pair &rhs) const {
-    return !(*this == rhs);
-  }
-
-  bool operator < (const Pair & ) const;
-
-  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
-  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
-
-};
-
-void swap(Pair &a, Pair &b);
-
 typedef struct _Value__isset {
   _Value__isset() : p_val(false), list_value(false), map_value(false) {}
   bool p_val;
@@ -308,8 +293,8 @@ typedef struct _Value__isset {
 class Value {
  public:
 
-  static const char* ascii_fingerprint; // = "6B1EC8F1C00CA805C8229F6FEEA9C3E8";
-  static const uint8_t binary_fingerprint[16]; // = {0x6B,0x1E,0xC8,0xF1,0xC0,0x0C,0xA8,0x05,0xC8,0x22,0x9F,0x6F,0xEE,0xA9,0xC3,0xE8};
+  static const char* ascii_fingerprint; // = "4F3FDDF167445C014ED96B41C3F03818";
+  static const uint8_t binary_fingerprint[16]; // = {0x4F,0x3F,0xDD,0xF1,0x67,0x44,0x5C,0x01,0x4E,0xD9,0x6B,0x41,0xC3,0xF0,0x38,0x18};
 
   Value() {
   }
@@ -318,7 +303,7 @@ class Value {
 
   PValue p_val;
   std::vector<PValue>  list_value;
-  std::vector<Pair>  map_value;
+  std::map<PValue, PValue>  map_value;
 
   _Value__isset __isset;
 
@@ -332,7 +317,7 @@ class Value {
     __isset.list_value = true;
   }
 
-  void __set_map_value(const std::vector<Pair> & val) {
+  void __set_map_value(const std::map<PValue, PValue> & val) {
     map_value = val;
     __isset.map_value = true;
   }
@@ -370,8 +355,8 @@ void swap(Value &a, Value &b);
 class RowSchema {
  public:
 
-  static const char* ascii_fingerprint; // = "98B371D2445C9E752C834F86BCBAF966";
-  static const uint8_t binary_fingerprint[16]; // = {0x98,0xB3,0x71,0xD2,0x44,0x5C,0x9E,0x75,0x2C,0x83,0x4F,0x86,0xBC,0xBA,0xF9,0x66};
+  static const char* ascii_fingerprint; // = "97E2A085BB7F97CCC58F3EA103BAD17C";
+  static const uint8_t binary_fingerprint[16]; // = {0x97,0xE2,0xA0,0x85,0xBB,0x7F,0x97,0xCC,0xC5,0x8F,0x3E,0xA1,0x03,0xBA,0xD1,0x7C};
 
   RowSchema() {
   }

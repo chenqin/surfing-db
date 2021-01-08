@@ -3,6 +3,9 @@
 # it is responsible for single ingest spec or task split
 set(TABLE surftable)
 
+# generate schema skeleton
+execute_process(COMMAND thrift --gen cpp schema.thrift)
+
 find_package(MPI REQUIRED)
 
 set(Boost_USE_STATIC_LIBS OFF)

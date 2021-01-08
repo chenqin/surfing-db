@@ -25,24 +25,29 @@ TEST(TableTest, testRowBuffer) {
   r.values = std::vector<surfingdb::table::schema::Value>();
 
   Field field1, field2, field3, field4, field5;
+  field1.name = "a";
   field1.type = RowType::INT;
   field1.unit_size = sizeof(int);
   r.fields.push_back(field1);
 
+  field2.name = "b";
   field2.type = RowType::LONG;
   field2.unit_size = sizeof(long);
   r.fields.push_back(field2);
 
+  field3.name = "c";
   field3.type = RowType::BOOL;
   field3.unit_size = sizeof(bool);
   r.fields.push_back(field3);
 
+  field4.name = "d";
   field4.type = RowType::DOUBLE;
   field4.unit_size = sizeof(double);
   r.fields.push_back(field4);
 
+  field5.name = "e";
   field5.type = RowType::STRING;
-  field5.unit_size = sizeof("hello");
+  field5.unit_size = sizeof("hello") + 1;
   r.fields.push_back(field5);
 
   Value v1, v2, v3, v4, v5, v6;

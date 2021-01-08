@@ -11,15 +11,16 @@ enum RowType {
     MAP
 }
 
-const map<RowType,i64> Type_Size = {RowType.BOOL: 1, RowType.INT: 4}
-
 struct Field {
-    1: optional string name
+    1: required string name
     2: required RowType type
     3: required i64    unit_size // size of single unit or max size of list/map
     4: optional RowType list_type = RowType.VOID //type within list
-    5: optional RowType map_key_type = RowType.VOID //map key type
-    6: optional RowType map_value_type = RowType.VOID //map value type
+    5: optional i64 list_unit_size // max_size of element in list
+    6: optional RowType map_key_type = RowType.VOID //map key type
+    7: optional RowType map_value_type = RowType.VOID //map value type
+    8: optional i64 map_key_unit_size //max_size of map key
+    9: optional i64 map_value_unit_size //max_size of map value
 }
 
 struct PValue {
@@ -33,15 +34,10 @@ struct PValue {
     8: optional string string_val;
 }
 
-struct Pair {
-    1: required PValue key;
-    2: required PValue value;
-}
-
 struct Value {
     1: optional PValue p_val;
     2: optional list<PValue> list_value;
-    3: optional list<Pair> map_value; //index to value
+    3: optional map<PValue, PValue> map_value; //index to value
 }
 
 struct RowSchema {

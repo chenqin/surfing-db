@@ -46,36 +46,7 @@ private:
   size_t _size;
   std::shared_ptr<std::unordered_map<Field, uint64_t, FieldHasher>> _offsets;
 
-public:
-  explicit RowBuffer(const RowSchema& schema) {
-    _offsets = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
-    _size = 0;
-    for (size_t i = 0; i < schema.fields.size(); i++) {
-      auto f = schema.fields.at(i);
-      this->_offsets.get()->emplace(f, _size);
-      if (f.type == RowType::MAP) {
-        // don't know
-      } else if (f.list_type != RowType::VOID) {
-        _size += schema.fields.at(i).unit_size * (f.list_type == RowType::INT ? sizeof(int) : sizeof(long));
-      } else {
-        _size += schema.fields.at(i).unit_size;
-      }
-    }
-    _payload = static_cast<uint8_t*>(malloc(_size));
-  }
-
-  ~RowBuffer() {
-    _size = 0;
-    _offsets->clear();
-    free(_payload);
-  }
-  /**
-   * copy value into row buffer
-   * @param f
-   * @param v
-   */
-  void write(const Field& f, const Value& v) {
-    uint64_t offset = _offsets->at(f);
+  void _pwrite(const Field& f, const Value& v, const uint64_t& offset) {
     switch (f.type) {
     case surfingdb::table::schema::RowType::VOID: {
       break;
@@ -96,13 +67,76 @@ public:
       memcpy((double*)(_payload + offset), &(v.p_val.double_val), sizeof(double));
       break;
     }
+      /*
+       * |int_64_t length|yourstring balba\n0000|
+       */
     case RowType::STRING: {
-      // be careful here with truncation, assume unit_size is equal or larger than string length
-      memcpy((char*)(_payload + offset), (v.p_val.string_val.c_str()), sizeof(char) * f.unit_size);
+      // be careful here with truncation, char* requires extra char \0 to end
+      assert(v.p_val.string_val.length() < sizeof(char) * f.unit_size - 1);
+      size_t length = v.p_val.string_val.length();
+      memcpy((int64_t*)(_payload + offset), &(length), sizeof(int64_t));
+      memcpy((char*)(_payload + offset + sizeof(int64_t)), (v.p_val.string_val.c_str()), length + 1);
+      memset((char*)(_payload + offset + sizeof(int64_t) + length + 1), 0, f.unit_size - length - 1);
+      break;
+    }
+    case RowType::LIST: {
+      assert(false);
+    }
+    case RowType::MAP: {
+      assert(false);
+    }
+    }
+  }
+public:
+  explicit RowBuffer(const RowSchema& schema) {
+    _offsets = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
+    _size = 0;
+    for (size_t i = 0; i < schema.fields.size(); i++) {
+      auto f = schema.fields.at(i);
+      this->_offsets.get()->emplace(f, _size);
+      if (f.type == RowType::MAP) {
+        // don't know
+      } else if (f.list_type != RowType::VOID) {
+        _size += schema.fields.at(i).unit_size * (f.list_type == RowType::INT ? sizeof(int) : sizeof(long));
+      } else {
+        _size += schema.fields.at(i).unit_size;
+        // use extra int space to store length of string
+        if (f.type == RowType::STRING) {
+          _size += sizeof(int);
+        }
+      }
+    }
+    _payload = static_cast<uint8_t*>(malloc(_size));
+  }
+
+  ~RowBuffer() {
+    _size = 0;
+    _offsets->clear();
+    free(_payload);
+  }
+  /**
+   * copy value into row buffer
+   * @param f
+   * @param v
+   */
+  void write(const Field& f, const Value& v) {
+    uint64_t offset = _offsets->at(f);
+    switch (f.type) {
+    case surfingdb::table::schema::RowType::VOID:
+    case surfingdb::table::schema::RowType::INT:
+    case surfingdb::table::schema::RowType::BOOL:
+    case RowType::LONG:
+    case RowType::DOUBLE:
+    case RowType::STRING:{
+      _pwrite(f, v, offset);
       break;
     }
     case RowType::LIST: {
       //hack here
+      Field listField;
+      listField.type = f.list_type;
+      listField.unit_size = f.list_unit_size;
+     
       assert(false);
       //memcpy((void*) vecotr_ptr.get(), (void*)&v.list_value[0], s.Type_Size.at(f.list_type) * f.unit_size);
       break;
@@ -146,13 +180,16 @@ public:
       break;
     }
     case RowType::STRING: {
-      char* char_ptr = (char*)(_payload + offset);
+      int64_t* len = (int64_t*)(_payload + offset);
+      char* char_ptr = (char*)(_payload + offset + sizeof(int64_t));
+      //avoid truncation
+      assert(*len == (int64_t)strlen(char_ptr));
       v.p_val.string_val = std::string(char_ptr);
       break;
     }
     case RowType::LIST: {
       //hack here
-      std::shared_ptr<char> vecotr_ptr((char*)(_payload + offset));
+
       //memcpy((void*) vecotr_ptr.get(), (void*)&v.list_value[0], s.Type_Size.at(f.list_type) * f.unit_size);
       break;
     }
