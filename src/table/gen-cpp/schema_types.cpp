@@ -517,8 +517,8 @@ void swap(Value &a, Value &b) {
   swap(a.__isset, b.__isset);
 }
 
-const char* RowSchema::ascii_fingerprint = "97E2A085BB7F97CCC58F3EA103BAD17C";
-const uint8_t RowSchema::binary_fingerprint[16] = {0x97,0xE2,0xA0,0x85,0xBB,0x7F,0x97,0xCC,0xC5,0x8F,0x3E,0xA1,0x03,0xBA,0xD1,0x7C};
+const char* RowSchema::ascii_fingerprint = "721FE21C727F9084A88D8C213CA0EE4B";
+const uint8_t RowSchema::binary_fingerprint[16] = {0x72,0x1F,0xE2,0x1C,0x72,0x7F,0x90,0x84,0xA8,0x8D,0x8C,0x21,0x3C,0xA0,0xEE,0x4B};
 
 uint32_t RowSchema::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -532,7 +532,6 @@ uint32_t RowSchema::read(::apache::thrift::protocol::TProtocol* iprot) {
   using ::apache::thrift::protocol::TProtocolException;
 
   bool isset_fields = false;
-  bool isset_values = false;
 
   while (true)
   {
@@ -562,26 +561,6 @@ uint32_t RowSchema::read(::apache::thrift::protocol::TProtocol* iprot) {
           xfer += iprot->skip(ftype);
         }
         break;
-      case 2:
-        if (ftype == ::apache::thrift::protocol::T_LIST) {
-          {
-            this->values.clear();
-            uint32_t _size23;
-            ::apache::thrift::protocol::TType _etype26;
-            xfer += iprot->readListBegin(_etype26, _size23);
-            this->values.resize(_size23);
-            uint32_t _i27;
-            for (_i27 = 0; _i27 < _size23; ++_i27)
-            {
-              xfer += this->values[_i27].read(iprot);
-            }
-            xfer += iprot->readListEnd();
-          }
-          isset_values = true;
-        } else {
-          xfer += iprot->skip(ftype);
-        }
-        break;
       default:
         xfer += iprot->skip(ftype);
         break;
@@ -593,8 +572,6 @@ uint32_t RowSchema::read(::apache::thrift::protocol::TProtocol* iprot) {
 
   if (!isset_fields)
     throw TProtocolException(TProtocolException::INVALID_DATA);
-  if (!isset_values)
-    throw TProtocolException(TProtocolException::INVALID_DATA);
   return xfer;
 }
 
@@ -605,22 +582,10 @@ uint32_t RowSchema::write(::apache::thrift::protocol::TProtocol* oprot) const {
   xfer += oprot->writeFieldBegin("fields", ::apache::thrift::protocol::T_LIST, 1);
   {
     xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->fields.size()));
-    std::vector<Field> ::const_iterator _iter28;
-    for (_iter28 = this->fields.begin(); _iter28 != this->fields.end(); ++_iter28)
+    std::vector<Field> ::const_iterator _iter23;
+    for (_iter23 = this->fields.begin(); _iter23 != this->fields.end(); ++_iter23)
     {
-      xfer += (*_iter28).write(oprot);
-    }
-    xfer += oprot->writeListEnd();
-  }
-  xfer += oprot->writeFieldEnd();
-
-  xfer += oprot->writeFieldBegin("values", ::apache::thrift::protocol::T_LIST, 2);
-  {
-    xfer += oprot->writeListBegin(::apache::thrift::protocol::T_STRUCT, static_cast<uint32_t>(this->values.size()));
-    std::vector<Value> ::const_iterator _iter29;
-    for (_iter29 = this->values.begin(); _iter29 != this->values.end(); ++_iter29)
-    {
-      xfer += (*_iter29).write(oprot);
+      xfer += (*_iter23).write(oprot);
     }
     xfer += oprot->writeListEnd();
   }
@@ -634,7 +599,6 @@ uint32_t RowSchema::write(::apache::thrift::protocol::TProtocol* oprot) const {
 void swap(RowSchema &a, RowSchema &b) {
   using ::std::swap;
   swap(a.fields, b.fields);
-  swap(a.values, b.values);
 }
 
 }}} // namespace

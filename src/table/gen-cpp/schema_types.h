@@ -355,8 +355,8 @@ void swap(Value &a, Value &b);
 class RowSchema {
  public:
 
-  static const char* ascii_fingerprint; // = "97E2A085BB7F97CCC58F3EA103BAD17C";
-  static const uint8_t binary_fingerprint[16]; // = {0x97,0xE2,0xA0,0x85,0xBB,0x7F,0x97,0xCC,0xC5,0x8F,0x3E,0xA1,0x03,0xBA,0xD1,0x7C};
+  static const char* ascii_fingerprint; // = "721FE21C727F9084A88D8C213CA0EE4B";
+  static const uint8_t binary_fingerprint[16]; // = {0x72,0x1F,0xE2,0x1C,0x72,0x7F,0x90,0x84,0xA8,0x8D,0x8C,0x21,0x3C,0xA0,0xEE,0x4B};
 
   RowSchema() {
   }
@@ -364,21 +364,14 @@ class RowSchema {
   virtual ~RowSchema() throw() {}
 
   std::vector<Field>  fields;
-  std::vector<Value>  values;
 
   void __set_fields(const std::vector<Field> & val) {
     fields = val;
   }
 
-  void __set_values(const std::vector<Value> & val) {
-    values = val;
-  }
-
   bool operator == (const RowSchema & rhs) const
   {
     if (!(fields == rhs.fields))
-      return false;
-    if (!(values == rhs.values))
       return false;
     return true;
   }

@@ -42,5 +42,4 @@ struct Value {
 
 struct RowSchema {
     1: required list<Field> fields;
-    2: required list<Value> values;
 }

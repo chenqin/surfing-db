@@ -22,9 +22,8 @@ struct myDummy {
 TEST(TableTest, testRowBuffer) {
   RowSchema r;
   r.fields = std::vector<surfingdb::table::schema::Field>();
-  r.values = std::vector<surfingdb::table::schema::Value>();
 
-  Field field1, field2, field3, field4, field5;
+  Field field1, field2, field3, field4, field5, field6;
   field1.name = "a";
   field1.type = RowType::INT;
   field1.unit_size = sizeof(int);
@@ -50,16 +49,29 @@ TEST(TableTest, testRowBuffer) {
   field5.unit_size = sizeof("hello") + 1;
   r.fields.push_back(field5);
 
+  field6.name = "l";
+  field6.type = RowType::LIST;
+  field6.list_unit_size = 1;
+  field6.list_type = RowType::DOUBLE;
+  r.fields.push_back(field6);
+
+
   Value v1, v2, v3, v4, v5, v6;
   v1.p_val.int_val = 3;
-  r.values.push_back(v1);
+
   v2.p_val.long_val = 4;
-  r.values.push_back(v2);
+
   v3.p_val.bool_val = true;
-  r.values.push_back(v3);
+
   v4.p_val.double_val = 0.1f;
-  r.values.push_back(v4);
+
   v5.p_val.string_val = "hello";
+  PValue p;
+  p.double_val = 0.1;
+  std::vector<PValue> lval;
+  lval.push_back(p);
+  v6.list_value = lval;
+
 
   // build continuous buffer with fixed fields offsets
   surfingdb::table::RowBuffer b(r);
@@ -68,12 +80,14 @@ TEST(TableTest, testRowBuffer) {
   b.write(field3, v3);
   b.write(field4, v4);
   b.write(field5, v5);
+  b.write(field6, v6);
 
   b.read(field1, v1);
   b.read(field2, v2);
   b.read(field3, v3);
   b.read(field4, v4);
   b.read(field5, v6);
+  b.read(field6, v5);
   EXPECT_EQ(v6.p_val.string_val, "hello");
 }
 TEST(TableTest, TestPartitionAloha) {
