@@ -24,7 +24,7 @@ TEST(TableTest, testRowBuffer) {
   r.fields = std::vector<surfingdb::table::schema::Field>();
   r.values = std::vector<surfingdb::table::schema::Value>();
 
-  Field field1, field2;
+  Field field1, field2, field3, field4, field5;
   field1.type = RowType::INT;
   field1.unit_size = sizeof(int);
   r.fields.push_back(field1);
@@ -33,18 +33,43 @@ TEST(TableTest, testRowBuffer) {
   field2.unit_size = sizeof(long);
   r.fields.push_back(field2);
 
-  Value v1, v2, v3, v4;
+  field3.type = RowType::BOOL;
+  field3.unit_size = sizeof(bool);
+  r.fields.push_back(field3);
+
+  field4.type = RowType::DOUBLE;
+  field4.unit_size = sizeof(double);
+  r.fields.push_back(field4);
+
+  field5.type = RowType::STRING;
+  field5.unit_size = sizeof("hello");
+  r.fields.push_back(field5);
+
+  Value v1, v2, v3, v4, v5, v6;
   v1.p_val.int_val = 3;
   r.values.push_back(v1);
   v2.p_val.long_val = 4;
   r.values.push_back(v2);
+  v3.p_val.bool_val = true;
+  r.values.push_back(v3);
+  v4.p_val.double_val = 0.1f;
+  r.values.push_back(v4);
+  v5.p_val.string_val = "hello";
 
   // build continuous buffer with fixed fields offsets
   surfingdb::table::RowBuffer b(r);
   b.write(field1, v1);
   b.write(field2, v2);
-  b.read(field1, v3);
-  b.read(field2, v4);
+  b.write(field3, v3);
+  b.write(field4, v4);
+  b.write(field5, v5);
+
+  b.read(field1, v1);
+  b.read(field2, v2);
+  b.read(field3, v3);
+  b.read(field4, v4);
+  b.read(field5, v6);
+  EXPECT_EQ(v6.p_val.string_val, "hello");
 }
 TEST(TableTest, TestPartitionAloha) {
   std::vector<myDummy> dataIn, dataInR, dataOut;

@@ -47,7 +47,7 @@ private:
   std::shared_ptr<std::unordered_map<Field, uint64_t, FieldHasher>> _offsets;
 
 public:
-  explicit RowBuffer(RowSchema& schema) {
+  explicit RowBuffer(const RowSchema& schema) {
     _offsets = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
     _size = 0;
     for (size_t i = 0; i < schema.fields.size(); i++) {
@@ -74,7 +74,7 @@ public:
    * @param f
    * @param v
    */
-  void write(Field& f, Value& v) {
+  void write(const Field& f, const Value& v) {
     uint64_t offset = _offsets->at(f);
     switch (f.type) {
     case surfingdb::table::schema::RowType::VOID: {
@@ -97,18 +97,18 @@ public:
       break;
     }
     case RowType::STRING: {
-      // be careful here with truncation
+      // be careful here with truncation, assume unit_size is equal or larger than string length
       memcpy((char*)(_payload + offset), (v.p_val.string_val.c_str()), sizeof(char) * f.unit_size);
       break;
     }
     case RowType::LIST: {
       //hack here
-      std::shared_ptr<char> vecotr_ptr((char*)(_payload + offset));
+      assert(false);
       //memcpy((void*) vecotr_ptr.get(), (void*)&v.list_value[0], s.Type_Size.at(f.list_type) * f.unit_size);
       break;
     }
     case RowType::MAP: {
-      std::shared_ptr<char> map_ptr((char*)(_payload + offset));
+      assert(false);
       break;
     }
     }
@@ -119,7 +119,7 @@ public:
  * @param f
  * @param v
  */
-  void read(Field& f, Value& v) {
+  void read(const Field& f, Value& v) {
     uint64_t offset = _offsets->at(f);
     switch (f.type) {
     case surfingdb::table::schema::RowType::VOID: {
@@ -141,13 +141,13 @@ public:
       break;
     }
     case RowType::DOUBLE: {
-      double* doube_ptr = (double*)(_payload + offset);
-      v.p_val.double_val = *doube_ptr;
+      double* double_ptr = (double*)(_payload + offset);
+      v.p_val.double_val = *double_ptr;
       break;
     }
     case RowType::STRING: {
-      // be careful here with truncation
-      memcpy((char*)(_payload + offset), (v.p_val.string_val.c_str()), sizeof(char) * f.unit_size);
+      char* char_ptr = (char*)(_payload + offset);
+      v.p_val.string_val = std::string(char_ptr);
       break;
     }
     case RowType::LIST: {
