@@ -253,6 +253,7 @@ public:
 
     CHECK_GT(_size, 0);
     _payload = static_cast<uint8_t*>(malloc(_size));
+    memset(_payload, 0, _size);
   }
 
   ~RowBuffer() {
