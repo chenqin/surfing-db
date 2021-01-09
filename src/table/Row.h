@@ -14,6 +14,8 @@
 
 #pragma once
 
+//    return (hash<string>()(k.string_val)) ^ (hash<int>()(k.int_val) >> 1) ^ (hash<long>()(k.long_val) >> 2) ^ (hash<double>()(k.double_val) >> 3) ^ (hash<double>()(k.bool_val) >> 4);
+
 namespace surfingdb {
 namespace table {
 
@@ -23,6 +25,8 @@ namespace table {
  * build a continous memory buffer
  */
 using namespace surfingdb::table::schema;
+using std::hash;
+using std::string;
 /**
  * fixed memory layout buffer per schema
  */
@@ -37,19 +41,27 @@ struct FieldHasher {
   }
 };
 
+bool surfingdb::table::schema::PValue::operator<(const PValue& k) const {
+  return (hash<string>()(this->string_val)) < (hash<string>()(k.string_val))
+         || this->double_val < k.double_val
+         || this->long_val < k.long_val
+         || this->int_val < k.int_val
+         || this->bool_val == k.bool_val;
+}
+
 /**
  * valid if schema is accepted
  * @param rowSchema
  */
-void validSchema(const RowSchema &rowSchema) {
+void validSchema(const RowSchema& rowSchema) {
   CHECK_GT(rowSchema.fields.size(), 0);
   std::set<std::string> name_set;
-  for(auto& field : rowSchema.fields) {
-    CHECK(name_set.find(field.name) ==name_set.end());
+  for (auto& field : rowSchema.fields) {
+    CHECK(name_set.find(field.name) == name_set.end());
 
     name_set.insert(field.name);
 
-    if(field.type == RowType::LIST || field.type == RowType::MAP) {
+    if (field.type == RowType::LIST || field.type == RowType::MAP) {
       CHECK(field.list_type != RowType::LIST);
       CHECK(field.list_type != RowType::MAP);
     } else {
@@ -99,6 +111,12 @@ inline size_t getFieldSize(const Field& f) {
   }
   assert(false);
 }
+
+inline void checkStringLength(const RowType::type type, const uint64_t& max_size){
+  if(type == RowType::STRING) {
+    CHECK_LE(max_size, MAX_STR_LEN);
+  }
+}
 /**
  * helper function to init a primitive field
  * @param field
@@ -110,8 +128,10 @@ inline void initField(Field& field, const std::string& name, const RowType::type
   field.name = name;
   field.type = type;
   field.max_unit_size = max_size;
+  // IF string should check max_size no more than MAX_STR_LEN
   CHECK(type != RowType::LIST);
   CHECK(type != RowType::MAP);
+  checkStringLength(type, max_size);
 }
 
 /**
@@ -129,6 +149,33 @@ inline void initListField(Field& field, const std::string& name, const RowType::
   field.max_list_unit_size = max_element_size;
   CHECK(list_type != RowType::LIST);
   CHECK(list_type != RowType::MAP);
+  checkStringLength(list_type, max_element_size);
+}
+
+/**
+ * helper function to init a map field
+ * @param field
+ * @param name
+ * @param key_type
+ * @param value_type
+ * @param max_map_size
+ * @param max_key_size
+ * @param max_value_size
+ */
+inline void initMapField(Field& field, const std::string& name, const RowType::type key_type, const RowType::type value_type, const uint64_t& max_map_size, const uint64_t& max_key_size, const uint64_t& max_value_size) {
+  field.name = name;
+  field.type = RowType::MAP;
+  field.map_key_type = key_type;
+  field.map_value_type = value_type;
+  field.max_unit_size = max_map_size;
+  field.max_map_key_unit_size = max_key_size;
+  field.max_map_value_unit_size = max_value_size;
+  CHECK(key_type != RowType::LIST);
+  CHECK(key_type != RowType::MAP);
+  CHECK(value_type != RowType::LIST);
+  CHECK(value_type != RowType::MAP);
+  checkStringLength(key_type, max_key_size);
+  checkStringLength(value_type, max_value_size);
 }
 
 /**
@@ -138,7 +185,7 @@ inline void initListField(Field& field, const std::string& name, const RowType::
  */
 class RowBuffer {
 private:
-  Field header;
+  Field _header;
   std::shared_ptr<std::unordered_map<Field, uint64_t, FieldHasher>> _offsets;
 
   /**
@@ -241,10 +288,10 @@ private:
 public:
   explicit RowBuffer(const RowSchema& schema) {
     validSchema(schema);
-    header.type = RowType::LONG;
-    header.max_unit_size = getFieldSize(header);
+    _header.type = RowType::LONG;
+    _header.max_unit_size = getFieldSize(_header);
 
-    CHECK_EQ(sizeof(uint64_t), getFieldSize(header));
+    CHECK_EQ(sizeof(uint64_t), getFieldSize(_header));
 
     _offsets = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
     _size = 0;
@@ -315,13 +362,13 @@ public:
       CHECK_LE(v.list_value.size(), (size_t)f.max_unit_size);
 
       int64_t size = v.list_value.size();
-      _pwrite(header, &size, offset);
+      _pwrite(_header, &size, offset);
       offset += sizeof(int64_t);
 
       //  |size|string|
       Field listField;
       listField.type = f.list_type;
-      listField.max_unit_size = getFieldSize(listField);
+      listField.max_unit_size = f.max_list_unit_size;
       for (auto pv : v.list_value) {
         //hard code
         Value item;
@@ -334,7 +381,29 @@ public:
       break;
     }
     case RowType::MAP: {
-      assert(false);
+      CHECK_LE(v.map_value.size(), (size_t)f.max_unit_size);
+      int64_t size = v.map_value.size();
+      _pwrite(_header, &size, offset);
+      offset += sizeof(int64_t);
+
+      Field keyField, valueField;
+      keyField.type = f.map_key_type;
+      valueField.type = f.map_value_type;
+      keyField.max_unit_size = f.max_map_key_unit_size;
+      valueField.max_unit_size = f.max_map_value_unit_size;
+
+      for(auto& pair : v.map_value) {
+        Value key, value;
+        key.p_val = pair.first;
+        value.p_val = pair.second;
+        write(keyField, key, offset);
+        offset += keyField.max_unit_size;
+        write(valueField, value, offset);
+        offset += valueField.max_unit_size;
+      }
+      int resid = f.max_unit_size - v.map_value.size();
+      memset(_payload + offset, 0, resid * (f.max_map_key_unit_size + f.max_map_value_unit_size));
+      break;
     }
     }
   }
@@ -374,18 +443,37 @@ public:
       _pread(l, &len, offset);
       offset += sizeof(int64_t);
 
-      Field listItem;
-      listItem.type = f.list_type;
+      Field listField;
+      listField.type = f.list_type;
+      listField.max_unit_size = f.max_list_unit_size;
       for (int i = 0; i < len; i++) {
-        Value item;
-        read(listItem, item, offset);
-        v.list_value.push_back(item.p_val);
-        offset += (size_t)getFieldSize(listItem);
+        Value listVal;
+        read(listField, listVal, offset);
+        v.list_value.push_back(listVal.p_val);
+        offset += listField.max_unit_size;
       }
       break;
     }
     case RowType::MAP: {
-      std::shared_ptr<char> map_ptr((char*)(_payload + offset));
+      Field l;
+      l.type = RowType::LONG;
+      long len;
+      _pread(l, &len, offset);
+      offset += sizeof(int64_t);
+
+      Field keyField, valueField;
+      keyField.type = f.map_key_type;
+      valueField.type = f.map_value_type;
+      keyField.max_unit_size = f.max_map_key_unit_size;
+      valueField.max_unit_size = f.max_map_value_unit_size;
+      for(int i = 0 ; i < len ; i++){
+        Value keyVal, valueVal;
+        read(keyField, keyVal, offset);
+        offset+= keyField.max_unit_size;
+        read(valueField, valueVal, offset);
+        offset += valueField.max_unit_size;
+        v.map_value.insert({keyVal.p_val, valueVal.p_val});
+      }
       break;
     }
     }

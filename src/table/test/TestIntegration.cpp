@@ -24,7 +24,7 @@ TEST(TableTest, testRowBuffer) {
   RowSchema r;
   r.fields = std::vector<surfingdb::table::schema::Field>();
 
-  Field field1, field2, field3, field4, field5, field6;
+  Field field1, field2, field3, field4, field5, field6, field7;
 
   initField(field1, "a", RowType::INT, sizeof(int));
   initField(field2, "b", RowType::LONG, sizeof(long));
@@ -33,6 +33,7 @@ TEST(TableTest, testRowBuffer) {
   initField(field5, "e", RowType::STRING, MAX_STR_LEN);
 
   initListField(field6, "l", RowType::DOUBLE, 3, sizeof(double));
+  initMapField(field7, "m", RowType::STRING, RowType::LONG, 3, MAX_STR_LEN, sizeof(long));
 
   r.fields.push_back(field1);
   r.fields.push_back(field2);
@@ -40,8 +41,9 @@ TEST(TableTest, testRowBuffer) {
   r.fields.push_back(field4);
   r.fields.push_back(field5);
   r.fields.push_back(field6);
+  r.fields.push_back(field7);
 
-  Value v1, v2, v3, v4, v5, v6;
+  Value v1, v2, v3, v4, v5, v6, v7;
   v1.p_val.int_val = 3;
 
   v2.p_val.long_val = 4;
@@ -56,6 +58,13 @@ TEST(TableTest, testRowBuffer) {
   std::vector<PValue> lval;
   lval.push_back(p);
   v6.list_value = lval;
+  PValue key, value;
+  key.string_val = "hello";
+  value.long_val = 1l;
+  std::pair<PValue, PValue> pair;
+  pair.first = key;
+  pair.second = value;
+  v7.map_value.insert(pair);
 
   // build continuous buffer with fixed fields offsets
   surfingdb::table::RowBuffer b(r);
@@ -65,6 +74,7 @@ TEST(TableTest, testRowBuffer) {
   b.write(field4, v4);
   b.write(field5, v5);
   b.write(field6, v6);
+  b.write(field7, v7);
 
   b.read(field1, v1);
   b.read(field2, v2);
@@ -72,8 +82,10 @@ TEST(TableTest, testRowBuffer) {
   b.read(field4, v4);
   b.read(field5, v6);
   b.read(field6, v5);
+  b.read(field7, v3);
   EXPECT_EQ(v6.p_val.string_val, "hello");
   EXPECT_EQ(v5.list_value.size(), 1);
+  EXPECT_EQ(v3.map_value.size(), 1);
 }
 
 TEST(TableTest, TestPartitionAloha) {
