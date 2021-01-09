@@ -72,6 +72,41 @@ void validSchema(const RowSchema& rowSchema) {
   }
 }
 
+inline MPI_Datatype getFieldMPIType(const Field& f) {
+  switch (f.type) {
+
+  case RowType::VOID: {
+    return MPI_DATATYPE_NULL;
+  }
+  case RowType::BOOL: {
+    return MPI_C_BOOL;
+  }
+  case RowType::INT: {
+    return MPI_INT;
+  }
+  case RowType::LONG: {
+    return MPI_LONG;
+  }
+  case RowType::DOUBLE: {
+    return MPI_DOUBLE;
+  }
+    //  |size|string|
+  case RowType::STRING: {
+    // max support string column MAX_STR_LEN character
+    return MPI_CHAR;
+  }
+    //  |size|array|
+  case RowType::LIST: {
+    return MPI_CHAR;
+  }
+    // | size | key val key val|
+  case RowType::MAP: {
+    return MPI_CHAR;
+  }
+  }
+  assert(false);
+}
+
 inline size_t getFieldSize(const Field& f) {
   switch (f.type) {
 
@@ -93,7 +128,8 @@ inline size_t getFieldSize(const Field& f) {
     //  |size|string|
   case RowType::STRING: {
     // max support string column MAX_STR_LEN character
-    return sizeof(char) * MAX_STR_LEN + HEADER_SIZE;
+    long str_size = f.max_unit_size < MAX_STR_LEN ? f.max_unit_size : MAX_STR_LEN;
+    return sizeof(char) * str_size + HEADER_SIZE;
   }
     //  |size|array|
   case RowType::LIST: {
@@ -112,8 +148,8 @@ inline size_t getFieldSize(const Field& f) {
   assert(false);
 }
 
-inline void checkStringLength(const RowType::type type, const uint64_t& max_size){
-  if(type == RowType::STRING) {
+inline void checkStringLength(const RowType::type type, const uint64_t& max_size) {
+  if (type == RowType::STRING) {
     CHECK_LE(max_size, MAX_STR_LEN);
   }
 }
@@ -178,6 +214,9 @@ inline void initMapField(Field& field, const std::string& name, const RowType::t
   checkStringLength(value_type, max_value_size);
 }
 
+Field _header;
+// TODO(add map
+std::shared_ptr<std::unordered_map<Field, uint64_t, FieldHasher>> _offsets;
 /**
  * a large piece of memory to store all fields in a row
  * RowSchema is superset of normal row schema allow each field place in fixed
@@ -185,14 +224,13 @@ inline void initMapField(Field& field, const std::string& name, const RowType::t
  */
 class RowBuffer {
 private:
-  Field _header;
-  std::shared_ptr<std::unordered_map<Field, uint64_t, FieldHasher>> _offsets;
-
   /**
    * those fields will be send to other processes as a Row
    * **/
+  size_t _schema_sig; // hash of schema fields
+  MPI_Datatype _row_type;
+  size_t _size;      // size of payload
   uint8_t* _payload; // consider using vector std::vector<uint8_t>
-  size_t _size;
 
   inline void _pwrite(const Field& f, const void* data, const uint64_t& offset) {
     switch (f.type) {
@@ -288,6 +326,8 @@ private:
 public:
   explicit RowBuffer(const RowSchema& schema) {
     validSchema(schema);
+    //hardcoded
+    _schema_sig = 1;
     _header.type = RowType::LONG;
     _header.max_unit_size = getFieldSize(_header);
 
@@ -297,7 +337,7 @@ public:
     _size = 0;
     for (size_t i = 0; i < schema.fields.size(); i++) {
       auto f = schema.fields.at(i);
-      this->_offsets.get()->emplace(f, _size);
+      _offsets.get()->emplace(f, _size);
       _size += getFieldSize(f);
     }
 
@@ -306,10 +346,60 @@ public:
     memset(_payload, 0, _size);
   }
 
+  MPI_Datatype row_type() {
+    return _row_type;
+  }
+
+  void reg_row_type(const RowSchema& rowSchema) {
+    int count = rowSchema.fields.size() + 3; // sig & row_type & _size
+    int array_of_blocklengths[count];
+    MPI_Aint array_of_displacements[count];
+    MPI_Datatype array_of_types[count];
+    array_of_types[0] = array_of_types[2] = MPI_LONG;
+    array_of_types[1] = MPI_INT;
+    array_of_blocklengths[0] = array_of_blocklengths[1] = array_of_blocklengths[2] = 1;
+    array_of_displacements[0] = offsetof(RowBuffer, _schema_sig);
+    array_of_displacements[1] = offsetof(RowBuffer, _row_type);
+    array_of_displacements[2] = offsetof(RowBuffer, _size);
+    MPI_Aint offset = offsetof(RowBuffer, _payload); // base address
+    int i = 3;
+    for (const auto& f : rowSchema.fields) {
+      array_of_types[i] = getFieldMPIType(f);
+      if (array_of_types[i] != MPI_CHAR) {
+        array_of_blocklengths[i] = 1;
+      } else {
+        //use array of char as container type
+        array_of_blocklengths[i] = getFieldSize(f);
+      }
+      array_of_displacements[i] = offset;
+      offset += getFieldSize(f);
+      ++i;
+    }
+    //for(int j = 0 ; j < count ; j++) {
+    //  LOG(INFO) << array_of_blocklengths[j] << " " << array_of_displacements[j] << " " << array_of_types[j];
+    //}
+    CHECK_EQ(i, count);
+    MPI_Datatype tmp_type;
+    MPI_Aint lb, extent;
+    MPI_Type_create_struct(count, array_of_blocklengths, array_of_displacements,
+                           array_of_types, &tmp_type);
+    MPI_Type_get_extent(tmp_type, &lb, &extent);
+    MPI_Type_create_resized(tmp_type, lb, extent, &_row_type);
+    MPI_Type_commit(&_row_type);
+  }
+
   ~RowBuffer() {
     _size = 0;
     _offsets->clear();
     free(_payload);
+  }
+
+  size_t size() {
+    return this->_size;
+  }
+
+  uint8_t* payload() {
+    return this->_payload;
   }
 
   /**
@@ -318,6 +408,9 @@ public:
   * @param v
   */
   void read(const Field& f, Value& v) {
+    CHECK_NOTNULL(_offsets);
+    CHECK_GE(_offsets->size(), 0);
+    CHECK(_offsets->find(f) != _offsets->end());
     uint64_t offset = _offsets->at(f);
     read(f, v, offset);
   }
@@ -392,7 +485,7 @@ public:
       keyField.max_unit_size = f.max_map_key_unit_size;
       valueField.max_unit_size = f.max_map_value_unit_size;
 
-      for(auto& pair : v.map_value) {
+      for (auto& pair : v.map_value) {
         Value key, value;
         key.p_val = pair.first;
         value.p_val = pair.second;
@@ -466,13 +559,13 @@ public:
       valueField.type = f.map_value_type;
       keyField.max_unit_size = f.max_map_key_unit_size;
       valueField.max_unit_size = f.max_map_value_unit_size;
-      for(int i = 0 ; i < len ; i++){
+      for (int i = 0; i < len; i++) {
         Value keyVal, valueVal;
         read(keyField, keyVal, offset);
-        offset+= keyField.max_unit_size;
+        offset += keyField.max_unit_size;
         read(valueField, valueVal, offset);
         offset += valueField.max_unit_size;
-        v.map_value.insert({keyVal.p_val, valueVal.p_val});
+        v.map_value.insert({ keyVal.p_val, valueVal.p_val });
       }
       break;
     }

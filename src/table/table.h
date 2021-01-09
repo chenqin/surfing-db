@@ -5,17 +5,17 @@
 #ifndef SURFINGDB_TABLE_H
 #define SURFINGDB_TABLE_H
 
-#include "table/gen-cpp/schema_types.h"
 #include "table/gen-cpp/schema_constants.h"
+#include "table/gen-cpp/schema_types.h"
 
 #include <arrow/api.h>
 #include <mpi.h>
-#include "Row.h"
 #include "CombineOp.h"
 #include "Node.h"
 #include "Operator.h"
 #include "ParDoOp.h"
 #include "PartitionOp.h"
+#include "Row.h"
 
 #pragma once
 
@@ -98,6 +98,10 @@ public:
     _chunks.get()->insert(_chunks.get()->end(), rows.begin(), rows.end());
   }
 
+  void ingest(const Row& row) {
+    _chunks.get()->push_back(row);
+  }
+
   void flush(std::shared_ptr<ColumnarTable<Row>> colptr) {
     colptr.get()->toTable(this->_chunks);
     _chunks.get()->clear();
@@ -109,9 +113,9 @@ public:
              */
   void regType(std::shared_ptr<arrow::Schema> schemaptr) {
     int count = schemaptr->num_fields();
-    int array_of_blocklengths[count];
-    MPI_Aint array_of_displacements[count];
-    MPI_Datatype array_of_types[count];
+    int array_of_blocklengths[count + 1];
+    MPI_Aint array_of_displacements[count + 1];
+    MPI_Datatype array_of_types[count + 1];
     int i = 0;
     for (auto field : schemaptr->fields()) {
       auto t = field->type();
@@ -134,6 +138,10 @@ public:
       i++;
       continue;
     }
+    array_of_blocklengths[i] = 10;
+    array_of_displacements[i] = array_of_displacements[i - 1] + sizeof(char);
+    array_of_types[i] = MPI_CHAR;
+
     MPI_Datatype tmp_type;
     MPI_Aint lb, extent;
 
@@ -182,14 +190,23 @@ public:
     op.process(rowL, rowR, rowOut);
   }
 
+  void send(int source, int dest, char* ptr1, int size) {
+    if (this->ptr->rank == source) {
+      MPI_Send((void*)ptr1, size, MPI_CHAR, dest, 0, MPI_COMM_WORLD);
+    } else if (this->ptr->rank == dest) {
+      MPI_Recv((void*)ptr1, size, MPI_CHAR, source, 0, MPI_COMM_WORLD,
+               MPI_STATUS_IGNORE);
+    }
+  }
+
   /**
              * blocking send chunk of data to another node
              */
-  void send(int source, int dest, const Row& data) {
+  void send(int source, int dest, const Row& data, const MPI_Datatype& row_type1) {
     if (this->ptr->rank == source) {
-      MPI_Send((void*)&data, 1, this->row_type, dest, 0, MPI_COMM_WORLD);
+      MPI_Send((void*)&data, 1, row_type1, dest, 0, MPI_COMM_WORLD);
     } else if (this->ptr->rank == dest) {
-      MPI_Recv((void*)&data, 1, this->row_type, source, 0, MPI_COMM_WORLD,
+      MPI_Recv((void*)&data, 1, row_type1, source, 0, MPI_COMM_WORLD,
                MPI_STATUS_IGNORE);
     }
   }
