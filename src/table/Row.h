@@ -221,8 +221,11 @@ private:
       int64_t* len = (int64_t*)(_payload + offset);
       char* char_ptr = (char*)(_payload + offset + sizeof(int64_t));
       //avoid truncation
-      assert(*len == (int64_t)strlen(char_ptr));
+      CHECK_EQ(*len, (int64_t)strlen(char_ptr));
+      size_t resid = f.max_unit_size - strlen(char_ptr);
+      CHECK_GE(resid, 0);
       memcpy(dataptr, char_ptr, strlen(char_ptr));
+      memset(_payload + strlen(char_ptr), 0, resid);
       return *len;
     }
     case RowType::LIST: {
@@ -309,7 +312,7 @@ public:
     }
     case RowType::LIST: {
       //guard overflow
-      CHECK_LE(v.list_value.size(), (size_t)f.max_list_unit_size);
+      CHECK_LE(v.list_value.size(), (size_t)f.max_unit_size);
 
       int64_t size = v.list_value.size();
       _pwrite(header, &size, offset);
@@ -326,6 +329,8 @@ public:
         write(listField, item, offset);
         offset += listField.max_unit_size;
       }
+      int resid = f.max_unit_size - v.list_value.size();
+      memset(_payload + offset, 0, resid * listField.max_unit_size);
       break;
     }
     case RowType::MAP: {
