@@ -21,16 +21,13 @@ namespace table {
 
 #define MAX_STR_LEN 128
 #define HEADER_SIZE sizeof(long)
+#define HUGE_PAGE_SIZE 4194304
 /**
  * build a continous memory buffer
  */
 using namespace surfingdb::table::schema;
 using std::hash;
 using std::string;
-/**
- * fixed memory layout buffer per schema
- */
-
 struct FieldHasher {
   std::size_t operator()(const Field& k) const {
     using std::hash;
@@ -38,6 +35,20 @@ struct FieldHasher {
     using std::string;
 
     return (hash<string>()(k.name));
+  }
+};
+
+struct SchemaHasher {
+  std::size_t operator()(const RowSchema& k) const {
+    using std::hash;
+    using std::size_t;
+    using std::string;
+    FieldHasher fieldHasher;
+    std::size_t result =  (hash<int>()(k.fields.size()));
+    for(size_t i = 0 ; i < k.fields.size(); i++) {
+      result = result ^ (fieldHasher.operator()(k.fields.at(i)) >> i);
+    }
+    return result;
   }
 };
 
@@ -214,6 +225,26 @@ inline void initMapField(Field& field, const std::string& name, const RowType::t
   checkStringLength(value_type, max_value_size);
 }
 
+size_t getSchemaSize(const RowSchema& schema) {
+  size_t _size = 0;
+  for (size_t i = 0; i < schema.fields.size(); i++) {
+    auto f = schema.fields.at(i);
+    _size += getFieldSize(f);
+  }
+  return _size;
+}
+
+std::shared_ptr<std::unordered_map<Field, uint64_t, FieldHasher>> getOffsets(const RowSchema& schema) {
+  std::shared_ptr<std::unordered_map<Field, uint64_t, FieldHasher>> _offsets;
+  size_t _size = 0;
+  for (size_t i = 0; i < schema.fields.size(); i++) {
+    auto f = schema.fields.at(i);
+    _offsets.get()->emplace(f, _size);
+    _size += getFieldSize(f);
+  }
+  return _offsets;
+}
+
 Field _header;
 // TODO(add map
 std::shared_ptr<std::unordered_map<Field, uint64_t, FieldHasher>> _offsets;
@@ -224,13 +255,10 @@ std::shared_ptr<std::unordered_map<Field, uint64_t, FieldHasher>> _offsets;
  */
 class RowBuffer {
 private:
-  /**
-   * those fields will be send to other processes as a Row
-   * **/
-  size_t _schema_sig; // hash of schema fields
-  MPI_Datatype _row_type;
+  // hash of schema fields
   size_t _size;      // size of payload
   uint8_t* _payload; // consider using vector std::vector<uint8_t>
+  std::vector<char> _vpayload;
 
   inline void _pwrite(const Field& f, const void* data, const uint64_t& offset) {
     switch (f.type) {
@@ -326,8 +354,8 @@ private:
 public:
   explicit RowBuffer(const RowSchema& schema) {
     validSchema(schema);
-    //hardcoded
-    _schema_sig = 1;
+    SchemaHasher s;
+    _schema_sig = s.operator()(schema);
     _header.type = RowType::LONG;
     _header.max_unit_size = getFieldSize(_header);
 
@@ -346,52 +374,10 @@ public:
     memset(_payload, 0, _size);
   }
 
-  MPI_Datatype row_type() {
-    return _row_type;
-  }
-
-  void reg_row_type(const RowSchema& rowSchema) {
-    int count = rowSchema.fields.size() + 3; // sig & row_type & _size
-    int array_of_blocklengths[count];
-    MPI_Aint array_of_displacements[count];
-    MPI_Datatype array_of_types[count];
-    array_of_types[0] = array_of_types[2] = MPI_LONG;
-    array_of_types[1] = MPI_INT;
-    array_of_blocklengths[0] = array_of_blocklengths[1] = array_of_blocklengths[2] = 1;
-    array_of_displacements[0] = offsetof(RowBuffer, _schema_sig);
-    array_of_displacements[1] = offsetof(RowBuffer, _row_type);
-    array_of_displacements[2] = offsetof(RowBuffer, _size);
-    MPI_Aint offset = offsetof(RowBuffer, _payload); // base address
-    int i = 3;
-    for (const auto& f : rowSchema.fields) {
-      array_of_types[i] = getFieldMPIType(f);
-      if (array_of_types[i] != MPI_CHAR) {
-        array_of_blocklengths[i] = 1;
-      } else {
-        //use array of char as container type
-        array_of_blocklengths[i] = getFieldSize(f);
-      }
-      array_of_displacements[i] = offset;
-      offset += getFieldSize(f);
-      ++i;
-    }
-    //for(int j = 0 ; j < count ; j++) {
-    //  LOG(INFO) << array_of_blocklengths[j] << " " << array_of_displacements[j] << " " << array_of_types[j];
-    //}
-    CHECK_EQ(i, count);
-    MPI_Datatype tmp_type;
-    MPI_Aint lb, extent;
-    MPI_Type_create_struct(count, array_of_blocklengths, array_of_displacements,
-                           array_of_types, &tmp_type);
-    MPI_Type_get_extent(tmp_type, &lb, &extent);
-    MPI_Type_create_resized(tmp_type, lb, extent, &_row_type);
-    MPI_Type_commit(&_row_type);
-  }
-
   ~RowBuffer() {
     _size = 0;
     _offsets->clear();
-    free(_payload);
+    CHECK_NOTNULL(_payload);
   }
 
   size_t size() {
@@ -571,6 +557,10 @@ public:
     }
     }
   }
+  /**
+   * those fields will be send to other processes as a Row
+   * **/
+  size_t _schema_sig;
 };
 } // namespace table
 } // namespace surfingdb

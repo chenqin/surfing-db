@@ -14,7 +14,7 @@ enum RowType {
 struct Field {
     1: required string name
     2: required RowType type
-    3: required i64    max_unit_size // size of single unit or max size of list/map
+    3: required i64    max_unit_size // size of single _size or max size of list/map
     4: optional RowType list_type = RowType.VOID //type within list
     5: optional i64 max_list_unit_size // max size of each element in list
     6: optional RowType map_key_type = RowType.VOID //map key type
