@@ -9,6 +9,7 @@
 #include "table/gen-cpp/schema_types.h"
 
 #include <arrow/api.h>
+#include <future>
 #include <mpi.h>
 #include "CombineOp.h"
 #include "Node.h"
@@ -103,6 +104,10 @@ public:
     MPI_Type_free(&type);
   }
 
+  void setCount(size_t count) {
+    this->_count = count;
+  }
+
   void ingest(RowBuffer row) {
     CHECK_EQ(row._schema_sig, schema_hash);
     CHECK_EQ(unit_size, row.size());
@@ -112,16 +117,14 @@ public:
     _count++;
   }
 
-  void send(int s, int d, size_t count) {
-    if (ptr->rank == s) {
-      CHECK_LE(count, _count);
-      MPI_Send(&_payload[0], count, type, d, 0, MPI_COMM_WORLD);
-    }
-    if (ptr->rank == d) {
-      CHECK_LE(unit_size * count, HUGE_PAGE_SIZE);
-      MPI_Recv(&_payload[0], count, type, s, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-      _count = count;
-    }
+  void async_send(int d, size_t count, MPI_Request& request) {
+    CHECK_LE(count, _count);
+    MPI_Isend(&_payload[0], count, type, d, 0, MPI_COMM_WORLD, &request);
+  }
+
+  void async_recv(int s, size_t count, MPI_Request& request) {
+    CHECK_LE(unit_size * count, HUGE_PAGE_SIZE);
+    MPI_Irecv(&_payload[0], count, type, s, 0, MPI_COMM_WORLD, &request);
   }
 
   std::unique_ptr<RowBuffer> read(int index) {

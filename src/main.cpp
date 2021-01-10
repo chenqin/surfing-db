@@ -15,6 +15,7 @@
  */
 
 #include "../include/main.h"
+#include <future>
 #include <glog/logging.h>
 #include <iostream>
 #include "table/table.h"
@@ -116,21 +117,38 @@ int main() {
   b.write(field7, v7);
 
   auto schema_ptr = std::make_shared<RowSchema>(r);
-  TempTable t(node, schema_ptr);
-
-  if(node->rank == 0) {
+  MPI_Request request;
+  MPI_Status status;
+  if (node->rank == 0) {
+    TempTable tsed(node, schema_ptr);
     size_t i;
     for (i = 0; i < HUGE_PAGE_SIZE / b.size(); i++) {
-      t.ingest(b);
+      tsed.ingest(b);
     }
-    for(int j = 1 ; j < node->world; j++) {
-      t.send(0, j, i);
+    MPI_Request requests[node->world];
+    int j;
+    for (j = 1; j < node->world; j++) {
+      tsed.async_send(j, HUGE_PAGE_SIZE / b.size(), requests[j]);
     }
-    LOG(INFO) << "sent " << i;
+
+    // do something else
+
+    for(j = 1; j < node->world; j++) {
+      auto wait_future = std::async(std::launch::deferred,
+                                    [&requests, j]() {
+                                      MPI_Status status;
+                                      MPI_Wait(&requests[j], &status);
+                                      LOG(INFO) << "sent " << j;
+                                    });
+      wait_future.wait();
+    }
   } else {
-    t.send(0,node->rank, HUGE_PAGE_SIZE / b.size());
-    auto s = t.read(0);
-    Value v,vm;
+    TempTable trecv(node, schema_ptr);
+    trecv.async_recv(0, HUGE_PAGE_SIZE / b.size(), request);
+    MPI_Wait(&request, &status);
+    trecv.setCount(HUGE_PAGE_SIZE / b.size());
+    auto s = trecv.read(0);
+    Value v, vm;
     s->read(field1, v);
     LOG(INFO) << v.p_val.int_val;
     v.p_val.int_val = 2;
