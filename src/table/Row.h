@@ -21,13 +21,14 @@ namespace table {
 
 #define MAX_STR_LEN 128
 #define HEADER_SIZE sizeof(long)
-#define HUGE_PAGE_SIZE 4194304
+#define HUGE_PAGE_SIZE 1073741824 //1GB
 /**
  * build a continous memory buffer
  */
 using namespace surfingdb::table::schema;
 using std::hash;
 using std::string;
+
 struct FieldHasher {
   std::size_t operator()(const Field& k) const {
     using std::hash;
@@ -81,41 +82,6 @@ void validSchema(const RowSchema& rowSchema) {
       CHECK(field.map_value_type == RowType::VOID);
     }
   }
-}
-
-inline MPI_Datatype getFieldMPIType(const Field& f) {
-  switch (f.type) {
-
-  case RowType::VOID: {
-    return MPI_DATATYPE_NULL;
-  }
-  case RowType::BOOL: {
-    return MPI_C_BOOL;
-  }
-  case RowType::INT: {
-    return MPI_INT;
-  }
-  case RowType::LONG: {
-    return MPI_LONG;
-  }
-  case RowType::DOUBLE: {
-    return MPI_DOUBLE;
-  }
-    //  |size|string|
-  case RowType::STRING: {
-    // max support string column MAX_STR_LEN character
-    return MPI_CHAR;
-  }
-    //  |size|array|
-  case RowType::LIST: {
-    return MPI_CHAR;
-  }
-    // | size | key val key val|
-  case RowType::MAP: {
-    return MPI_CHAR;
-  }
-  }
-  assert(false);
 }
 
 inline size_t getFieldSize(const Field& f) {
@@ -370,14 +336,41 @@ public:
     }
 
     CHECK_GT(_size, 0);
-    _payload = static_cast<uint8_t*>(malloc(_size));
-    memset(_payload, 0, _size);
+    _vpayload.resize(_size);
+    _payload = (uint8_t *) &_vpayload[0];
+  }
+
+  /**
+   * only used in Temptable point to piece of memory to read/write fields
+   * @param schema
+   * @param payload
+   */
+  explicit RowBuffer(const RowSchema& schema, uint8_t* payload) {
+    validSchema(schema);
+    SchemaHasher s;
+    _schema_sig = s.operator()(schema);
+    _header.type = RowType::LONG;
+    _header.max_unit_size = getFieldSize(_header);
+
+    CHECK_EQ(sizeof(uint64_t), getFieldSize(_header));
+
+    _offsets = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
+    _size = 0;
+    for (size_t i = 0; i < schema.fields.size(); i++) {
+      auto f = schema.fields.at(i);
+      _offsets.get()->emplace(f, _size);
+      _size += getFieldSize(f);
+    }
+    CHECK_GT(_size, 0);
+    CHECK_NE(payload, _payload);
+    _payload = payload;
   }
 
   ~RowBuffer() {
     _size = 0;
     _offsets->clear();
-    CHECK_NOTNULL(_payload);
+    _payload = nullptr;
+    _vpayload.clear();
   }
 
   size_t size() {

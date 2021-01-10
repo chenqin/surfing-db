@@ -69,25 +69,28 @@ void reducer(void* a, void* b, int* len, MPI_Datatype*) {
   //#pragma omp barrier
 }
 
+/**
+ * stores vector of RowBuffer with same schema
+ */
 class TempTable {
-public:
+private:
   // defines the node row table bind to
   std::shared_ptr<Node> ptr;
   std::shared_ptr<RowSchema> schema_ptr;
   std::vector<char> _payload;
 
   size_t schema_hash;   // hash of schema fields
-  size_t _count = 0;      // number of rows in table
+  size_t _count = 0;    // number of rows in table
   size_t unit_size = 0; //size of earch rowbuffer payload
   size_t offset = 0;    //current offset position
   MPI_Datatype type;    //used to run communication with other processes
-
+public:
   TempTable(const std::shared_ptr<Node> node, const std::shared_ptr<RowSchema> schema) {
     this->ptr = node;
     this->schema_ptr = schema;
     SchemaHasher s;
     schema_hash = s.operator()(*schema.get());
-    this->_payload.resize(HUGE_PAGE_SIZE); //4MB
+    this->_payload.resize(HUGE_PAGE_SIZE);
     _count = 0;
     unit_size = getSchemaSize(*schema.get());
 
@@ -96,13 +99,11 @@ public:
   }
 
   ~TempTable() {
+    _payload.clear();
     MPI_Type_free(&type);
   }
 
   void ingest(RowBuffer row) {
-    if(row.size() + offset >= HUGE_PAGE_SIZE){
-      _payload.resize(_payload.size() + HUGE_PAGE_SIZE);
-    }
     CHECK_EQ(row._schema_sig, schema_hash);
     CHECK_EQ(unit_size, row.size());
     CHECK_LT(row.size() + offset, _payload.max_size());
@@ -111,15 +112,21 @@ public:
     _count++;
   }
 
-  void send(int s, int d, int count) {
+  void send(int s, int d, size_t count) {
     if (ptr->rank == s) {
       CHECK_LE(count, _count);
       MPI_Send(&_payload[0], count, type, d, 0, MPI_COMM_WORLD);
     }
     if (ptr->rank == d) {
-      CHECK_LE(unit_size * (count + _count), HUGE_PAGE_SIZE);
+      CHECK_LE(unit_size * count, HUGE_PAGE_SIZE);
       MPI_Recv(&_payload[0], count, type, s, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      _count = count;
     }
+  }
+
+  std::unique_ptr<RowBuffer> read(int index) {
+    CHECK_LT(index, _count);
+    return std::make_unique<RowBuffer>(*schema_ptr.get(), reinterpret_cast<uint8_t*>(&_payload[0] + unit_size * index));
   }
 
   size_t count() {

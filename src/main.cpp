@@ -71,7 +71,7 @@ int main() {
   initField(field4, "d", RowType::DOUBLE, sizeof(double));
   initField(field5, "e", RowType::STRING, MAX_STR_LEN);
 
-  initListField(field6, "l", RowType::DOUBLE, 3, sizeof(double));
+  initListField(field6, "l", RowType::DOUBLE, 2, sizeof(double));
   initMapField(field7, "m", RowType::STRING, RowType::LONG, 3, MAX_STR_LEN, sizeof(long));
 
   r.fields.push_back(field1);
@@ -83,7 +83,7 @@ int main() {
   r.fields.push_back(field7);
 
   Value v1, v2, v3, v4, v5, v6, v7;
-  v1.p_val.int_val = node->rank;
+  v1.p_val.int_val = node->rank + 1;
 
   v2.p_val.long_val = 4;
 
@@ -115,13 +115,29 @@ int main() {
   b.write(field6, v6);
   b.write(field7, v7);
 
-  auto schemaptr = std::make_shared<RowSchema>(r);
-  TempTable t(node, schemaptr);
-  for(int i = 0 ; i < 100 ; i++) {
-    t.ingest(b);
+  auto schema_ptr = std::make_shared<RowSchema>(r);
+  TempTable t(node, schema_ptr);
+
+  if(node->rank == 0) {
+    size_t i;
+    for (i = 0; i < HUGE_PAGE_SIZE / b.size(); i++) {
+      t.ingest(b);
+    }
+    for(int j = 1 ; j < node->world; j++) {
+      t.send(0, j, i);
+    }
+    LOG(INFO) << "sent " << i;
+  } else {
+    t.send(0,node->rank, HUGE_PAGE_SIZE / b.size());
+    auto s = t.read(0);
+    Value v,vm;
+    s->read(field1, v);
+    LOG(INFO) << v.p_val.int_val;
+    v.p_val.int_val = 2;
+    s->write(field1, v);
+    s->read(field1, vm);
+    LOG(INFO) << vm.p_val.int_val;
   }
-  t.send(0,1,1);
-  LOG(INFO) << node->rank << &b;
 
   return 0;
 }
