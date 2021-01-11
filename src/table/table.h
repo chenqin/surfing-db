@@ -8,7 +8,6 @@
 #include "table/gen-cpp/schema_constants.h"
 #include "table/gen-cpp/schema_types.h"
 
-#include <arrow/api.h>
 #include <future>
 #include <mpi.h>
 #include "CombineOp.h"
@@ -23,34 +22,6 @@
 namespace surfingdb {
 namespace table {
 using surfingdb::node::Node;
-
-/**
-         * columnarTable is maintained collectively to as one logical arrow table
-         */
-template <class Row>
-class ColumnarTable {
-private:
-  std::shared_ptr<arrow::Table> tableptr;
-
-public:
-  ColumnarTable() {
-  }
-
-  void toTable(std::shared_ptr<std::vector<Row>>& rowptr) {
-    arrow::MemoryPool* pool = arrow::default_memory_pool();
-    arrow::Int32Builder a_builder(pool);
-    arrow::Int64Builder b_builder(pool);
-    for (auto chunk : *rowptr.get()) {
-      a_builder.Append(chunk.a);
-      b_builder.Append(chunk.b);
-    }
-    std::shared_ptr<arrow::Array> a_array;
-    a_builder.Finish(&a_array);
-    std::shared_ptr<arrow::Array> b_array;
-    b_builder.Finish(&b_array);
-    tableptr = arrow::Table::Make(Row::schema(), { a_array, b_array });
-  }
-};
 
 /**
          * use class operator+ to get row count of a key
@@ -79,8 +50,7 @@ private:
   std::shared_ptr<Node> ptr;
   std::shared_ptr<TableSchema> schema_ptr;
   std::vector<char> _payload;
-
-  size_t schema_hash;   // hash of schema fields
+  
   size_t _count = 0;    // number of rows in table
   size_t _pending = 0;
   size_t unit_size = 0; //size of earch rowbuffer payload
@@ -178,60 +148,6 @@ public:
     _chunks.get()->push_back(row);
   }
 
-  void flush(std::shared_ptr<ColumnarTable<Row>> colptr) {
-    colptr.get()->toTable(this->_chunks);
-    _chunks.get()->clear();
-  }
-
-  /**
-             * register MPI_struct type based on row schema
-             * @param schemaptr arrow Schema
-             */
-  void regType(std::shared_ptr<arrow::Schema> schemaptr) {
-    int count = schemaptr->num_fields();
-    int array_of_blocklengths[count + 1];
-    MPI_Aint array_of_displacements[count + 1];
-    MPI_Datatype array_of_types[count + 1];
-    int i = 0;
-    for (auto field : schemaptr->fields()) {
-      auto t = field->type();
-
-      int prev_displ = i == 0 ? 0 : array_of_displacements[i - 1];
-      bool isInt32 = t->Equals(arrow::int32());
-      bool isInt64 = t->Equals(arrow::int64());
-      bool isPrimitive = isInt32 || isInt64;
-
-      if (isPrimitive) {
-        array_of_blocklengths[i] = 1;
-      }
-      if (isInt32) {
-        array_of_displacements[i] = prev_displ + sizeof(int);
-        array_of_types[i] = MPI_INT;
-      } else if (isInt64) {
-        array_of_displacements[i] = prev_displ + sizeof(long);
-        array_of_types[i] = MPI_LONG;
-      }
-      i++;
-      continue;
-    }
-    array_of_blocklengths[i] = 10;
-    array_of_displacements[i] = array_of_displacements[i - 1] + sizeof(char);
-    array_of_types[i] = MPI_CHAR;
-
-    MPI_Datatype tmp_type;
-    MPI_Aint lb, extent;
-
-    MPI_Type_create_struct(count, array_of_blocklengths, array_of_displacements,
-                           array_of_types, &tmp_type);
-    MPI_Type_get_extent(tmp_type, &lb, &extent);
-    MPI_Type_create_resized(tmp_type, lb, extent, &row_type);
-    MPI_Type_commit(&row_type);
-  }
-
-  /**
-             * partition run in place shuffle
-             * @param op
-             */
   void partition(PartitionOp<Row>& op) {
     std::vector<Row>* payload = this->_chunks.get();
     op.process(*payload, *payload, *payload);

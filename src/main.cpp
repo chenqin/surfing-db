@@ -31,15 +31,6 @@ public:
   mychunk() {
     ptr = static_cast<char*>(malloc(10));
   }
-  static std::shared_ptr<arrow::Schema> schema() {
-    std::vector<std::shared_ptr<arrow::Field>> schema_vector = {
-      arrow::field("a", arrow::int32()),
-      arrow::field("b", arrow::int64())
-    };
-
-    return std::make_shared<arrow::Schema>(schema_vector);
-  }
-
   // friends defined inside class body are inline and are hidden from non-ADL lookup
   friend mychunk operator+(mychunk lhs,        // passing lhs by value helps optimize chained a+b+c
                            const mychunk& rhs) // otherwise, both parameters may be const references

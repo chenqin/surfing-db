@@ -6,7 +6,9 @@
 #define SURFINGDB_ROW_H
 
 #include "schema.h"
-
+#include <iostream>
+#include <string>
+#include <unordered_map>
 #pragma once
 
 namespace surfingdb {
@@ -28,9 +30,7 @@ using std::string;
 class RowBuffer {
 private:
   Field _header;
-  std::shared_ptr<std::unordered_map<Field, uint64_t, FieldHasher>> _offsets;
-  // hash of schema fields
-  size_t _size;      // size of payload
+  std::shared_ptr<TableSchema> schemaptr;
   uint8_t* _payload; // consider using vector std::vector<uint8_t>
   std::vector<char> _vpayload;
 
@@ -131,13 +131,9 @@ public:
     _header.type = RowType::LONG;
     _header.max_unit_size = getFieldSize(_header);
     CHECK_EQ(sizeof(uint64_t), getFieldSize(_header));
-
-    _size = schemaptr->_size;
-    _schema_sig = schemaptr->_schema_sig;
-    _offsets = schemaptr->_offsets;
-
-    CHECK_GT(_size, 0);
-    _vpayload.resize(_size);
+    this->schemaptr = schemaptr;
+    CHECK_GT(schemaptr->_size, 0);
+    _vpayload.resize(schemaptr->_size);
     _payload = (uint8_t *) &_vpayload[0];
   }
 
@@ -151,24 +147,18 @@ public:
     _header.max_unit_size = getFieldSize(_header);
     CHECK_EQ(sizeof(uint64_t), getFieldSize(_header));
 
-    _size = schemaptr->_size;
-    _schema_sig = schemaptr->_schema_sig;
-    _offsets = schemaptr->_offsets;
-
-    CHECK_GT(_size, 0);
+    CHECK_GT(schemaptr->_size, 0);
     CHECK_NE(payload, _payload);
     _payload = payload;
   }
 
   ~RowBuffer() {
-    _size = 0;
-    _offsets->clear();
     _payload = nullptr;
     _vpayload.clear();
   }
 
   size_t size() {
-    return this->_size;
+    return this->schemaptr->_size;
   }
 
   uint8_t* payload() {
@@ -181,10 +171,10 @@ public:
   * @param v
   */
   void read(const Field& f, Value& v) {
-    CHECK_NOTNULL(_offsets);
-    CHECK_GE(_offsets->size(), 0);
-    CHECK(_offsets->find(f) != _offsets->end());
-    uint64_t offset = _offsets->at(f);
+    CHECK_NOTNULL(schemaptr->_offsets);
+    CHECK_GE(schemaptr->_offsets->size(), 0);
+    CHECK(schemaptr->_offsets->find(f) != schemaptr->_offsets->end());
+    uint64_t offset = schemaptr->_offsets->at(f);
     read(f, v, offset);
   }
   /**
@@ -193,7 +183,7 @@ public:
    * @param v
    */
   void write(const Field& f, const Value& v) {
-    uint64_t offset = _offsets->at(f);
+    uint64_t offset = schemaptr->_offsets->at(f);
     write(f, v, offset);
   }
 

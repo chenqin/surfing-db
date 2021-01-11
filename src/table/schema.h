@@ -8,7 +8,8 @@
 
 #include <glog/logging.h>
 #include <iostream>
-#include <jemalloc/jemalloc.h>
+#include <string>
+#include <unordered_map>
 #include <stdlib.h>
 
 namespace surfingdb {

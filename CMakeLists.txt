@@ -203,7 +203,7 @@ include(ext/Gflatbuffers_Ext.cmake)
 # include rapid JSON
 include(ext/Json_Ext.cmake)
 
-include(ext/Arrow_Ext.cmake)
+#include(ext/Arrow_Ext.cmake)
 
 include(ext/Sketches_Ext.cmake)
 

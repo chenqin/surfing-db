@@ -10,9 +10,8 @@ if(APPLE)
     # install thrift through brew
     # "brew install thrift"
     # thrift
-    set(THRIFT_ROOT ${CELLAR_ROOT}/thrift/0.9.3/)
-    set(THRIFT_INCLUDE_DIR ${THRIFT_ROOT}/include)
-    set(THRIFT_LIBRARY_PATH ${THRIFT_ROOT}/lib/libthrift.a)
+    set(THRIFT_INCLUDE_DIR /usr/local/opt/thrift@0.9/include)
+    set(THRIFT_LIBRARY_PATH /usr/local/opt/thrift@0.9/lib/libthrift.a)
 else()
     # build thrift
     SET(THRIFT_OPTS
