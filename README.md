@@ -1,7 +1,10 @@
 # surfing-db
-Ride wave of streams with SQL/Python on HPC architectures (NUMA, GPU, RMA)
+Ride wave of streams with SQL/Python on HPC architectures (NUMA, GPU, RMA) The only data processing framework that utlize high performance computing architecture to run large scale machine learning and data processing all in one place. with SQL or Python.
 
-The goal of this project is to enable scientist, analyst and who speaks SQL and python take advantage of more efficent cluster architecture on open cloud run experiment and machine learning in sub-second latency.
+## no jvm gc headache
+## high throughput on both cheap server cluster or super commputer if needed without code change
+## speaks SQL and Python as it should to data scientists
+
 
 pre-requesite
 - sudo apt install libjemalloc-dev
