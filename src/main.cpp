@@ -118,43 +118,43 @@ int main() {
 
   auto schema_ptr = std::make_shared<RowSchema>(r);
   MPI_Request request;
-  MPI_Status status;
   if (node->rank == 0) {
     TempTable tsed(node, schema_ptr);
     size_t i;
     for (i = 0; i < HUGE_PAGE_SIZE / b.size(); i++) {
       tsed.ingest(b);
     }
-    MPI_Request requests[node->world];
-    int j;
-    for (j = 1; j < node->world; j++) {
-      tsed.async_send(j, HUGE_PAGE_SIZE / b.size(), requests[j]);
+    node->forward(); // stage 0 read data
+
+    for (int j = 1; j < node->world; j++) {
+      MPI_Request req;
+      tsed.async_send(j, HUGE_PAGE_SIZE / b.size(), req);
+      node->keep(std::make_unique<MPI_Request>(req));
     }
 
     // do something else
-
-    for(j = 1; j < node->world; j++) {
-      auto wait_future = std::async(std::launch::deferred,
-                                    [&requests, j]() {
-                                      MPI_Status status;
-                                      MPI_Wait(&requests[j], &status);
-                                      LOG(INFO) << "sent " << j;
-                                    });
-      wait_future.wait();
-    }
+    node->forward(); // stage 1 broadcast data
   } else {
+    node.get()->forward(); // stage 0 do nothing
     TempTable trecv(node, schema_ptr);
     trecv.async_recv(0, HUGE_PAGE_SIZE / b.size(), request);
-    MPI_Wait(&request, &status);
-    trecv.setCount(HUGE_PAGE_SIZE / b.size());
-    auto s = trecv.read(0);
-    Value v, vm;
-    s->read(field1, v);
-    LOG(INFO) << v.p_val.int_val;
-    v.p_val.int_val = 2;
-    s->write(field1, v);
-    s->read(field1, vm);
-    LOG(INFO) << vm.p_val.int_val;
+    auto revcallback = std::async(std::launch::async, [&request, &field1, &trecv, &b]() {
+      MPI_Status status;
+      MPI_Wait(&request, &status);
+      trecv.setCount(HUGE_PAGE_SIZE / b.size());
+      auto s = trecv.read(0);
+      Value v, vm;
+      s->read(field1, v);
+      LOG(INFO) << v.p_val.int_val;
+      v.p_val.int_val = 2;
+      s->write(field1, v);
+      s->read(field1, vm);
+      LOG(INFO) << vm.p_val.int_val;
+    });
+
+    // do something not waiting for sent data here
+    revcallback.wait();
+    node->forward(); // stage 1 recv data
   }
 
   return 0;

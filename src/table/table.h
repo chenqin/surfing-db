@@ -91,7 +91,7 @@ public:
     this->schema_ptr = schema;
     SchemaHasher s;
     schema_hash = s.operator()(*schema.get());
-    this->_payload.resize(HUGE_PAGE_SIZE);
+    this->_payload.resize(HUGE_PAGE_SIZE); // TODO(chenqin): use mmap
     _count = 0;
     unit_size = getSchemaSize(*schema.get());
 
