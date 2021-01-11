@@ -83,6 +83,10 @@ int main() {
   r.fields.push_back(field6);
   r.fields.push_back(field7);
 
+  
+  std::shared_ptr<TableSchema> schema_ptr = std::make_shared<TableSchema>(r);
+
+
   Value v1, v2, v3, v4, v5, v6, v7;
   v1.p_val.int_val = node->rank + 1;
 
@@ -106,8 +110,8 @@ int main() {
   pair.second = value;
   v7.map_value.insert(pair);
 
-  // build continuous buffer with fixed fields offsets
-  surfingdb::table::RowBuffer b(r);
+
+  surfingdb::table::RowBuffer b(schema_ptr);
   b.write(field1, v1);
   b.write(field2, v2);
   b.write(field3, v3);
@@ -116,27 +120,30 @@ int main() {
   b.write(field6, v6);
   b.write(field7, v7);
 
-  auto schema_ptr = std::make_shared<RowSchema>(r);
-  MPI_Request request;
+  /**
+   * ingestion
+   */
+  TempTable tsed(node, schema_ptr);
   if (node->rank == 0) {
-    TempTable tsed(node, schema_ptr);
     size_t i;
     for (i = 0; i < HUGE_PAGE_SIZE / b.size(); i++) {
       tsed.ingest(b);
     }
-    node->forward(); // stage 0 read data
+  }
+  node->forward();
 
+  /**
+   * broadcast, recve
+   */
+  if (node->rank == 0) {
     for (int j = 1; j < node->world; j++) {
       MPI_Request req;
       tsed.async_send(j, HUGE_PAGE_SIZE / b.size(), req);
       node->keep(std::make_unique<MPI_Request>(req));
     }
-
-    // do something else
-    node->forward(); // stage 1 broadcast data
   } else {
-    node.get()->forward(); // stage 0 do nothing
     TempTable trecv(node, schema_ptr);
+    MPI_Request request;
     trecv.async_recv(0, HUGE_PAGE_SIZE / b.size(), request);
     auto revcallback = std::async(std::launch::async, [&request, &field1, &trecv, &b]() {
       MPI_Status status;
@@ -154,8 +161,8 @@ int main() {
 
     // do something not waiting for sent data here
     revcallback.wait();
-    node->forward(); // stage 1 recv data
   }
+  node->forward(); // stage 1 broadcast data
 
   return 0;
 }

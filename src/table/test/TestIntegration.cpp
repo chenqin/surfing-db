@@ -10,7 +10,7 @@
 #include <random>
 #include "frequent_items_sketch.hpp"
 #include "table/Operator.h"
-#include "table/Row.h"
+#include "table/row.h"
 #include "table/table.h"
 
 namespace surfingdb {
@@ -67,7 +67,8 @@ TEST(TableTest, testRowBuffer) {
   v7.map_value.insert(pair);
 
   // build continuous buffer with fixed fields offsets
-  surfingdb::table::RowBuffer b(r);
+  std::shared_ptr<TableSchema> tpr = std::make_shared<TableSchema>(r);
+  surfingdb::table::RowBuffer b(tpr);
   b.write(field1, v1);
   b.write(field2, v2);
   b.write(field3, v3);

@@ -16,7 +16,7 @@
 #include "Operator.h"
 #include "ParDoOp.h"
 #include "PartitionOp.h"
-#include "Row.h"
+#include "row.h"
 
 #pragma once
 
@@ -77,7 +77,7 @@ class TempTable {
 private:
   // defines the node row table bind to
   std::shared_ptr<Node> ptr;
-  std::shared_ptr<RowSchema> schema_ptr;
+  std::shared_ptr<TableSchema> schema_ptr;
   std::vector<char> _payload;
 
   size_t schema_hash;   // hash of schema fields
@@ -86,16 +86,12 @@ private:
   size_t offset = 0;    //current offset position
   MPI_Datatype type;    //used to run communication with other processes
 public:
-  TempTable(const std::shared_ptr<Node> node, const std::shared_ptr<RowSchema> schema) {
+  TempTable(const std::shared_ptr<Node> node, const std::shared_ptr<TableSchema> sharedPtr) {
     this->ptr = node;
-    this->schema_ptr = schema;
-    SchemaHasher s;
-    schema_hash = s.operator()(*schema.get());
+    this->schema_ptr = sharedPtr;
     this->_payload.resize(HUGE_PAGE_SIZE); // TODO(chenqin): use mmap
     _count = 0;
-    unit_size = getSchemaSize(*schema.get());
-
-    MPI_Type_contiguous(unit_size, MPI_CHAR, &type);
+    MPI_Type_contiguous(sharedPtr->_size, MPI_CHAR, &type);
     MPI_Type_commit(&type);
   }
 
@@ -109,8 +105,8 @@ public:
   }
 
   void ingest(RowBuffer row) {
-    CHECK_EQ(row._schema_sig, schema_hash);
-    CHECK_EQ(unit_size, row.size());
+    CHECK_EQ(row._schema_sig, schema_ptr->_schema_sig);
+    CHECK_EQ(schema_ptr->_size, row.size());
     CHECK_LT(row.size() + offset, _payload.max_size());
     memcpy(&_payload[0], row.payload(), row.size());
     offset += row.size();
@@ -126,10 +122,14 @@ public:
     CHECK_LE(unit_size * count, HUGE_PAGE_SIZE);
     MPI_Irecv(&_payload[0], count, type, s, 0, MPI_COMM_WORLD, &request);
   }
-
-  std::unique_ptr<RowBuffer> read(int index) {
+  /**
+   * directly read from temptable memory
+   * @param index
+   * @return
+   */
+  const std::unique_ptr<RowBuffer> read(int index) {
     CHECK_LT(index, _count);
-    return std::make_unique<RowBuffer>(*schema_ptr.get(), reinterpret_cast<uint8_t*>(&_payload[0] + unit_size * index));
+    return std::make_unique<RowBuffer>(schema_ptr, reinterpret_cast<uint8_t*>(&_payload[0] + unit_size * index));
   }
 
   size_t count() {
