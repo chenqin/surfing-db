@@ -83,9 +83,7 @@ int main() {
   r.fields.push_back(field6);
   r.fields.push_back(field7);
 
-  
   std::shared_ptr<TableSchema> schema_ptr = std::make_shared<TableSchema>(r);
-
 
   Value v1, v2, v3, v4, v5, v6, v7;
   v1.p_val.int_val = node->rank + 1;
@@ -110,7 +108,6 @@ int main() {
   pair.second = value;
   v7.map_value.insert(pair);
 
-
   surfingdb::table::RowBuffer b(schema_ptr);
   b.write(field1, v1);
   b.write(field2, v2);
@@ -124,45 +121,51 @@ int main() {
    * ingestion
    */
   TempTable tsed(node, schema_ptr);
-  if (node->rank == 0) {
-    size_t i;
-    for (i = 0; i < HUGE_PAGE_SIZE / b.size(); i++) {
-      tsed.ingest(b);
-    }
-  }
-  node->forward();
 
-  /**
+  int iteration = 0;
+  while (iteration++ < 100) {
+    /**
+  * ingestion
+  */
+    if (node->rank == 0) {
+      size_t i;
+      for (i = 0; i < 30000; i++) {
+        tsed.ingest(b);
+      }
+    }
+    node->forward();
+    /**
    * broadcast, recve
    */
-  if (node->rank == 0) {
-    for (int j = 1; j < node->world; j++) {
-      MPI_Request req;
-      tsed.async_send(j, HUGE_PAGE_SIZE / b.size(), req);
-      node->keep(std::make_unique<MPI_Request>(req));
+    if (node->rank == 0) {
+      for (int j = 1; j < node->world; j++) {
+        MPI_Request req;
+        tsed.async_send(j, 30000, req);
+        node->keep(std::make_unique<MPI_Request>(req));
+      }
+    } else {
+      TempTable trecv(node, schema_ptr);
+      MPI_Request request;
+      trecv.async_recv(0, request);
+      auto revcallback = std::async(std::launch::async, [&request, &trecv]() {
+        MPI_Status status;
+        MPI_Wait(&request, &status);
+        trecv.complete();
+        /*
+        auto s = trecv.read(0);
+        Value v, vm;
+        s->read(field1, v);
+        LOG(INFO) << v.p_val.int_val;
+        v.p_val.int_val = 2;
+        s->write(field1, v);
+        s->read(field1, vm);
+         */
+      });
+
+      // do something not waiting for sent data here
+      revcallback.wait();
     }
-  } else {
-    TempTable trecv(node, schema_ptr);
-    MPI_Request request;
-    trecv.async_recv(0, HUGE_PAGE_SIZE / b.size(), request);
-    auto revcallback = std::async(std::launch::async, [&request, &field1, &trecv, &b]() {
-      MPI_Status status;
-      MPI_Wait(&request, &status);
-      trecv.setCount(HUGE_PAGE_SIZE / b.size());
-      auto s = trecv.read(0);
-      Value v, vm;
-      s->read(field1, v);
-      LOG(INFO) << v.p_val.int_val;
-      v.p_val.int_val = 2;
-      s->write(field1, v);
-      s->read(field1, vm);
-      LOG(INFO) << vm.p_val.int_val;
-    });
-
-    // do something not waiting for sent data here
-    revcallback.wait();
+    node->forward(); // stage 1 broadcast data
   }
-  node->forward(); // stage 1 broadcast data
-
   return 0;
 }

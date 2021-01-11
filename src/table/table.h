@@ -82,6 +82,7 @@ private:
 
   size_t schema_hash;   // hash of schema fields
   size_t _count = 0;    // number of rows in table
+  size_t _pending = 0;
   size_t unit_size = 0; //size of earch rowbuffer payload
   size_t offset = 0;    //current offset position
   MPI_Datatype type;    //used to run communication with other processes
@@ -100,8 +101,9 @@ public:
     MPI_Type_free(&type);
   }
 
-  void setCount(size_t count) {
-    this->_count = count;
+  void complete() {
+    this->_count = _pending;
+    _pending = 0;
   }
 
   void ingest(RowBuffer row) {
@@ -115,10 +117,15 @@ public:
 
   void async_send(int d, size_t count, MPI_Request& request) {
     CHECK_LE(count, _count);
+    MPI_Send(&count, 1, MPI_UNSIGNED_LONG, d, 0, MPI_COMM_WORLD);
     MPI_Isend(&_payload[0], count, type, d, 0, MPI_COMM_WORLD, &request);
   }
 
-  void async_recv(int s, size_t count, MPI_Request& request) {
+  void async_recv(int s, MPI_Request& request) {
+    CHECK_EQ(_pending, 0);
+    size_t count;
+    MPI_Recv(&count, 1, MPI_UNSIGNED_LONG, s, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    _pending = count;
     CHECK_LE(unit_size * count, HUGE_PAGE_SIZE);
     MPI_Irecv(&_payload[0], count, type, s, 0, MPI_COMM_WORLD, &request);
   }
@@ -129,6 +136,7 @@ public:
    */
   const std::unique_ptr<RowBuffer> read(int index) {
     CHECK_LT(index, _count);
+    CHECK_NOTNULL(schema_ptr);
     return std::make_unique<RowBuffer>(schema_ptr, reinterpret_cast<uint8_t*>(&_payload[0] + unit_size * index));
   }
 
