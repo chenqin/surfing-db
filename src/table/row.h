@@ -41,6 +41,9 @@ private:
     }
     case surfingdb::table::schema::RowType::INT: {
       memcpy((int*)(_payload + offset), data, sizeof(int));
+      int* ptr = (int*)(_payload + offset);
+      LOG(INFO) << "write to " << ptr << " value " << *ptr;
+      CHECK_EQ(*ptr, (int)*((int*)data));
       break;
     }
     case surfingdb::table::schema::RowType::BOOL: {
@@ -85,6 +88,8 @@ private:
     }
     case surfingdb::table::schema::RowType::INT: {
       int* int_ptr = (int*)(_payload + offset);
+      int* ptr = (int*)(_payload + offset);
+      LOG(INFO) << "read from " << ptr << " value " << *ptr;
       memcpy(dataptr, int_ptr, sizeof(int));
       return sizeof(int);
     }
@@ -109,10 +114,9 @@ private:
       char* char_ptr = (char*)(_payload + offset + sizeof(int64_t));
       //avoid truncation
       CHECK_EQ(*len, (int64_t)strlen(char_ptr));
-      size_t resid = f.max_unit_size - strlen(char_ptr);
+      size_t resid = f.max_unit_size - strlen(char_ptr) - 1; //leave extra byte'\0'
       CHECK_GE(resid, 0);
       memcpy(dataptr, char_ptr, strlen(char_ptr));
-      memset(_payload + strlen(char_ptr), 0, resid);
       return *len;
     }
     case RowType::LIST: {
@@ -127,7 +131,6 @@ private:
 
 public:
   explicit RowBuffer(std::shared_ptr<TableSchema> schemaptr) {
-
     _header.type = RowType::LONG;
     _header.max_unit_size = getFieldSize(_header);
     CHECK_EQ(sizeof(uint64_t), getFieldSize(_header));
@@ -142,14 +145,14 @@ public:
    * @param schema
    * @param payload
    */
-  explicit RowBuffer(std::shared_ptr<TableSchema> schemaptr, uint8_t* payload) {
+  explicit RowBuffer(std::shared_ptr<TableSchema> schemaptr, uint8_t* payloadptr) {
     _header.type = RowType::LONG;
     _header.max_unit_size = getFieldSize(_header);
     CHECK_EQ(sizeof(uint64_t), getFieldSize(_header));
-
+    this->schemaptr = schemaptr;
     CHECK_GT(schemaptr->_size, 0);
-    CHECK_NE(payload, _payload);
-    _payload = payload;
+    CHECK_NE(payloadptr, _payload);
+    _payload = payloadptr;
   }
 
   ~RowBuffer() {
@@ -161,7 +164,7 @@ public:
     return this->schemaptr->_size;
   }
 
-  uint8_t* payload() {
+  uint8_t* payload_ptr() {
     return this->_payload;
   }
 
@@ -171,7 +174,6 @@ public:
   * @param v
   */
   void read(const Field& f, Value& v) {
-    CHECK_NOTNULL(schemaptr->_offsets);
     CHECK_GE(schemaptr->_offsets->size(), 0);
     CHECK(schemaptr->_offsets->find(f) != schemaptr->_offsets->end());
     uint64_t offset = schemaptr->_offsets->at(f);
@@ -232,8 +234,6 @@ public:
         write(listField, item, offset);
         offset += listField.max_unit_size;
       }
-      int resid = f.max_unit_size - v.list_value.size();
-      memset(_payload + offset, 0, resid * listField.max_unit_size);
       break;
     }
     case RowType::MAP: {
@@ -257,14 +257,12 @@ public:
         write(valueField, value, offset);
         offset += valueField.max_unit_size;
       }
-      int resid = f.max_unit_size - v.map_value.size();
-      memset(_payload + offset, 0, resid * (f.max_map_key_unit_size + f.max_map_value_unit_size));
       break;
     }
     }
   }
 
-  inline void read(const Field& f, Value& v, uint64_t& offset) {
+  inline void read(const Field& f, Value& v, const uint64_t& offset) {
     switch (f.type) {
     case surfingdb::table::schema::RowType::VOID: {
       break;
@@ -293,29 +291,33 @@ public:
       break;
     }
     case RowType::LIST: {
+      v.list_value.clear();
+      size_t _offset = offset;
       Field l;
       l.type = RowType::LONG;
       long len;
-      _pread(l, &len, offset);
-      offset += sizeof(int64_t);
+      _pread(l, &len, _offset);
+      _offset += sizeof(int64_t);
 
       Field listField;
       listField.type = f.list_type;
       listField.max_unit_size = f.max_list_unit_size;
       for (int i = 0; i < len; i++) {
         Value listVal;
-        read(listField, listVal, offset);
+        read(listField, listVal, _offset);
         v.list_value.push_back(listVal.p_val);
-        offset += listField.max_unit_size;
+        _offset += listField.max_unit_size;
       }
       break;
     }
     case RowType::MAP: {
+      v.map_value.clear();
+      size_t _offset = offset;
       Field l;
       l.type = RowType::LONG;
       long len;
-      _pread(l, &len, offset);
-      offset += sizeof(int64_t);
+      _pread(l, &len, _offset);
+      _offset += sizeof(int64_t);
 
       Field keyField, valueField;
       keyField.type = f.map_key_type;
@@ -325,9 +327,9 @@ public:
       for (int i = 0; i < len; i++) {
         Value keyVal, valueVal;
         read(keyField, keyVal, offset);
-        offset += keyField.max_unit_size;
+        _offset += keyField.max_unit_size;
         read(valueField, valueVal, offset);
-        offset += valueField.max_unit_size;
+        _offset += valueField.max_unit_size;
         v.map_value.insert({ keyVal.p_val, valueVal.p_val });
       }
       break;

@@ -87,6 +87,103 @@ TEST(TableTest, testRowBuffer) {
   EXPECT_EQ(v6.p_val.string_val, "hello");
   EXPECT_EQ(v5.list_value.size(), 1);
   EXPECT_EQ(v3.map_value.size(), 1);
+
+  // verify read by reference
+  Value v11, v22, v33, v44, v55, v66, v77;
+  auto s = RowBuffer(tpr, b.payload_ptr());
+  s.read(field1, v11);
+  s.read(field2, v22);
+  s.read(field3, v33);
+  s.read(field4, v44);
+  s.read(field5, v55);
+  s.read(field6, v66);
+  s.read(field7, v77);
+  EXPECT_EQ(v55.p_val.string_val, "hello");
+  EXPECT_EQ(v66.list_value.size(), 1);
+  EXPECT_EQ(v77.map_value.size(), 1);
+
+  // test copy to memory and point to memory by ptr
+  uint8_t buf[tpr->_size];
+  memset(buf, 0, tpr->_size);
+  memcpy(buf, b.payload_ptr(), tpr->_size);
+
+  s = RowBuffer(tpr, &buf[0]);
+  s.read(field1, v11);
+  s.read(field2, v22);
+  s.read(field3, v33);
+  s.read(field4, v44);
+  s.read(field5, v55);
+  s.read(field6, v66);
+  s.read(field7, v77);
+  EXPECT_EQ(v55.p_val.string_val, "hello");
+  EXPECT_EQ(v66.list_value.size(), 1);
+  EXPECT_EQ(v77.map_value.size(), 1);
+}
+
+TEST(TableTest, TestTempTable) {
+  RowSchema r;
+  r.fields = std::vector<surfingdb::table::schema::Field>();
+
+  Field field1, field2, field3, field4, field5, field6, field7;
+
+  initField(field1, "a", RowType::INT, sizeof(int));
+  initField(field2, "b", RowType::LONG, sizeof(long));
+  initField(field3, "c", RowType::BOOL, sizeof(bool));
+  initField(field4, "d", RowType::DOUBLE, sizeof(double));
+  initField(field5, "e", RowType::STRING, MAX_STR_LEN);
+
+  initListField(field6, "l", RowType::DOUBLE, 3, sizeof(double));
+  initMapField(field7, "m", RowType::STRING, RowType::LONG, 3, MAX_STR_LEN, sizeof(long));
+
+  r.fields.push_back(field1);
+  r.fields.push_back(field2);
+  r.fields.push_back(field3);
+  r.fields.push_back(field4);
+  r.fields.push_back(field5);
+  r.fields.push_back(field6);
+  r.fields.push_back(field7);
+
+  Value v1, v2, v3, v4, v5, v6, v7;
+  v1.p_val.int_val = 3;
+
+  v2.p_val.long_val = 4;
+
+  v3.p_val.bool_val = true;
+
+  v4.p_val.double_val = 0.1f;
+
+  v5.p_val.string_val = "hello";
+  PValue p;
+  p.double_val = 0.1;
+  std::vector<PValue> lval;
+  lval.push_back(p);
+  v6.list_value = lval;
+  PValue key, value;
+  key.string_val = "hello";
+  value.long_val = 1l;
+  std::pair<PValue, PValue> pair;
+  pair.first = key;
+  pair.second = value;
+  v7.map_value.insert(pair);
+
+  // build continuous buffer with fixed fields offsets
+  std::shared_ptr<TableSchema> tpr = std::make_shared<TableSchema>(r);
+
+  surfingdb::table::RowBuffer b(tpr);
+  b.write(field1, v1);
+  b.write(field2, v2);
+  b.write(field3, v3);
+  b.write(field4, v4);
+  b.write(field5, v5);
+  b.write(field6, v6);
+  b.write(field7, v7);
+
+  Value v;
+  TempTable trecv(tpr);
+  trecv.ingest(b);
+  auto s = trecv.read(0);
+  s->read(field1, v);
+  CHECK(v.p_val.int_val == 3);
 }
 
 TEST(TableTest, TestPartitionAloha) {

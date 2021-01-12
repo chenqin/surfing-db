@@ -138,11 +138,11 @@ int main() {
       TempTable trecv(node, schema_ptr);
       MPI_Request request;
       trecv.async_recv(0, request);
-      auto revcallback = std::async(std::launch::async, [&request, &trecv]() {
+      auto revcallback = std::async(std::launch::async, [&request, &trecv, field1]() {
         MPI_Status status;
         MPI_Wait(&request, &status);
         trecv.complete();
-        /*
+
         auto s = trecv.read(0);
         Value v, vm;
         s->read(field1, v);
@@ -150,7 +150,6 @@ int main() {
         v.p_val.int_val = 2;
         s->write(field1, v);
         s->read(field1, vm);
-         */
       });
 
       // do something not waiting for sent data here

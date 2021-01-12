@@ -6,7 +6,7 @@ set(TABLE surftable)
 # generate schema skeleton
 execute_process(COMMAND thrift --gen cpp schema.thrift)
 
-include_directories(${JEMALLOC_INCLUDE_DIRS})
+#include_directories(${JEMALLOC_INCLUDE_DIRS})
 include_directories(${DATASKETCHES_INCLUDE_DIRS})
 
 include_directories(${THRIFT_INCLUDE_DIR})
@@ -21,11 +21,8 @@ add_library(${TABLE} STATIC
         ${SURFINGDB_SRC}/table/Node.cpp)
 
 target_link_libraries(${TABLE}
-        PUBLIC CXX_STANDARD 20
-        PUBLIC CXX_STANDARD_REQUIRED ON
-        PUBLIC CXX_EXTENSIONS ON
         PUBLIC ${THRIFT_LIBRARY}
-        PUBLIC ${JEMALLOC_LIBRARIES}
+        #PUBLIC ${JEMALLOC_LIBRARIES}
         PUBLIC Threads::Threads
         PUBLIC OpenMP::OpenMP_CXX
         PUBLIC ${MPI_CXX_INCLUDE_PATH}
@@ -40,11 +37,8 @@ add_executable(TableTest
         ${SURFINGDB_SRC}/table/test/TestIntegration.cpp)
 
 target_link_libraries(TableTest
-        PRIVATE CXX_STANDARD 20
-        PRIVATE CXX_STANDARD_REQUIRED ON
-        PRIVATE CXX_EXTENSIONS ON
         PRIVATE ${THRIFT_LIBRARY}
-        PRIVATE ${JEMALLOC_LIBRARIES}
+        #PRIVATE ${JEMALLOC_LIBRARIES}
         PRIVATE Threads::Threads
         PRIVATE OpenMP::OpenMP_CXX
         PRIVATE MPI::MPI_CXX
