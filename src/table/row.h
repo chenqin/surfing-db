@@ -171,7 +171,7 @@ public:
     _vpayload.clear();
   }
 
-  size_t schema_sig(){
+  size_t schema_sig() {
     CHECK_NE(_schema_sig, 0);
     return this->_schema_sig;
   }
@@ -203,10 +203,16 @@ public:
    */
   void write(const Field& f, const Value& v) {
     uint64_t offset = schemaptr->_offsets->at(f);
+    CHECK_GT(offset, 0);
     write(f, v, offset);
   }
-
-  inline void write(const Field& f, const Value& v, uint64_t& offset) {
+  /**
+   * allow write to list and map elements
+   * @param f
+   * @param v
+   * @param offset
+   */
+  void write(const Field& f, const Value& v, const uint64_t& offset) {
     switch (f.type) {
     case surfingdb::table::schema::RowType::VOID: {
       assert(false);
@@ -237,7 +243,7 @@ public:
 
       int64_t size = v.list_value.size();
       _pwrite(_header, &size, offset);
-      offset += sizeof(int64_t);
+      size_t list_offset = offset + sizeof(int64_t);
 
       //  |size|string|
       Field listField;
@@ -247,8 +253,8 @@ public:
         //hard code
         Value item;
         item.p_val = pv;
-        write(listField, item, offset);
-        offset += listField.max_unit_size;
+        write(listField, item, list_offset);
+        list_offset += listField.max_unit_size;
       }
       break;
     }
@@ -257,7 +263,7 @@ public:
 
       int64_t size = v.map_value.size();
       _pwrite(_header, &size, offset);
-      offset += sizeof(int64_t);
+      size_t map_offset = offset + sizeof(int64_t);
 
       Field keyField, valueField;
       keyField.type = f.map_key_type;
@@ -269,10 +275,10 @@ public:
         Value key, value;
         key.p_val = pair.first;
         value.p_val = pair.second;
-        write(keyField, key, offset);
-        offset += keyField.max_unit_size;
-        write(valueField, value, offset);
-        offset += valueField.max_unit_size;
+        write(keyField, key, map_offset);
+        map_offset += keyField.max_unit_size;
+        write(valueField, value, map_offset);
+        map_offset += valueField.max_unit_size;
       }
       break;
     }
