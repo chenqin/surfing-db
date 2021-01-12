@@ -49,25 +49,23 @@ private:
   // defines the node row table bind to
   std::shared_ptr<Node> ptr;
   std::shared_ptr<TableSchema> schema_ptr;
-  uint8_t* _payload;
+  std::vector<uint8_t> _payload;
 
-  size_t _count = 0;    // number of rows in table
+  size_t _count = 0; // number of rows in table
   size_t _pending = 0;
-  size_t offset = 0;    //current offset position
-  MPI_Datatype type;    //used to run communication with other processes
+  size_t offset = 0; //current offset position
+  MPI_Datatype type; //used to run communication with other processes
 public:
   TempTable(const std::shared_ptr<TableSchema> sharedPtr) {
     this->schema_ptr = sharedPtr;
     offset = 0;
-    _payload = (uint8_t*) malloc(HUGE_PAGE_SIZE);
-    memset(_payload, 0, HUGE_PAGE_SIZE);
+    _payload.resize(HUGE_PAGE_SIZE);
     _count = 0;
     LOG(INFO) << "for testing only";
   }
   TempTable(const std::shared_ptr<Node> node, const std::shared_ptr<TableSchema> sharedPtr) {
     this->schema_ptr = sharedPtr;
-    _payload = (uint8_t*) malloc(HUGE_PAGE_SIZE);
-    memset(_payload, 0, HUGE_PAGE_SIZE);
+    _payload.resize(HUGE_PAGE_SIZE);
     offset = 0;
     _count = 0;
     this->ptr = node;
@@ -76,7 +74,7 @@ public:
   }
 
   ~TempTable() {
-    free(_payload);
+    _payload.clear();
     offset = 0;
     _count = 0;
     MPI_Type_free(&type);
@@ -87,14 +85,15 @@ public:
     _pending = 0;
   }
 
+  uint8_t* payload_ptr() {
+    return &this->_payload[0];
+  }
+
   void ingest(RowBuffer row) {
     //CHECK_EQ(row._schema_sig, schema_ptr->_schema_sig);
     CHECK_EQ(schema_ptr->_size, row.size());
     // CHECK_LT(row.size() + offset, _payload.max_size());
-    memcpy(_payload + offset, row.payload_ptr(), row.size());
-    LOG(INFO) << "write "<< &_payload <<" offset " << offset << " size " << row.size();
-    int* int_ptr = (int*) row.payload_ptr();
-    LOG(INFO) << "write int " << *int_ptr;
+    memcpy(&_payload[offset], row.payload_ptr(), row.size());
     offset += row.size();
     _count++;
   }
@@ -102,7 +101,7 @@ public:
   void async_send(int d, size_t count, MPI_Request& request) {
     CHECK_LE(count, _count);
     MPI_Send(&count, 1, MPI_UNSIGNED_LONG, d, 0, MPI_COMM_WORLD);
-    MPI_Isend(_payload, count, type, d, 0, MPI_COMM_WORLD, &request);
+    MPI_Isend(&_payload[0], count, type, d, 0, MPI_COMM_WORLD, &request);
   }
 
   void async_recv(int s, MPI_Request& request) {
@@ -111,7 +110,7 @@ public:
     MPI_Recv(&count, 1, MPI_UNSIGNED_LONG, s, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     _pending = count;
     CHECK_LE(schema_ptr->_size * count, HUGE_PAGE_SIZE);
-    MPI_Irecv(_payload, count, type, s, 0, MPI_COMM_WORLD, &request);
+    MPI_Irecv(&_payload[0], count, type, s, 0, MPI_COMM_WORLD, &request);
   }
   /**
    * directly read from temptable memory
@@ -121,10 +120,7 @@ public:
   std::unique_ptr<RowBuffer> read(int index) {
     CHECK_LT(index, _count);
     CHECK_NOTNULL(schema_ptr);
-    auto s =  std::make_unique<RowBuffer>(schema_ptr);
-    LOG(INFO) << "read " << &_payload << " index " << index << " size " << schema_ptr->_size;
-    memcpy(s->payload_ptr(), _payload + (schema_ptr->_size * index), schema_ptr->_size);
-    return s;
+    return std::make_unique<RowBuffer>(schema_ptr, &_payload[schema_ptr->_size * index]);
   }
 
   size_t count() {

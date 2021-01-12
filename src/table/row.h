@@ -5,10 +5,10 @@
 #ifndef SURFINGDB_ROW_H
 #define SURFINGDB_ROW_H
 
-#include "schema.h"
 #include <iostream>
 #include <string>
 #include <unordered_map>
+#include "schema.h"
 #pragma once
 
 namespace surfingdb {
@@ -20,7 +20,6 @@ namespace table {
 using namespace surfingdb::table::schema;
 using std::hash;
 using std::string;
-
 
 /**
  * a large piece of memory to store all fields in a row
@@ -41,9 +40,6 @@ private:
     }
     case surfingdb::table::schema::RowType::INT: {
       memcpy((int*)(_payload + offset), data, sizeof(int));
-      int* ptr = (int*)(_payload + offset);
-      LOG(INFO) << "write to " << ptr << " value " << *ptr;
-      CHECK_EQ(*ptr, (int)*((int*)data));
       break;
     }
     case surfingdb::table::schema::RowType::BOOL: {
@@ -88,8 +84,6 @@ private:
     }
     case surfingdb::table::schema::RowType::INT: {
       int* int_ptr = (int*)(_payload + offset);
-      int* ptr = (int*)(_payload + offset);
-      LOG(INFO) << "read from " << ptr << " value " << *ptr;
       memcpy(dataptr, int_ptr, sizeof(int));
       return sizeof(int);
     }
@@ -137,7 +131,7 @@ public:
     this->schemaptr = schemaptr;
     CHECK_GT(schemaptr->_size, 0);
     _vpayload.resize(schemaptr->_size);
-    _payload = (uint8_t *) &_vpayload[0];
+    _payload = (uint8_t*)&_vpayload[0];
   }
 
   /**
