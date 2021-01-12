@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "../include/main.h"
 #include <future>
 #include <glog/logging.h>
 #include <iostream>
@@ -23,31 +22,13 @@
 using namespace surfingdb::table::schema;
 using namespace surfingdb::table;
 
-class mychunk {
-public:
-  int a;
-  long b;
-  char* ptr;
-  mychunk() {
-    ptr = static_cast<char*>(malloc(10));
-  }
-  // friends defined inside class body are inline and are hidden from non-ADL lookup
-  friend mychunk operator+(mychunk lhs,        // passing lhs by value helps optimize chained a+b+c
-                           const mychunk& rhs) // otherwise, both parameters may be const references
-  {
-    //should read from payload and decide what to do
-    if (rhs.a == lhs.a) {
-      lhs.b += 1;
-    }
-    return lhs; // return the result by value (uses move constructor)
-  }
-};
-
 /** run this program with
  * mpirun -np 12 ./MainTest
  * @return
  */
 int main() {
+  auto num = omp_get_thread_num();
+  LOG(INFO) << "threads # " << num;
   //google::InitGoogleLogging(argv[0]);
   // create node of cluster
   const auto node = std::make_shared<surfingdb::table::Node>();
@@ -114,13 +95,13 @@ int main() {
   TempTable tsed(node, schema_ptr);
 
   int iteration = 0;
-  while (iteration++ < 100) {
+  while (iteration++ < 10) {
     /**
   * ingestion
   */
     if (node->rank == 0) {
       size_t i;
-      for (i = 0; i < 30000; i++) {
+      for (i = 0; i < 3000; i++) {
         tsed.ingest(b);
       }
     }
@@ -131,25 +112,27 @@ int main() {
     if (node->rank == 0) {
       for (int j = 1; j < node->world; j++) {
         MPI_Request req;
-        tsed.async_send(j, 30000, req);
+        tsed.async_send(j, 3000, req);
         node->keep(std::make_unique<MPI_Request>(req));
       }
     } else {
       TempTable trecv(node, schema_ptr);
       MPI_Request request;
       trecv.async_recv(0, request);
-      auto revcallback = std::async(std::launch::async, [&request, &trecv, field1]() {
+      auto revcallback = std::async(std::launch::deferred, [&request, &trecv, field1]() {
         MPI_Status status;
         MPI_Wait(&request, &status);
         trecv.complete();
-
-        auto s = trecv.read(0);
-        Value v, vm;
-        s->read(field1, v);
-        LOG(INFO) << v.p_val.int_val;
-        v.p_val.int_val = 2;
-        s->write(field1, v);
-        s->read(field1, vm);
+        // after recv all items, loop over and modify in parallel parDo
+#pragma omp parallel for
+        for(int i = 0 ; i < 3000 ; i++) {
+          auto s = trecv.read(i);
+          Value v, vm;
+          s->read(field1, v);
+          v.p_val.int_val = 2;
+          s->write(field1, v);
+          s->read(field1, vm);
+        }
       });
 
       // do something not waiting for sent data here

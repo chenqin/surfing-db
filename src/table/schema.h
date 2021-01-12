@@ -8,16 +8,16 @@
 
 #include <glog/logging.h>
 #include <iostream>
+#include <stdlib.h>
 #include <string>
 #include <unordered_map>
-#include <stdlib.h>
 
 namespace surfingdb {
 namespace table {
 
 #define MAX_STR_LEN 128
 #define HEADER_SIZE sizeof(long)
-#define HUGE_PAGE_SIZE 1073741824 //1GB
+#define HUGE_PAGE_SIZE 107374182 //100MB
 
 /**
  * build a continous memory buffer
@@ -208,10 +208,21 @@ std::shared_ptr<std::unordered_map<Field, uint64_t, FieldHasher>> getOffsets(con
 }
 
 class TableSchema : public RowSchema {
+private:
+  int _size; // fixed size of each row
+  size_t _schema_sig; //schema fields hash
+
 public:
-  int _size;
   std::shared_ptr<std::unordered_map<Field, uint64_t, FieldHasher>> _offsets;
-  size_t _schema_sig;
+  int size() {
+    CHECK_GT(_size, 0);
+    return _size;
+  }
+  size_t schema_sig() {
+    CHECK_NE(_schema_sig, 0);
+    return _schema_sig;
+  }
+
   TableSchema(const RowSchema& schema1) {
     validSchema(schema1);
     _size = getSchemaSize(schema1);

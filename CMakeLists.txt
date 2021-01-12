@@ -172,6 +172,7 @@ IF(USE_OpenMP)
     endif()
 ENDIF()
 
+
 find_package(MPI REQUIRED)
 set( ENV{MPI_HOSTS} ${PROJECT_SOURCE_DIR}/host_file )
 
@@ -225,6 +226,7 @@ add_executable(MainTest src/main.cpp)
 
 target_link_libraries(MainTest
         PRIVATE MPI::MPI_CXX
+        PRIVATE OpenMP::OpenMP_CXX
         PRIVATE ${TABLE})
 
 # install it into local bin folder

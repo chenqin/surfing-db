@@ -69,7 +69,7 @@ public:
     offset = 0;
     _count = 0;
     this->ptr = node;
-    MPI_Type_contiguous(sharedPtr->_size, MPI_CHAR, &type);
+    MPI_Type_contiguous(sharedPtr->size(), MPI_CHAR, &type);
     MPI_Type_commit(&type);
   }
 
@@ -90,9 +90,9 @@ public:
   }
 
   void ingest(RowBuffer row) {
-    //CHECK_EQ(row._schema_sig, schema_ptr->_schema_sig);
-    CHECK_EQ(schema_ptr->_size, row.size());
-    // CHECK_LT(row.size() + offset, _payload.max_size());
+    CHECK_EQ(row.schema_sig(), schema_ptr->schema_sig()); //check schema signature
+    CHECK_EQ(schema_ptr->size(), row.size());            //check row size
+    CHECK_LT(row.size() + offset, _payload.max_size()); // check capacity of temp table
     memcpy(&_payload[offset], row.payload_ptr(), row.size());
     offset += row.size();
     _count++;
@@ -109,7 +109,7 @@ public:
     size_t count;
     MPI_Recv(&count, 1, MPI_UNSIGNED_LONG, s, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     _pending = count;
-    CHECK_LE(schema_ptr->_size * count, HUGE_PAGE_SIZE);
+    CHECK_LE(schema_ptr->size() * count, HUGE_PAGE_SIZE);
     MPI_Irecv(&_payload[0], count, type, s, 0, MPI_COMM_WORLD, &request);
   }
   /**
@@ -120,7 +120,7 @@ public:
   std::unique_ptr<RowBuffer> read(int index) {
     CHECK_LT(index, _count);
     CHECK_NOTNULL(schema_ptr);
-    return std::make_unique<RowBuffer>(schema_ptr, &_payload[schema_ptr->_size * index]);
+    return std::make_unique<RowBuffer>(schema_ptr, &_payload[schema_ptr->size() * index]);
   }
 
   size_t count() {

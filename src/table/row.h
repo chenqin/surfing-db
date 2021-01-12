@@ -30,6 +30,7 @@ class RowBuffer {
 private:
   Field _header;
   std::shared_ptr<TableSchema> schemaptr;
+  size_t _schema_sig;
   uint8_t* _payload; // consider using vector std::vector<uint8_t>
   std::vector<char> _vpayload;
 
@@ -129,8 +130,9 @@ public:
     _header.max_unit_size = getFieldSize(_header);
     CHECK_EQ(sizeof(uint64_t), getFieldSize(_header));
     this->schemaptr = schemaptr;
-    CHECK_GT(schemaptr->_size, 0);
-    _vpayload.resize(schemaptr->_size);
+    _schema_sig = schemaptr->schema_sig();
+    CHECK_GT(schemaptr->size(), 0);
+    _vpayload.resize(schemaptr->size());
     _payload = (uint8_t*)&_vpayload[0];
   }
 
@@ -144,7 +146,8 @@ public:
     _header.max_unit_size = getFieldSize(_header);
     CHECK_EQ(sizeof(uint64_t), getFieldSize(_header));
     this->schemaptr = schemaptr;
-    CHECK_GT(schemaptr->_size, 0);
+    _schema_sig = schemaptr->schema_sig();
+    CHECK_GT(schemaptr->size(), 0);
     CHECK_NE(payloadptr, _payload);
     _payload = payloadptr;
   }
@@ -154,8 +157,13 @@ public:
     _vpayload.clear();
   }
 
+  size_t schema_sig(){
+    CHECK_NE(_schema_sig, 0);
+    return this->_schema_sig;
+  }
+
   size_t size() {
-    return this->schemaptr->_size;
+    return this->schemaptr->size();
   }
 
   uint8_t* payload_ptr() {
@@ -330,10 +338,6 @@ public:
     }
     }
   }
-  /**
-   * those fields will be send to other processes as a Row
-   * **/
-  size_t _schema_sig;
 };
 } // namespace table
 } // namespace surfingdb
