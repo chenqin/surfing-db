@@ -187,26 +187,6 @@ inline void initMapField(Field& field, const std::string& name, const RowType::t
   checkStringLength(value_type, max_value_size);
 }
 
-size_t getSchemaSize(const RowSchema& schema) {
-  size_t _size = 0;
-  for (size_t i = 0; i < schema.fields.size(); i++) {
-    auto f = schema.fields.at(i);
-    _size += getFieldSize(f);
-  }
-  return _size;
-}
-
-std::shared_ptr<std::unordered_map<Field, uint64_t, FieldHasher>> getOffsets(const RowSchema& schema) {
-  std::shared_ptr<std::unordered_map<Field, uint64_t, FieldHasher>> _offsets = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
-  size_t _size = 0;
-  for (size_t i = 0; i < schema.fields.size(); i++) {
-    auto f = schema.fields.at(i);
-    _offsets.get()->emplace(f, _size);
-    _size += getFieldSize(f);
-  }
-  return _offsets;
-}
-
 class TableSchema : public RowSchema {
 private:
   int _size; // fixed size of each row
@@ -214,6 +194,7 @@ private:
 
 public:
   std::shared_ptr<std::unordered_map<Field, uint64_t, FieldHasher>> _offsets;
+  std::shared_ptr<std::unordered_map<Field, uint64_t, FieldHasher>> _max_unit;
   int size() {
     CHECK_GT(_size, 0);
     return _size;
@@ -223,11 +204,18 @@ public:
     return _schema_sig;
   }
 
-  TableSchema(const RowSchema& schema1) {
-    validSchema(schema1);
-    _size = getSchemaSize(schema1);
-    _offsets = getOffsets(schema1);
-    _schema_sig = schemaHasher.operator()(schema1);
+  TableSchema(const RowSchema& schema) {
+    _offsets = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
+    _max_unit = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
+    validSchema(schema);
+    _schema_sig = schemaHasher.operator()(schema);
+    _size = sizeof(size_t); // store _schema_sig
+    for (size_t i = 0; i < schema.fields.size(); i++) {
+      auto f = schema.fields.at(i);
+      _offsets->emplace(f, _size);
+      _max_unit->emplace(f, f.max_unit_size);
+      _size += getFieldSize(f);
+    }
   }
 };
 
