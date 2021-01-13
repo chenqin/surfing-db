@@ -124,7 +124,6 @@ int main() {
         MPI_Wait(&request, &status);
         trecv.complete();
         // after recv all items, loop over and modify in parallel parDo
-#pragma omp parallel for
         for(int i = 0 ; i < 3000 ; i++) {
           auto s = trecv.read(i);
           Value v, vm;

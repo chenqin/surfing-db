@@ -5,17 +5,14 @@
 #ifndef SURFINGDB_TABLE_H
 #define SURFINGDB_TABLE_H
 
-#include "table/gen-cpp/schema_constants.h"
-#include "table/gen-cpp/schema_types.h"
-
+#include <cstdarg>
 #include <future>
 #include <mpi.h>
-#include "CombineOp.h"
+#include "KMeanOperator.h"
 #include "Node.h"
-#include "Operator.h"
-#include "ParDoOp.h"
-#include "PartitionOp.h"
 #include "row.h"
+#include "table/gen-cpp/schema_constants.h"
+#include "table/gen-cpp/schema_types.h"
 
 #pragma once
 
@@ -55,12 +52,16 @@ private:
   size_t _pending = 0;
   size_t offset = 0; //current offset position
   MPI_Datatype type; //used to run communication with other processes
+
+  std::shared_ptr<std::unordered_map<size_t, std::set<size_t>>> _groups;
+
 public:
   TempTable(const std::shared_ptr<TableSchema> sharedPtr) {
     this->schema_ptr = sharedPtr;
     offset = 0;
     _payload.resize(HUGE_PAGE_SIZE);
     _count = 0;
+    _groups = std::make_shared<std::unordered_map<size_t, std::set<size_t>>>();
     LOG(INFO) << "for testing only";
   }
   TempTable(const std::shared_ptr<Node> node, const std::shared_ptr<TableSchema> sharedPtr) {
@@ -68,6 +69,7 @@ public:
     _payload.resize(HUGE_PAGE_SIZE);
     offset = 0;
     _count = 0;
+    _groups = std::make_shared<std::unordered_map<size_t, std::set<size_t>>>();
     this->ptr = node;
     MPI_Type_contiguous(sharedPtr->size(), MPI_CHAR, &type);
     MPI_Type_commit(&type);
@@ -91,8 +93,8 @@ public:
 
   void ingest(RowBuffer row) {
     CHECK_EQ(row.schema_sig(), schema_ptr->schema_sig()); //check schema signature
-    CHECK_EQ(schema_ptr->size(), row.size());            //check row size
-    CHECK_LT(row.size() + offset, _payload.max_size()); // check capacity of temp table
+    CHECK_EQ(schema_ptr->size(), row.size());             //check row size
+    CHECK_LT(row.size() + offset, _payload.max_size());   // check capacity of temp table
     memcpy(&_payload[offset], row.payload_ptr(), row.size());
     offset += row.size();
     _count++;
@@ -126,120 +128,39 @@ public:
   size_t count() {
     return this->_count;
   }
-};
 
-/**
-         * RowTable hold ingested chunks of Row in memory
-         * - shuffle row with other MPI processes
-         * - join with other columnar tables
-         * - periodical flush to columnar table
-         */
-template <class Row>
-class RowTable {
-public:
-  // defines the node row table bind to
-  std::shared_ptr<Node> ptr;
-  std::shared_ptr<std::vector<Row>> _chunks;
+  void k_mean(int k, const std::vector<Field> fields) {
+    KMeanOperator op(schema_ptr, k, fields);
 
-  RowTable(const std::shared_ptr<Node> node) {
-    this->ptr = node;
-    this->_chunks = std::make_shared<std::vector<Row>>();
+    // step 1: figure out all rows in all processes
+    // step 2: random pick k as centriod
+    // step 3, send cetriods to all nodes
+    // step 4, caculate distance and group to k
+    // step 5, find mean position of each group
+    // step 6, repeat step 1
+    ptr->forward();
   }
 
-  ~RowTable() {
-    // MPI_Type_free(&row_type);
-  }
+  void group_by(Field f) {
+    CHECK(schema_ptr->exist(f));
+    _groups->clear();
+    size_t max_size = 0;
+    for (size_t i = 0; i < _count; i++) {
+      auto r = read(i);
+      Value v;
+      r->read(f, v);
+      size_t key = value_hasher.operator()(v);
 
-  MPI_Op reducer_op;
-  MPI_Datatype row_type = 0;
+      if (_groups->find(key) == _groups->end()) {
+        std::set<size_t> set;
+        _groups->insert({ key, set });
+      }
 
-  void ingest(const std::vector<Row>& rows) {
-    _chunks.get()->insert(_chunks.get()->end(), rows.begin(), rows.end());
-  }
-
-  void ingest(const Row& row) {
-    _chunks.get()->push_back(row);
-  }
-
-  void partition(PartitionOp<Row>& op) {
-    std::vector<Row>* payload = this->_chunks.get();
-    op.process(*payload, *payload, *payload);
-  }
-
-  /**
-             * combine two row table (left, right) into out table
-             * @param otherTable
-             */
-  void combine(const RowTable<Row>& rightTable, RowTable<Row>& outTable) {
-    CombineOp<Row> op;
-    const std::vector<Row> rowL = *(this->_chunks.get());
-    const std::vector<Row> rowR = *(rightTable._chunks.get());
-    std::vector<Row> rowOut = *(outTable._chunks.get());
-    op.process(rowL, rowR, rowOut);
-  }
-
-  /**
-             * vectorized "map"
-             * @tparam RowInR
-             * @tparam RowOut
-             * @param rightTable
-             * @param outTable
-             * @param op
-             */
-  template <class RowInR, class RowOut>
-  void parDo(const RowTable<RowInR>& rightTable, RowTable<int>& outTable, ParDoOp<Row, RowInR, RowOut>& op) {
-    assert(op.Optype() == OperatorType::ParDo);
-    const std::vector<Row> rowL = *(this->_chunks.get());
-    const std::vector<RowInR> rowR = *(rightTable._chunks.get());
-    std::vector<RowOut> rowOut = *(outTable._chunks.get());
-    op.process(rowL, rowR, rowOut);
-  }
-
-  void send(int source, int dest, char* ptr1, int size) {
-    if (this->ptr->rank == source) {
-      MPI_Send((void*)ptr1, size, MPI_CHAR, dest, 0, MPI_COMM_WORLD);
-    } else if (this->ptr->rank == dest) {
-      MPI_Recv((void*)ptr1, size, MPI_CHAR, source, 0, MPI_COMM_WORLD,
-               MPI_STATUS_IGNORE);
+      _groups->at(key).insert(i);
+      max_size = max_size > _groups->at(key).size() ? max_size : _groups->at(key).size();
     }
-  }
-
-  /**
-             * blocking send chunk of data to another node
-             */
-  void send(int source, int dest, const Row& data, const MPI_Datatype& row_type1) {
-    if (this->ptr->rank == source) {
-      MPI_Send((void*)&data, 1, row_type1, dest, 0, MPI_COMM_WORLD);
-    } else if (this->ptr->rank == dest) {
-      MPI_Recv((void*)&data, 1, row_type1, source, 0, MPI_COMM_WORLD,
-               MPI_STATUS_IGNORE);
-    }
-  }
-
-  /**
-             * blocking send vector of struct mychunk
-             */
-  void sendAll(int source, int dest, int size, const std::vector<Row>& chunks) {
-    assert(!chunks.empty());
-    if (this->ptr->rank == source) {
-      MPI_Send((void*)&chunks[0], size, this->row_type, dest, 0, MPI_COMM_WORLD);
-    } else if (this->ptr->rank == dest) {
-      std::vector<Row> results(size);
-      MPI_Recv((void*)&results[0], size, this->row_type, source, 0, MPI_COMM_WORLD,
-               MPI_STATUS_IGNORE);
-    }
-  }
-
-  void allreduce(const std::vector<Row>& chunks) {
-    // create list of user defined MPI_OPs
-    auto op = [](Row a, Row b) { return a + b; };
-
-    MPI_Op_create(&reducer<Row, +op>, true, &this->reducer_op);
-    std::vector<Row> result(chunks.size());
-    // used to collective get quantile sketch of each columns https://datasketches.apache.org/docs/Quantiles/QuantilesCppExample.html
-    MPI_Allreduce((void*)&chunks[0], (void*)&result[0], chunks.size(), row_type, reducer_op,
-                  MPI_COMM_WORLD);
-    MPI_Op_free(&reducer_op);
+    // EXCHANGE MAX_SIZE
+    // run all reduce to merge hash(value) | node | offsets,,,|
   }
 };
 } // namespace table

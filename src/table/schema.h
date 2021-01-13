@@ -34,7 +34,7 @@ struct FieldHasher {
 
     return (hash<string>()(k.name));
   }
-} fieldHasher;
+} field_hasher;
 
 struct SchemaHasher {
   std::size_t operator()(const RowSchema& k) const {
@@ -43,11 +43,38 @@ struct SchemaHasher {
     using std::string;
     std::size_t result = (hash<int>()(k.fields.size()));
     for (size_t i = 0; i < k.fields.size(); i++) {
-      result = result ^ (fieldHasher.operator()(k.fields.at(i)) >> i);
+      result = result ^ (field_hasher.operator()(k.fields.at(i)) >> i);
     }
     return result;
   }
-} schemaHasher;
+} schema_hasher;
+
+struct ValueHasher {
+  std::size_t operator()(const PValue& k) const {
+    size_t result = hash<string>()(k.string_val);
+    result ^= hash<int>()(k.int_val) << 1;
+    result ^= hash<long>()(k.long_val) << 2;
+    result ^= hash<double>()(k.double_val) << 3;
+    result ^= hash<bool>()(k.bool_val) << 4;
+    return result;
+  }
+
+  std::size_t operator()(const Value& k) const {
+    size_t result = hash<string>()(k.p_val.string_val);
+    result ^= hash<int>()(k.p_val.int_val) << 1;
+    result ^= hash<long>()(k.p_val.long_val) << 2;
+    result ^= hash<double>()(k.p_val.double_val) << 3;
+    result ^= hash<bool>()(k.p_val.bool_val) << 4;
+    for(auto l : k.list_value) {
+      result ^=operator()(l);
+    }
+    for(auto p : k.map_value) {
+      result ^=operator()(p.first) << 1;
+      result ^=operator()(p.second) << 2;
+    }
+    return result;
+  }
+} value_hasher;
 
 bool surfingdb::table::schema::PValue::operator<(const PValue& k) const {
   return (hash<string>()(this->string_val)) < (hash<string>()(k.string_val))
@@ -204,11 +231,20 @@ public:
     return _schema_sig;
   }
 
+  bool exist(Field field){
+    for(auto f : fields) {
+      if(field_hasher.operator()(f) == field_hasher.operator()(field)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   TableSchema(const RowSchema& schema) {
     _offsets = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
     _max_unit = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
     validSchema(schema);
-    _schema_sig = schemaHasher.operator()(schema);
+    _schema_sig = schema_hasher.operator()(schema);
     _size = sizeof(size_t); // store _schema_sig
     for (size_t i = 0; i < schema.fields.size(); i++) {
       auto f = schema.fields.at(i);
