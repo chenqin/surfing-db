@@ -133,8 +133,39 @@ public:
     KMeanOperator op(schema_ptr, k, fields);
 
     // step 1: figure out all rows in all processes
+    size_t data_size = 0;
+    MPI_Allreduce(&this->_count, &data_size, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
+    size_t local_data_size[ptr->world], recv[ptr->world];
+    memset(&local_data_size[0], 0, sizeof(size_t));
+    memset(&recv[0], 0, sizeof(size_t));
+    local_data_size[ptr->rank] = this->_count;
+    MPI_Allreduce(&local_data_size[0], &recv[0], ptr->world, MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
+
     // step 2: random pick k as centriod
+    std::vector<size_t> offsets(data_size);
+    if(ptr->rank == 0) {
+      for (size_t i = 0; i < data_size; i++) {
+        offsets.at(i) = i;
+      }
+      random_unique(offsets.begin(), offsets.end(), k);
+    }
+    std::vector<size_t> centriod(data_size);
+    centriod.resize(k);
     // step 3, send cetriods to all nodes
+    MPI_Allreduce(&offsets[0], &centriod[0], k, MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
+    size_t local_start_index = 0, local_end_index;
+    for(int i = 0 ; i <= ptr->rank - 1; i++) {
+      local_start_index += recv[i];
+    }
+    local_end_index = local_start_index + _count;
+    //LOG(INFO) << ptr->rank << " " << local_start_index << " " << local_end_index;
+    for(auto item : centriod) {
+      if(item >= local_start_index && item < local_end_index) {
+        auto pick = this->read(item - local_start_index);
+        LOG(INFO) << "pick";
+        //broad cast to all
+      }
+    }
     // step 4, caculate distance and group to k
     // step 5, find mean position of each group
     // step 6, repeat step 1

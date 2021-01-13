@@ -17,6 +17,7 @@
 #include <future>
 #include <glog/logging.h>
 #include <iostream>
+#include <omp.h>
 #include "table/table.h"
 
 using namespace surfingdb::table::schema;
@@ -95,7 +96,7 @@ int main() {
   TempTable tsed(node, schema_ptr);
 
   int iteration = 0;
-  while (iteration++ < 10) {
+  while (iteration++ < 1) {
     /**
   * ingestion
   */
@@ -138,6 +139,10 @@ int main() {
       revcallback.wait();
     }
     node->forward(); // stage 1 broadcast data
+    std::vector<Field> fields;
+    fields.push_back(field4);
+    fields.resize(1);
+    tsed.k_mean(3, fields);
   }
   return 0;
 }
