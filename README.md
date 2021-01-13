@@ -1,11 +1,9 @@
 # surfing-db
 Ride wave of streams with SQL/Python on HPC architectures (NUMA, GPU, RMA) The only data processing framework that utlize high performance computing architecture to run large scale machine learning and data processing all in one place. with SQL or Python.
 
-## no jvm gc headache, runs same way as distributed ML trainning does
+## data prep, training and serving all in one place with SQL.
 
 ## high throughput on both cheap server cluster or super commputer if needed without code change
-
-## speaks SQL and Python as it should to data scientists
 
 
 pre-requesite
