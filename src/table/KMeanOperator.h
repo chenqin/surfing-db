@@ -29,14 +29,12 @@ class KMeanOperator{
 public:
   std::shared_ptr<TableSchema> schema_ptr;
   int k;
-  std::vector<std::shared_ptr<RowBuffer>> centroids;
   std::vector<Field> fields;
   KMeanOperator(std::shared_ptr<TableSchema> schema_ptr, int k, const std::vector<Field> fields){
     CHECK_NOTNULL(schema_ptr);
     this->schema_ptr = schema_ptr;
     CHECK_GE(k, 1);
     this->k = k;
-    centroids.resize(k);
     CHECK_GT(fields.size(), 0);
     for(auto f : fields) {
       //CHECK(schema_ptr->exist(f));

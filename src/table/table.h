@@ -7,6 +7,7 @@
 
 #include <cstdarg>
 #include <future>
+#include <math.h>
 #include <mpi.h>
 #include "KMeanOperator.h"
 #include "Node.h"
@@ -143,7 +144,7 @@ public:
 
     // step 2: random pick k as centriod
     std::vector<size_t> offsets(data_size);
-    if(ptr->rank == 0) {
+    if (ptr->rank == 0) {
       for (size_t i = 0; i < data_size; i++) {
         offsets.at(i) = i;
       }
@@ -154,21 +155,53 @@ public:
     // step 3, send cetriods to all nodes
     MPI_Allreduce(&offsets[0], &centriod[0], k, MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
     size_t local_start_index = 0, local_end_index;
-    for(int i = 0 ; i <= ptr->rank - 1; i++) {
+    for (int i = 0; i <= ptr->rank - 1; i++) {
       local_start_index += recv[i];
     }
     local_end_index = local_start_index + _count;
     //LOG(INFO) << ptr->rank << " " << local_start_index << " " << local_end_index;
-    for(auto item : centriod) {
-      if(item >= local_start_index && item < local_end_index) {
+    double centers[k][fields.size()];
+    size_t j = 0;
+    for (auto item : centriod) {
+      if (item >= local_start_index && item < local_end_index) {
         auto pick = this->read(item - local_start_index);
         LOG(INFO) << "pick";
-        //broad cast to all
+        for (size_t i = 0; i < fields.size(); i++) {
+          Value v;
+          pick->read(fields.at(i), v);
+          centers[j][i] = v.p_val.double_val;
+        }
+      }
+      j++;
+    }
+    double recvcenters[k][fields.size()];
+    MPI_Allreduce(&centers, &recvcenters, k * fields.size(), MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
+
+    // step 4, caculate distance and group to k
+    double dist[k];
+    for (int i = 0; i < k; i++) {
+      LOG(INFO) << i << " " << recvcenters[i][0];
+      // center is recvcenters[i];
+      // for each value
+      for(j = 0 ; j < _count; j++) {
+        Value v;
+        double sum = 0;
+        k =0;
+        for(auto f : fields) {
+          read(j)->read(f, v);
+          sum += std::abs(v.p_val.double_val - recvcenters[i][k]) * std::abs(v.p_val.double_val - recvcenters[i][k]);
+          k++;
+        }
+        double distance = sqrt(sum);
+        dist[i] = distance;
+        LOG(INFO) << dist[i];
       }
     }
-    // step 4, caculate distance and group to k
-    // step 5, find mean position of each group
-    // step 6, repeat step 1
+
+    // step 5, group to k clusters
+
+    // step 6, find mean position of each group
+    // step 7, repeat step 1
     ptr->forward();
   }
 
