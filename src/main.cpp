@@ -139,10 +139,13 @@ int main() {
       revcallback.wait();
     }
     node->forward(); // stage 1 broadcast data
+    // stage 2 run k_mean
     std::vector<Field> fields;
     fields.push_back(field4);
     fields.resize(1);
-    tsed.k_mean(3, fields);
+
+    KMeanOperator op(schema_ptr, 1, fields, 100);
+    tsed.process(op);
   }
   return 0;
 }

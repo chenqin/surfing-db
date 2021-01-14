@@ -233,9 +233,7 @@ public:
 
   bool exist(Field field){
     for(auto f : fields) {
-      if(field_hasher.operator()(f) == field_hasher.operator()(field)) {
-        return true;
-      }
+      if(field == f) return true;
     }
     return false;
   }

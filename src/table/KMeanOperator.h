@@ -24,19 +24,18 @@ BidiIter random_unique(BidiIter begin, BidiIter end, size_t num_random) {
   return begin;
 }
 
-class Group{
-public:
-  int _index;
-  std::vector<size_t> indexes;
-};
-
 class KMeanOperator{
 public:
   std::shared_ptr<TableSchema> schema_ptr;
   int k;
   std::vector<Field> fields;
+  size_t max_iteration;
+  size_t iteration;
   std::unordered_map<int, std::set<size_t>> groups;
-  KMeanOperator(std::shared_ptr<TableSchema> schema_ptr, int k, const std::vector<Field> fields){
+  double* centers;
+  bool inited;
+
+  KMeanOperator(std::shared_ptr<TableSchema> schema_ptr, int k, const std::vector<Field> fields, size_t max_iteration){
     CHECK_NOTNULL(schema_ptr);
     this->schema_ptr = schema_ptr;
     CHECK_GE(k, 1);
@@ -50,6 +49,53 @@ public:
     for(int i = 0 ; i < this->k ; i++) {
       groups.insert({i, std::set<size_t>()});
     }
+    this->max_iteration = max_iteration;
+    iteration = 0;
+    centers = (double*) malloc(sizeof(double)*k*fields.size());
+    memset(centers, 0, sizeof(double)*k*fields.size());
+    inited = false;
+  }
+
+  ~KMeanOperator() {
+    free(centers);
+  }
+
+  void init(size_t count, int rank, int world, std::unordered_map<int, size_t>& local_picks) {
+    // step 1: figure out all rows in all processes
+    size_t data_size = 0;
+    MPI_Allreduce(&count, &data_size, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
+    size_t local_data_size[world], recv[world];
+    memset(&local_data_size[0], 0, sizeof(size_t));
+    memset(&recv[0], 0, sizeof(size_t));
+    local_data_size[rank] = count;
+    MPI_Allreduce(&local_data_size[0], &recv[0], world, MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
+
+    // step 2: random pick k as centriod
+    std::vector<size_t> offsets(data_size);
+    if (rank == 0) {
+      for (size_t i = 0; i < data_size; i++) {
+        offsets.at(i) = i;
+      }
+      random_unique(offsets.begin(), offsets.end(), k);
+    }
+    std::vector<size_t> centriod(data_size);
+    centriod.resize(k);
+    // step 3, send cetriods to all nodes
+    MPI_Allreduce(&offsets[0], &centriod[0], k, MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
+    size_t local_start_index = 0, local_end_index;
+    for (int i = 0; i <= rank - 1; i++) {
+      local_start_index += recv[i];
+    }
+    local_end_index = local_start_index + count;
+
+    int j = 0;
+    for (auto item : centriod) {
+      if (item >= local_start_index && item < local_end_index) {
+        auto pick_index = item - local_start_index;
+        local_picks.insert({j, pick_index});
+      }
+      j++;
+    }
   }
 
   void addGroup(int i, size_t index) {
@@ -57,7 +103,7 @@ public:
   }
 
   bool shouldStop() {
-    return true;
+    return iteration >= max_iteration;
   }
 
   void process(RowBuffer, RowBuffer, RowBuffer) {

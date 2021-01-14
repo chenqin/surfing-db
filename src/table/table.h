@@ -126,63 +126,40 @@ public:
     return std::make_unique<RowBuffer>(schema_ptr, &_payload[schema_ptr->size() * index]);
   }
 
+
   size_t count() {
     return this->_count;
   }
 
-  void k_mean(int k, const std::vector<Field> fields) {
-    KMeanOperator op(schema_ptr, k, fields);
+  void process(KMeanOperator& op) {
+    auto k = op.k;
+    auto fields = op.fields;
+    double centers[k][fields.size()]; //more efficient ds
+    double final_centers[k][fields.size()];
 
-    // step 1: figure out all rows in all processes
-    size_t data_size = 0;
-    MPI_Allreduce(&this->_count, &data_size, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
-    size_t local_data_size[ptr->world], recv[ptr->world];
-    memset(&local_data_size[0], 0, sizeof(size_t));
-    memset(&recv[0], 0, sizeof(size_t));
-    local_data_size[ptr->rank] = this->_count;
-    MPI_Allreduce(&local_data_size[0], &recv[0], ptr->world, MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
-
-    // step 2: random pick k as centriod
-    std::vector<size_t> offsets(data_size);
-    if (ptr->rank == 0) {
-      for (size_t i = 0; i < data_size; i++) {
-        offsets.at(i) = i;
-      }
-      random_unique(offsets.begin(), offsets.end(), k);
-    }
-    std::vector<size_t> centriod(data_size);
-    centriod.resize(k);
-    // step 3, send cetriods to all nodes
-    MPI_Allreduce(&offsets[0], &centriod[0], k, MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
-    size_t local_start_index = 0, local_end_index;
-    for (int i = 0; i <= ptr->rank - 1; i++) {
-      local_start_index += recv[i];
-    }
-    local_end_index = local_start_index + _count;
-    //LOG(INFO) << ptr->rank << " " << local_start_index << " " << local_end_index;
-    double centers[k][fields.size()];
-    size_t j = 0;
-    for (auto item : centriod) {
-      if (item >= local_start_index && item < local_end_index) {
-        auto pick = this->read(item - local_start_index);
-        LOG(INFO) << "pick";
+    if(!op.inited) {
+      std::unordered_map<int, size_t> local_picks;
+      op.init(_count, ptr->rank, ptr->world, local_picks);
+      for (auto pick : local_picks) {
         for (size_t i = 0; i < fields.size(); i++) {
           Value v;
-          pick->read(fields.at(i), v);
-          centers[j][i] = v.p_val.double_val;
+          read(pick.second)->read(fields.at(i), v);
+          centers[pick.first][i] = v.p_val.double_val;
         }
       }
-      j++;
-    }
-    double recvcenters[k][fields.size()];
-    MPI_Allreduce(&centers, &recvcenters, k * fields.size(), MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
 
+      MPI_Allreduce(&centers, &final_centers, k * fields.size(), MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
+      op.inited = true;
+      memcpy(op.centers, centers, sizeof(double) * k * fields.size());
+    } else {
+      memcpy(final_centers, op.centers, sizeof(double) * k * fields.size());
+    }
     // step 4, caculate distance and group to k, group to k clusters
     double dist[k]; // each row distance to recvcenter[i]
 
-    for (j = 0; j < _count; j++) {
+    for (size_t j = 0; j < _count; j++) {
       for (int point = 0; point < k; point++) {
-        auto center = recvcenters[point];
+        auto center = final_centers[point];
         dist[point] = distance(fields, j, center);
       }
       int g = 0; //put on first group
@@ -197,39 +174,42 @@ public:
       op.addGroup(g, j);
     }
     // step 6, find mean position of each group
-    size_t quantity[k];
+    size_t members[k];
     double total[k][fields.size()];
     // group
     for (int i = 0; i < k; i++) {
-      quantity[i] = op.groups.at(i).size();
+      members[i] = op.groups.at(i).size();
       // each row in group i
       for (auto index : op.groups.at(i)) {
         // field j in a row index in group i
-        for (j = 0; j < fields.size(); j++) {
+        for (size_t j = 0; j < fields.size(); j++) {
           Value v;
           read(index)->read(fields.at(j), v);
           total[i][j] += v.p_val.double_val;
         }
       }
     }
-    size_t totalquantity[k];
-    MPI_Allreduce(quantity, totalquantity, k, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
+    size_t total_members[k];
+    MPI_Allreduce(members, total_members, k, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
 
     double grandtotal[k][fields.size()];
     MPI_Allreduce(total, grandtotal, k * fields.size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
-    LOG(INFO) << totalquantity[0] << " " << grandtotal[0][0];
-
     // update centers with mean value of each field centers[k][fields.size()];
     for (int i = 0; i < k; i++) {
-      for (j = 0; j < fields.size(); j++) {
-        centers[i][j] = grandtotal[i][j] / totalquantity[i];
+      for (size_t j = 0; j < fields.size(); j++) {
+        centers[i][j] = grandtotal[i][j] / total_members[i];
       }
     }
+    memcpy(op.centers, centers, sizeof(double)*k*fields.size());
+    op.iteration++;
+
     if (op.shouldStop()) {
+      LOG(INFO) << "complete k-mean training";
       ptr->forward();
     } else {
-      //  step 7, repeat step 1
+      //LOG(INFO) << "next iteration of k-mean";
+      process(op);
     }
   }
 
