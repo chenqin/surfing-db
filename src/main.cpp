@@ -144,7 +144,7 @@ int main() {
     fields.push_back(field4);
     fields.resize(1);
 
-    KMeanOperator op(schema_ptr, 1, fields, 100);
+    KMeanOperator op(1, fields, 100);
     tsed.process(op);
   }
   return 0;

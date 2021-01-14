@@ -26,7 +26,6 @@ BidiIter random_unique(BidiIter begin, BidiIter end, size_t num_random) {
 
 class KMeanOperator{
 public:
-  std::shared_ptr<TableSchema> schema_ptr;
   int k;
   std::vector<Field> fields;
   size_t max_iteration;
@@ -35,9 +34,7 @@ public:
   double* centers;
   bool inited;
 
-  KMeanOperator(std::shared_ptr<TableSchema> schema_ptr, int k, const std::vector<Field> fields, size_t max_iteration){
-    CHECK_NOTNULL(schema_ptr);
-    this->schema_ptr = schema_ptr;
+  KMeanOperator(int k, const std::vector<Field> fields, size_t max_iteration){
     CHECK_GE(k, 1);
     this->k = k;
     CHECK_GT(fields.size(), 0);
