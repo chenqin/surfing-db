@@ -24,12 +24,18 @@ BidiIter random_unique(BidiIter begin, BidiIter end, size_t num_random) {
   return begin;
 }
 
+class Group{
+public:
+  int _index;
+  std::vector<size_t> indexes;
+};
 
 class KMeanOperator{
 public:
   std::shared_ptr<TableSchema> schema_ptr;
   int k;
   std::vector<Field> fields;
+  std::unordered_map<int, std::set<size_t>> groups;
   KMeanOperator(std::shared_ptr<TableSchema> schema_ptr, int k, const std::vector<Field> fields){
     CHECK_NOTNULL(schema_ptr);
     this->schema_ptr = schema_ptr;
@@ -41,6 +47,17 @@ public:
       CHECK(f.type == RowType::DOUBLE); //force normalization before using
     }
     this->fields = fields;
+    for(int i = 0 ; i < this->k ; i++) {
+      groups.insert({i, std::set<size_t>()});
+    }
+  }
+
+  void addGroup(int i, size_t index) {
+    groups.at(i).insert(index);
+  }
+
+  bool shouldStop() {
+    return true;
   }
 
   void process(RowBuffer, RowBuffer, RowBuffer) {

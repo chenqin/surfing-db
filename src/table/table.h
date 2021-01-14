@@ -177,32 +177,72 @@ public:
     double recvcenters[k][fields.size()];
     MPI_Allreduce(&centers, &recvcenters, k * fields.size(), MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
 
-    // step 4, caculate distance and group to k
-    double dist[k];
-    for (int i = 0; i < k; i++) {
-      LOG(INFO) << i << " " << recvcenters[i][0];
-      // center is recvcenters[i];
-      // for each value
-      for(j = 0 ; j < _count; j++) {
-        Value v;
-        double sum = 0;
-        k =0;
-        for(auto f : fields) {
-          read(j)->read(f, v);
-          sum += std::abs(v.p_val.double_val - recvcenters[i][k]) * std::abs(v.p_val.double_val - recvcenters[i][k]);
-          k++;
+    // step 4, caculate distance and group to k, group to k clusters
+    double dist[k]; // each row distance to recvcenter[i]
+
+    for (j = 0; j < _count; j++) {
+      for (int point = 0; point < k; point++) {
+        auto center = recvcenters[point];
+        dist[point] = distance(fields, j, center);
+      }
+      int g = 0; //put on first group
+      int shortest = dist[0];
+      for (int m = 1; m < k; m++) {
+        if (dist[m] < shortest) {
+          shortest = dist[m];
+          g = m;
         }
-        double distance = sqrt(sum);
-        dist[i] = distance;
-        LOG(INFO) << dist[i];
+      }
+      // put row j to group g
+      op.addGroup(g, j);
+    }
+    // step 6, find mean position of each group
+    size_t quantity[k];
+    double total[k][fields.size()];
+    // group
+    for (int i = 0; i < k; i++) {
+      quantity[i] = op.groups.at(i).size();
+      // each row in group i
+      for (auto index : op.groups.at(i)) {
+        // field j in a row index in group i
+        for (j = 0; j < fields.size(); j++) {
+          Value v;
+          read(index)->read(fields.at(j), v);
+          total[i][j] += v.p_val.double_val;
+        }
       }
     }
+    size_t totalquantity[k];
+    MPI_Allreduce(quantity, totalquantity, k, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
 
-    // step 5, group to k clusters
+    double grandtotal[k][fields.size()];
+    MPI_Allreduce(total, grandtotal, k * fields.size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
-    // step 6, find mean position of each group
-    // step 7, repeat step 1
-    ptr->forward();
+    LOG(INFO) << totalquantity[0] << " " << grandtotal[0][0];
+
+    // update centers with mean value of each field centers[k][fields.size()];
+    for (int i = 0; i < k; i++) {
+      for (j = 0; j < fields.size(); j++) {
+        centers[i][j] = grandtotal[i][j] / totalquantity[i];
+      }
+    }
+    if (op.shouldStop()) {
+      ptr->forward();
+    } else {
+      //  step 7, repeat step 1
+    }
+  }
+
+  inline double distance(const std::vector<Field>& fields, size_t index, double center[]) {
+    double sum = 0;
+    size_t k = 0;
+    for (auto f : fields) {
+      Value v;
+      read(index)->read(f, v);
+      sum += std::abs(v.p_val.double_val - center[k]) * std::abs(v.p_val.double_val - center[k]);
+      k++;
+    }
+    return sqrt(sum);
   }
 
   void group_by(Field f) {
