@@ -154,6 +154,14 @@ TEST(TableTest, testRowBuffer) {
   EXPECT_EQ(v33.map_value.size(), 1);
 }
 
+TEST(TableTest, TestXGBOperator) {
+  Field f;
+  initField(f,"test", RowType::DOUBLE, sizeof(double));
+  std::vector<Field> ff;
+  ff.push_back(f);
+  XGBOperator op(ff);
+}
+
 TEST(TableTest, TestSketchFrequency) {
   typedef datasketches::frequent_items_sketch<std::string> frequent_strings_sketch;
 

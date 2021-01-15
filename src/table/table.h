@@ -10,6 +10,7 @@
 #include <math.h>
 #include <mpi.h>
 #include "KMeanOperator.h"
+#include "XGBOperator.h"
 #include "Node.h"
 #include "row.h"
 #include "table/gen-cpp/schema_constants.h"
