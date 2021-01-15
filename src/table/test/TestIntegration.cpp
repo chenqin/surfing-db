@@ -160,6 +160,10 @@ TEST(TableTest, TestXGBOperator) {
   std::vector<Field> ff;
   ff.push_back(f);
   XGBOperator op(ff);
+  const float data1[] = { 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 };
+  op.fillTrainingData(data1, data1, 50, 1);
+  op.train();
+  // op.predict();
 }
 
 TEST(TableTest, TestSketchFrequency) {

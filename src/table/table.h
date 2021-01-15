@@ -127,9 +127,42 @@ public:
     return std::make_unique<RowBuffer>(schema_ptr, &_payload[schema_ptr->size() * index]);
   }
 
+  /**
+   * for xgboost, we need to extract list of numerical fields and pass as array of float
+   * @param fields features
+   * @param data pointer to external float array
+   */
+  void readFields(std::vector<Field> fields, float* data) {
+    CHECK_NOTNULL(data);
+    CHECK_GT(fields.size(), 0);
+
+    for(const auto& f : fields) {
+      CHECK_EQ(f.type, RowType::DOUBLE);
+    }
+
+    size_t columns = fields.size();
+    memset(data, 0, sizeof(float)*columns*_count);
+    for(size_t i = 0 ; i < _count; i++) {
+      for(size_t j = 0 ; j < columns ; j++) {
+        Value v;
+        read(i)->read(fields[j], v);
+        data[i * columns + j] = (float) v.p_val.double_val;
+      }
+    }
+  }
 
   size_t count() {
     return this->_count;
+  }
+
+  void process(XGBOperator& op) {
+    float data[op.features()*_count];
+    readFields(op.fields, data);
+    //TODO(test with a different temptable data)
+    op.fillTrainingData(data, data, _count, op.features());
+    op.train();
+    op.predict();
+    free(data);
   }
 
   void process(KMeanOperator& op) {
