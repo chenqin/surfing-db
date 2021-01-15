@@ -208,6 +208,8 @@ include(ext/Json_Ext.cmake)
 
 include(ext/Sketches_Ext.cmake)
 
+include(ext/XGBoost_Ext.cmake)
+
 include(ext/Thrift_Ext.cmake)
 
 # set up directory to search for headers

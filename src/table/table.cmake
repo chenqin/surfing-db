@@ -30,7 +30,8 @@ target_link_libraries(${TABLE}
         PUBLIC ${GFLAGS_LIBRARY}
         PUBLIC ${JSON_LIBRARY}
         PUBLIC ${ARROW_LIBRARY}
-        PUBLIC ${PARQUET_LIBRARY})
+        PUBLIC ${PARQUET_LIBRARY}
+        PUBLIC ${XGBOOST_LIBRARY})
 
 # build test binary
 add_executable(TableTest
@@ -47,7 +48,8 @@ target_link_libraries(TableTest
         PRIVATE ${GTEST_LIBRARY}
         PRIVATE ${GTEST_MAIN_LIBRARY}
         PRIVATE ${ARROW_LIBRARY}
-        PRIVATE ${PARQUET_LIBRARY})
+        PRIVATE ${PARQUET_LIBRARY}
+        PRIVATE ${XGBOOST_LIBRARY})
 
 # discover all gtests in this module
 include(GoogleTest)
