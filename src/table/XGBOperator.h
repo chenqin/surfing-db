@@ -3,7 +3,7 @@
 //
 
 #include <xgboost/c_api.h>
-
+#include <glog/logging.h>
 #include "Node.h"
 #include "row.h"
 #ifndef SURFINGDB_XGBOPERATOR_H
@@ -21,29 +21,28 @@ namespace table {
     }                                                                                            \
   }
 
-class XGBOperator {
-public:
-  std::vector<Field> fields;
-  std::unique_ptr<DMatrixHandle> dtrain, dtest, dlabeledTrain;
-  std::unique_ptr<BoosterHandle> booster;
+struct XGBParameters {
   std::string tree_method;
   std::string objective;
+  std::string eval_metric;
   double min_child_weight;
   double gamma;
   uint8_t max_depth;
   bool verbosity;
+};
 
-  XGBOperator(std::vector<Field>& columns) {
+class XGBOperator {
+public:
+  std::vector<Field> fields;
+  XGBParameters parameters;
+
+  std::unique_ptr<DMatrixHandle> dtrain, dtest, dlabeledTrain;
+  std::unique_ptr<BoosterHandle> booster;
+
+  XGBOperator(const std::vector<Field>& columns, const XGBParameters& parameters1) : fields(columns), parameters(parameters1) {
     for (const auto& f : columns) {
-      CHECK_EQ(f.type, RowType::DOUBLE); //
+      CHECK_EQ(f.type, RowType::DOUBLE); //thrift don't support float
     }
-    fields = columns;
-    tree_method = "hist";
-    objective = "binary:logistic";
-    min_child_weight = 1;
-    gamma = 0.1;
-    max_depth = 1;
-    verbosity = true;
   }
   ~XGBOperator() {
     if (booster) {
@@ -89,15 +88,16 @@ public:
     // configure the training
     // available parameters are described here:
     //   https://xgboost.readthedocs.io/en/latest/parameter.html
-    safe_xgboost(XGBoosterSetParam(*booster.get(), "tree_method", tree_method.c_str()));
+    safe_xgboost(XGBoosterSetParam(*booster.get(), "tree_method", parameters.tree_method.c_str()));
     // avoid evaluating objective and metric on a GPU
     safe_xgboost(XGBoosterSetParam(*booster.get(), "gpu_id", "-1"));
 
-    safe_xgboost(XGBoosterSetParam(*booster.get(), "objective", objective.c_str()));
-    safe_xgboost(XGBoosterSetParam(*booster.get(), "min_child_weight", std::to_string(min_child_weight).c_str()));
-    safe_xgboost(XGBoosterSetParam(*booster.get(), "gamma", std::to_string(gamma).c_str()));
-    safe_xgboost(XGBoosterSetParam(*booster.get(), "max_depth", std::to_string(max_depth).c_str()));
-    safe_xgboost(XGBoosterSetParam(*booster.get(), "verbosity", std::to_string(verbosity).c_str()));
+    safe_xgboost(XGBoosterSetParam(*booster.get(), "objective", parameters.objective.c_str()));
+    safe_xgboost(XGBoosterSetParam(*booster.get(), "min_child_weight", std::to_string(parameters.min_child_weight).c_str()));
+    safe_xgboost(XGBoosterSetParam(*booster.get(), "gamma", std::to_string(parameters.gamma).c_str()));
+    safe_xgboost(XGBoosterSetParam(*booster.get(), "max_depth", std::to_string(parameters.max_depth).c_str()));
+    safe_xgboost(XGBoosterSetParam(*booster.get(), "eval_metric", parameters.eval_metric.c_str()));
+    safe_xgboost(XGBoosterSetParam(*booster.get(), "verbosity", std::to_string(parameters.verbosity).c_str()));
   }
 
   void train() {

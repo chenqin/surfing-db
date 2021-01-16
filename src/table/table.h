@@ -158,6 +158,7 @@ public:
   void process(XGBOperator& op) {
     float data[op.features()*_count];
     readFields(op.fields, data);
+
     //TODO(test with a different temptable data)
     op.fillTrainingData(data, data, _count, op.features());
     op.train();

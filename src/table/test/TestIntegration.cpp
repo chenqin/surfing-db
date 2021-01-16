@@ -159,7 +159,15 @@ TEST(TableTest, TestXGBOperator) {
   initField(f,"test", RowType::DOUBLE, sizeof(double));
   std::vector<Field> ff;
   ff.push_back(f);
-  XGBOperator op(ff);
+  XGBParameters parameters;
+  parameters.tree_method = "hist";
+  parameters.objective = "binary:logistic";
+  parameters.min_child_weight = 1;
+  parameters.gamma = 0.1;
+  parameters.max_depth = 1;
+  parameters.verbosity = true;
+  parameters.eval_metric = "error";
+  XGBOperator op(ff, parameters);
   const float data1[] = { 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 };
   op.fillTrainingData(data1, data1, 50, 1);
   op.train();
