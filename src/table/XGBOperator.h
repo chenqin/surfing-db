@@ -2,8 +2,8 @@
 // Created by cq on 1/14/21.
 //
 
-#include <xgboost/c_api.h>
 #include <glog/logging.h>
+#include <xgboost/c_api.h>
 #include "Node.h"
 #include "row.h"
 #ifndef SURFINGDB_XGBOPERATOR_H
@@ -29,17 +29,18 @@ struct XGBParameters {
   double gamma;
   uint8_t max_depth;
   bool verbosity;
+  int root = 0;
 };
 
 class XGBOperator {
 public:
   std::vector<Field> fields;
   XGBParameters parameters;
-
+  int rank, world;
   std::unique_ptr<DMatrixHandle> dtrain, dtest, dlabeledTrain;
   std::unique_ptr<BoosterHandle> booster;
 
-  XGBOperator(const std::vector<Field>& columns, const XGBParameters& parameters1) : fields(columns), parameters(parameters1) {
+  XGBOperator(const std::vector<Field>& columns, const XGBParameters& parameters1, int rank, int world) : fields(columns), parameters(parameters1), rank(rank), world(world) {
     for (const auto& f : columns) {
       CHECK_EQ(f.type, RowType::DOUBLE); //thrift don't support float
     }
@@ -71,7 +72,7 @@ public:
    * @param row_count training dataset rows
    * @param column_count features number
    */
-  void fillTrainingData(const float* train, const float* label, int row_count, int column_count) {
+  void fill(const float* train, const float* label, int row_count, int column_count) {
     CHECK_NOTNULL(train);
     // CHECK_NOTNULL(test);
     CHECK_EQ(column_count, fields.size());
@@ -98,6 +99,49 @@ public:
     safe_xgboost(XGBoosterSetParam(*booster.get(), "max_depth", std::to_string(parameters.max_depth).c_str()));
     safe_xgboost(XGBoosterSetParam(*booster.get(), "eval_metric", parameters.eval_metric.c_str()));
     safe_xgboost(XGBoosterSetParam(*booster.get(), "verbosity", std::to_string(parameters.verbosity).c_str()));
+  }
+
+
+  void gather(const float* train, const float* label, int& row_count, const int column_count) {
+    int max_rank;
+    MPI_Allreduce(&rank, &max_rank, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    CHECK_GT(max_rank, 0); // at least two processes
+    int myaligns[world], rcounts[world], displs[world];
+    memset(myaligns, 0, sizeof(int) * world);
+    memset(rcounts, 0, sizeof(int) * world);
+    memset(displs, 0, sizeof(int) * world);
+    myaligns[rank] = row_count * column_count;
+    MPI_Reduce(myaligns, rcounts, world, MPI_INT, parameters.root, 0, MPI_COMM_WORLD);
+    int offset = 0;
+    for (int i = 0; i < world; i++) {
+      int temp = rcounts[i];
+      displs[i] = offset;
+      offset += temp;
+    }
+    if(rank == parameters.root) {
+      float train_all[HUGE_PAGE_SIZE];
+      float label_all[HUGE_PAGE_SIZE];
+      MPI_Gatherv(train, row_count * column_count, MPI_FLOAT, train_all, rcounts,
+                  displs, MPI_FLOAT,
+                  parameters.root, MPI_COMM_WORLD);
+      MPI_Gatherv(label, row_count * column_count, MPI_FLOAT, label_all, rcounts,
+                  displs, MPI_FLOAT,
+                  parameters.root, MPI_COMM_WORLD);
+      train = train_all;
+      label = label_all;
+      for (int i = 0; i < world; i++) {
+        if (i != rank) {
+          row_count += rcounts[i] / column_count;
+        }
+      }
+    } else {
+      MPI_Gatherv(train, row_count * column_count, MPI_FLOAT, nullptr, nullptr,
+                  nullptr, MPI_FLOAT,
+                  parameters.root, MPI_COMM_WORLD);
+      MPI_Gatherv(label, row_count * column_count, MPI_FLOAT, nullptr, nullptr,
+                  nullptr, MPI_FLOAT,
+                  parameters.root, MPI_COMM_WORLD);
+    }
   }
 
   void train() {

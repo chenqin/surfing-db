@@ -97,7 +97,7 @@ public:
     CHECK_EQ(row.schema_sig(), schema_ptr->schema_sig()); //check schema signature
     CHECK_EQ(schema_ptr->size(), row.size());             //check row size
     CHECK_LT(row.size() + offset, _payload.max_size());   // check capacity of temp table
-    fastcpy(&_payload[offset], row.payload_ptr(), row.size()); // avx copy without hit cache
+    memcpy(&_payload[offset], row.payload_ptr(), row.size()); // TODO(chenqin): should use fastcopy
     offset += row.size();
     _count++;
   }
@@ -160,7 +160,7 @@ public:
     readFields(op.fields, data);
 
     //TODO(test with a different temptable data)
-    op.fillTrainingData(data, data, _count, op.features());
+    op.fill(data, data, _count, op.features());
     op.train();
     op.predict();
     free(data);

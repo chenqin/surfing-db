@@ -164,10 +164,10 @@ TEST(TableTest, TestXGBOperator) {
   parameters.max_depth = 1;
   parameters.verbosity = true;
   parameters.eval_metric = "error";
-  XGBOperator op(ff, parameters);
+  XGBOperator op(ff, parameters, 0, 1);
   const float data1[] = { 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 };
   const float label1[] = { 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 };
-  op.fillTrainingData(data1, label1, 50, 1);
+  op.fill(data1, label1, 50, 1);
   op.train();
   // op.predict();
 }

@@ -153,7 +153,7 @@ set(CMAKE_CXX_FLAGS_RELEASE ${NCFLAGS_RELEASE})
 
 
 # utils.h fastcopy need avx
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -O3")
 
 
 # use openmp simd
