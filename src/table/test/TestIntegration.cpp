@@ -16,9 +16,6 @@
 namespace surfingdb {
 namespace table {
 namespace test {
-struct myDummy {
-  int a;
-};
 
 TEST(TableTest, testRowBuffer) {
   RowSchema r;
@@ -169,7 +166,8 @@ TEST(TableTest, TestXGBOperator) {
   parameters.eval_metric = "error";
   XGBOperator op(ff, parameters);
   const float data1[] = { 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 };
-  op.fillTrainingData(data1, data1, 50, 1);
+  const float label1[] = { 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 };
+  op.fillTrainingData(data1, label1, 50, 1);
   op.train();
   // op.predict();
 }

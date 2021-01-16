@@ -6,9 +6,10 @@
 #define SURFINGDB_ROW_H
 
 #include <iostream>
-#include <string>
+
 #include <unordered_map>
 #include "schema.h"
+#include "utils.h"
 #pragma once
 
 namespace surfingdb {
@@ -20,6 +21,7 @@ namespace table {
 using namespace surfingdb::table::schema;
 using std::hash;
 using std::string;
+using namespace surfingdb::table;
 
 inline void sign(uint8_t* _payload, size_t _schema_sig) {
   CHECK_NOTNULL(_payload);
@@ -76,8 +78,8 @@ private:
       char* str_ptr = (char*)data;
 
       size_t length = strlen(str_ptr);
-      memcpy((int64_t*)(_payload + offset), &(length), sizeof(int64_t));
-      memcpy((char*)(_payload + offset + sizeof(int64_t)), data, length + 1);
+      fastcpy((int64_t*)(_payload + offset), &(length), sizeof(int64_t));
+      fastcpy((char*)(_payload + offset + sizeof(int64_t)), data, length + 1);
       memset((char*)(_payload + offset + sizeof(int64_t) + length + 1), 0, f.max_unit_size - length - 1);
       break;
     }
@@ -123,7 +125,7 @@ private:
       CHECK_EQ(*len, (int64_t)strlen(char_ptr));
       size_t resid = f.max_unit_size - strlen(char_ptr) - 1; //leave extra byte'\0'
       CHECK_GE(resid, 0);
-      memcpy(dataptr, char_ptr, strlen(char_ptr));
+      fastcpy(dataptr, char_ptr, strlen(char_ptr));
       return *len;
     }
     case RowType::LIST: {

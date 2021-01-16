@@ -10,8 +10,8 @@
 #include <math.h>
 #include <mpi.h>
 #include "KMeanOperator.h"
-#include "XGBOperator.h"
 #include "Node.h"
+#include "XGBOperator.h"
 #include "row.h"
 #include "table/gen-cpp/schema_constants.h"
 #include "table/gen-cpp/schema_types.h"
@@ -97,7 +97,7 @@ public:
     CHECK_EQ(row.schema_sig(), schema_ptr->schema_sig()); //check schema signature
     CHECK_EQ(schema_ptr->size(), row.size());             //check row size
     CHECK_LT(row.size() + offset, _payload.max_size());   // check capacity of temp table
-    memcpy(&_payload[offset], row.payload_ptr(), row.size());
+    fastcpy(&_payload[offset], row.payload_ptr(), row.size()); // avx copy without hit cache
     offset += row.size();
     _count++;
   }
@@ -136,17 +136,17 @@ public:
     CHECK_NOTNULL(data);
     CHECK_GT(fields.size(), 0);
 
-    for(const auto& f : fields) {
+    for (const auto& f : fields) {
       CHECK_EQ(f.type, RowType::DOUBLE);
     }
 
     size_t columns = fields.size();
-    memset(data, 0, sizeof(float)*columns*_count);
-    for(size_t i = 0 ; i < _count; i++) {
-      for(size_t j = 0 ; j < columns ; j++) {
+    memset(data, 0, sizeof(float) * columns * _count);
+    for (size_t i = 0; i < _count; i++) {
+      for (size_t j = 0; j < columns; j++) {
         Value v;
         read(i)->read(fields[j], v);
-        data[i * columns + j] = (float) v.p_val.double_val;
+        data[i * columns + j] = (float)v.p_val.double_val;
       }
     }
   }
@@ -156,7 +156,7 @@ public:
   }
 
   void process(XGBOperator& op) {
-    float data[op.features()*_count];
+    float data[op.features() * _count];
     readFields(op.fields, data);
 
     //TODO(test with a different temptable data)
@@ -172,7 +172,7 @@ public:
     double centers[k][fields.size()]; //more efficient ds
     double final_centers[k][fields.size()];
 
-    if(!op.inited) {
+    if (!op.inited) {
       std::unordered_map<int, size_t> local_picks;
       op.init(_count, ptr->rank, ptr->world, local_picks);
       for (auto pick : local_picks) {
@@ -185,9 +185,9 @@ public:
 
       MPI_Allreduce(&centers, &final_centers, k * fields.size(), MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
       op.inited = true;
-      memcpy(op.centers, centers, sizeof(double) * k * fields.size());
+      fastcpy(op.centers, centers, sizeof(double) * k * fields.size());
     } else {
-      memcpy(final_centers, op.centers, sizeof(double) * k * fields.size());
+      fastcpy(final_centers, op.centers, sizeof(double) * k * fields.size());
     }
     // step 4, caculate distance and group to k, group to k clusters
     double dist[k]; // each row distance to recvcenter[i]
@@ -236,7 +236,7 @@ public:
         centers[i][j] = grandtotal[i][j] / total_members[i];
       }
     }
-    memcpy(op.centers, centers, sizeof(double)*k*fields.size());
+    fastcpy(op.centers, centers, sizeof(double) * k * fields.size());
     op.iteration++;
 
     if (op.shouldStop()) {

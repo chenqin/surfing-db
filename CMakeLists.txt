@@ -3,12 +3,12 @@
 cmake_minimum_required(VERSION 3.16)
 project(surfingdb LANGUAGES CXX VERSION 0.1)
 
-if(linux)
-    project (Treads)
+if (linux)
+    project(Treads)
     #set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -std=gnu++2a -pthread" )
-    set( CMAKE_EXPORT_COMPILE_COMMANDS ON )
+    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
     set(THREADS_PREFER_PTHREAD_FLAG TRUE)
-endif()
+endif ()
 
 find_package(Threads REQUIRED)
 
@@ -151,30 +151,34 @@ set(CMAKE_CXX_FLAGS ${NCFLAGS})
 set(CMAKE_CXX_FLAGS_DEBUG "-g -DNDBG")
 set(CMAKE_CXX_FLAGS_RELEASE ${NCFLAGS_RELEASE})
 
+
+# utils.h fastcopy need avx
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
+
+
 # use openmp simd
+OPTION(USE_OpenMP "Use OpenMP" ON)
 
-OPTION (USE_OpenMP "Use OpenMP" ON)
-
-IF(USE_OpenMP)
+IF (USE_OpenMP)
     message(STATUS "USE_OpenMP=${USE_OpenMP}")
     find_package(OpenMP REQUIRED)
-    IF(OPENMP_FOUND)
+    IF (OPENMP_FOUND)
         SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
         SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-    ENDIF()
-    if(NOT TARGET OpenMP::OpenMP_CXX)
+    ENDIF ()
+    if (NOT TARGET OpenMP::OpenMP_CXX)
         add_library(OpenMP_TARGET INTERFACE)
         add_library(OpenMP::OpenMP_CXX ALIAS OpenMP_TARGET)
         target_compile_options(OpenMP_TARGET INTERFACE ${OpenMP_CXX_FLAGS})
         find_package(Threads REQUIRED)
         target_link_libraries(OpenMP_TARGET INTERFACE Threads::Threads)
         target_link_libraries(OpenMP_TARGET INTERFACE ${OpenMP_CXX_FLAGS})
-    endif()
-ENDIF()
+    endif ()
+ENDIF ()
 
 
 find_package(MPI REQUIRED)
-set( ENV{MPI_HOSTS} ${PROJECT_SOURCE_DIR}/host_file )
+set(ENV{MPI_HOSTS} ${PROJECT_SOURCE_DIR}/host_file)
 
 # we use static link always
 set(BUILD_SHARED_LIBS OFF)
