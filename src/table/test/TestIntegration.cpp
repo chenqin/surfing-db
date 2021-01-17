@@ -154,8 +154,8 @@ TEST(TableTest, testRowBuffer) {
 TEST(TableTest, TestXGBOperator) {
   Field f;
   initField(f,"test", RowType::DOUBLE, sizeof(double));
-  std::vector<Field> ff;
-  ff.push_back(f);
+  std::vector<Field> features;
+  features.push_back(f);
   XGBParameters parameters;
   parameters.tree_method = "hist";
   parameters.objective = "binary:logistic";
@@ -164,7 +164,7 @@ TEST(TableTest, TestXGBOperator) {
   parameters.max_depth = 1;
   parameters.verbosity = true;
   parameters.eval_metric = "error";
-  XGBOperator op(ff, parameters, 0, 1);
+  XGBOperator op(features, f, parameters, 0, 1);
   const float data1[] = { 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 };
   const float label1[] = { 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 };
   op.fill(data1, label1, 50, 1);

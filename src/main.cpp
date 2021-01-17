@@ -139,6 +139,7 @@ int main() {
       revcallback.wait();
     }
     node->forward(); // stage 1 broadcast data
+
     // stage 2 run k_mean
     std::vector<Field> fields;
     fields.push_back(field4);
@@ -146,6 +147,20 @@ int main() {
 
     KMeanOperator op(1, fields, 100);
     tsed.process(op);
+
+    // stage 3, run xgb
+    tsed.ingest(b);
+    LOG(INFO) << "xgb operator" << " process "<< node->rank << " has " << tsed.count() << " rows";
+    XGBParameters parameters;
+    parameters.tree_method = "exact";
+    parameters.objective = "binary:logistic";
+    parameters.min_child_weight = 1;
+    parameters.gamma = 0.1;
+    parameters.max_depth = 2;
+    parameters.verbosity = true;
+    parameters.eval_metric = "error";
+    XGBOperator xgbOperator(fields, field4, parameters, node->rank, node->world);
+    tsed.process(xgbOperator);
   }
   return 0;
 }

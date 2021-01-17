@@ -21,7 +21,7 @@ Node::Node() {
   processor = std::string(processor_name);
   stage = 0;
   outstanding_requests.clear();
-  LOG(INFO) << "cluster size " << world << " node rank " << rank << " alias " << processor;
+  // LOG(INFO) << "cluster size " << world << " node rank " << rank << " alias " << processor;
 }
 
 Node::~Node() {

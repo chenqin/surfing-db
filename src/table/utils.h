@@ -32,19 +32,6 @@ void fastMemcpy(void* pvDest, const void* pvSrc, size_t nBytes) {
   _mm_sfence();
 }
 
-/*
- * check if byte size align with avx
- */
-void fastcpy(void* pvDest, const void* pvSrc, size_t nBytes) {
-  size_t fastCopyBytes = nBytes - nBytes % width;
-  if (fastCopyBytes > 0) {
-    fastMemcpy(pvDest, pvSrc, fastCopyBytes);
-  }
-  if (fastCopyBytes != nBytes) {
-    memcpy((char*)pvDest + fastCopyBytes, (char*)pvSrc + fastCopyBytes, nBytes % width);
-  }
-}
-
 } // namespace table
 } // namespace surfingdb
 #endif //SURFINGDB_UTILS_H

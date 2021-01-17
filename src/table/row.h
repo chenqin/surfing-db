@@ -191,7 +191,7 @@ public:
   * @param f
   * @param v
   */
-  void read(const Field& f, Value& v) {
+  inline void read(const Field& f, Value& v) {
     CHECK_GE(schemaptr->_offsets->size(), 0);
     CHECK(schemaptr->_offsets->find(f) != schemaptr->_offsets->end());
     uint64_t offset = schemaptr->_offsets->at(f);

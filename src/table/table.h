@@ -94,9 +94,9 @@ public:
   }
 
   void ingest(RowBuffer row) {
-    CHECK_EQ(row.schema_sig(), schema_ptr->schema_sig()); //check schema signature
-    CHECK_EQ(schema_ptr->size(), row.size());             //check row size
-    CHECK_LT(row.size() + offset, _payload.max_size());   // check capacity of temp table
+    CHECK_EQ(row.schema_sig(), schema_ptr->schema_sig());     //check schema signature
+    CHECK_EQ(schema_ptr->size(), row.size());                 //check row size
+    CHECK_LT(row.size() + offset, _payload.max_size());       // check capacity of temp table
     memcpy(&_payload[offset], row.payload_ptr(), row.size()); // TODO(chenqin): should use fastcopy
     offset += row.size();
     _count++;
@@ -121,7 +121,7 @@ public:
    * @param index
    * @return
    */
-  std::unique_ptr<RowBuffer> read(int index) {
+  inline std::unique_ptr<RowBuffer> read(int index) {
     CHECK_LT(index, _count);
     CHECK_NOTNULL(schema_ptr);
     return std::make_unique<RowBuffer>(schema_ptr, &_payload[schema_ptr->size() * index]);
@@ -143,11 +143,24 @@ public:
     size_t columns = fields.size();
     memset(data, 0, sizeof(float) * columns * _count);
     for (size_t i = 0; i < _count; i++) {
+      const auto row = read(i);
       for (size_t j = 0; j < columns; j++) {
         Value v;
-        read(i)->read(fields[j], v);
+        row->read(fields[j], v);
         data[i * columns + j] = (float)v.p_val.double_val;
       }
+    }
+  }
+
+  void readField(const Field& field, float* data) {
+    CHECK_NOTNULL(data);
+    CHECK_EQ(field.type, RowType::DOUBLE);
+    memset(data, 0, sizeof(float) * _count);
+    for (size_t i = 0; i < _count; i++) {
+      const auto row = read(i);
+      Value v;
+      row->read(field, v);
+      data[i] = (float)v.p_val.double_val;
     }
   }
 
@@ -156,14 +169,20 @@ public:
   }
 
   void process(XGBOperator& op) {
-    float data[op.features() * _count];
-    readFields(op.fields, data);
+    float data[op.features() * _count]; // features
+    float label[_count];                // features
+    readFields(op.fields, data);        // read from temptable
+    readField(op.labelField, label);
 
-    //TODO(test with a different temptable data)
-    op.fill(data, data, _count, op.features());
-    op.train();
-    op.predict();
-    free(data);
+    size_t total_row_count = _count;
+    op.gather(data, label, total_row_count, op.features()); //gather training dataset to root
+
+    if (op.rank == op.parameters.root) {
+      LOG(INFO) << "total training dataset at root " << total_row_count << " rows";
+      op.fill(data, label, total_row_count, op.features());
+      op.train();
+    }
+    ptr->forward();
   }
 
   void process(KMeanOperator& op) {
@@ -185,9 +204,9 @@ public:
 
       MPI_Allreduce(&centers, &final_centers, k * fields.size(), MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
       op.inited = true;
-      fastcpy(op.centers, centers, sizeof(double) * k * fields.size());
+      memcpy(op.centers, centers, sizeof(double) * k * fields.size());
     } else {
-      fastcpy(final_centers, op.centers, sizeof(double) * k * fields.size());
+      memcpy(final_centers, op.centers, sizeof(double) * k * fields.size());
     }
     // step 4, caculate distance and group to k, group to k clusters
     double dist[k]; // each row distance to recvcenter[i]
@@ -236,7 +255,7 @@ public:
         centers[i][j] = grandtotal[i][j] / total_members[i];
       }
     }
-    fastcpy(op.centers, centers, sizeof(double) * k * fields.size());
+    memcpy(op.centers, centers, sizeof(double) * k * fields.size());
     op.iteration++;
 
     if (op.shouldStop()) {
