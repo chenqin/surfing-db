@@ -30,6 +30,7 @@ struct XGBParameters {
   uint8_t max_depth;
   bool verbosity;
   int root = 0;
+  bool isTraining = true;
 };
 
 class XGBOperator {
@@ -38,13 +39,15 @@ public:
   Field labelField;
   XGBParameters parameters;
   int rank, world;
-  std::unique_ptr<DMatrixHandle> dtrain, dtest, dlabeledTrain;
+  std::string url;
+  std::unique_ptr<DMatrixHandle> dtrain, dtest;
   std::unique_ptr<BoosterHandle> booster;
 
   XGBOperator(const std::vector<Field>& features, const Field& label, const XGBParameters& parameters1, int rank, int world) : fields(features), labelField(label), parameters(parameters1), rank(rank), world(world) {
     for (const auto& f : features) {
       CHECK_EQ(f.type, RowType::DOUBLE); //thrift don't support float
     }
+    url =  "/tmp/test.bin";
   }
   ~XGBOperator() {
     if (booster) {
@@ -69,7 +72,9 @@ public:
    * @param row_count training dataset rows
    * @param column_count features number
    */
-  void fill(const float* train, const float* label, int row_count, int feature_num) {
+  void buildTrainingDataset(const float* train, const float* label, int row_count, int feature_num) {
+    // if(rank != parameters.root) return; // only train on root process
+    LOG(INFO) << "total training dataset at root " << row_count << " rows";
     CHECK_NOTNULL(train);
     // CHECK_NOTNULL(test);
     CHECK_EQ(feature_num, fields.size());
@@ -140,6 +145,12 @@ public:
     }
   }
 
+  void syncModel() {
+    if(rank == parameters.root) {
+      safe_xgboost(XGBoosterSaveModel(*booster.get(), url.c_str()));
+    }
+  }
+
   void train() {
     DMatrixHandle eval_dmats[2] = { *dtrain.get(), *dtrain.get() }; // hack
     booster = std::make_unique<BoosterHandle>();
@@ -150,6 +161,8 @@ public:
     CHECK_EQ(num_feature, features());
 
     fillParameter();
+
+    if (rank != parameters.root) return; // only run train steps on root
 
     // train and evaluate for 10 iterations
     int n_trees = 10;

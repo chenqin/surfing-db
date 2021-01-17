@@ -161,6 +161,9 @@ int main() {
     parameters.eval_metric = "error";
     XGBOperator xgbOperator(fields, field4, parameters, node->rank, node->world);
     tsed.process(xgbOperator);
+
+    parameters.isTraining = false; // now switch to prediction
+
   }
   return 0;
 }

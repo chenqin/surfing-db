@@ -176,12 +176,10 @@ public:
 
     size_t total_row_count = _count;
     op.gather(data, label, total_row_count, op.features()); //gather training dataset to root
+    op.buildTrainingDataset(data, label, total_row_count, op.features());
+    op.train();
+    op.syncModel(); // send model to all processes from root
 
-    if (op.rank == op.parameters.root) {
-      LOG(INFO) << "total training dataset at root " << total_row_count << " rows";
-      op.fill(data, label, total_row_count, op.features());
-      op.train();
-    }
     ptr->forward();
   }
 
