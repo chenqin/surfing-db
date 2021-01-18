@@ -162,8 +162,8 @@ int main() {
     XGBOperator xgbOperator(fields, field4, parameters, node->rank, node->world);
     tsed.process(xgbOperator);
 
-    parameters.isTraining = false; // now switch to prediction
-
+    xgbOperator.parameters.isTraining = false; // now switch to prediction
+    tsed.process(xgbOperator);
   }
   return 0;
 }

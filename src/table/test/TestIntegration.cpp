@@ -167,9 +167,11 @@ TEST(TableTest, TestXGBOperator) {
   XGBOperator op(features, f, parameters, 0, 1);
   const float data1[] = { 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 };
   const float label1[] = { 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 };
-  op.buildTrainingDataset(data1, label1, 50, 1);
-  op.train();
-  // op.predict();
+  op.train(data1, label1, 50, 1);
+  const float label2[] = { 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 };
+  bst_ulong result_count =0;
+  op.predict(data1, label2, 50, 1);
+  EXPECT_EQ(result_count, 50);
 }
 
 TEST(TableTest, TestSketchFrequency) {

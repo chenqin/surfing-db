@@ -164,22 +164,40 @@ public:
     }
   }
 
+  void writeField (const Field& field, const float* data) {
+    CHECK_NOTNULL(data);
+    CHECK_EQ(field.type, RowType::DOUBLE);
+    for (size_t i = 0; i < _count; i++) {
+      const auto row = read(i);
+      Value v;
+      v.p_val.double_val = (double) data[i];
+      row->write(field, v);
+    }
+  }
+
   size_t count() {
     return this->_count;
   }
 
   void process(XGBOperator& op) {
     float data[op.features() * _count]; // features
-    float label[_count];                // features
     readFields(op.fields, data);        // read from temptable
+
+    float label[_count];                // label
     readField(op.labelField, label);
 
     size_t total_row_count = _count;
     op.gather(data, label, total_row_count, op.features()); //gather training dataset to root
-    op.buildTrainingDataset(data, label, total_row_count, op.features());
-    op.train();
-    op.syncModel(); // send model to all processes from root
-
+    if(op.parameters.isTraining) {
+      LOG(INFO) << "start training on " << ptr->rank;
+      op.train(data, label, total_row_count, op.features());
+      op.syncModel(); // send model to all processes from root
+    } else {
+      LOG(INFO) << "start prediction on " << ptr->rank;
+      memset(label, 0, sizeof(float ) * _count); // avoid dirty data
+      op.predict(data, label, total_row_count, op.features());
+      writeField(op.labelField, label);
+    }
     ptr->forward();
   }
 

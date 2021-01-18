@@ -72,7 +72,7 @@ public:
    * @param row_count training dataset rows
    * @param column_count features number
    */
-  void buildTrainingDataset(const float* train, const float* label, int row_count, int feature_num) {
+  void train(const float* train, const float* label, bst_ulong row_count, int feature_num) {
     // if(rank != parameters.root) return; // only train on root process
     LOG(INFO) << "total training dataset at root " << row_count << " rows";
     CHECK_NOTNULL(train);
@@ -84,6 +84,28 @@ public:
     // set row_count of features adding label column
     safe_xgboost(XGDMatrixCreateFromMat(train, row_count, feature_num, -1, dtrain.get()));
     safe_xgboost(XGDMatrixSetFloatInfo(*dtrain.get(), "label", label, row_count));
+
+    DMatrixHandle eval_dmats[2] = { *dtrain.get(), *dtrain.get() }; // hack
+    booster = std::make_unique<BoosterHandle>();
+    safe_xgboost(XGBoosterCreate(eval_dmats, 2, booster.get()));
+
+    bst_ulong num_feature = 0;
+    safe_xgboost(XGBoosterGetNumFeature(*booster.get(), &num_feature));
+    CHECK_EQ(num_feature, features());
+
+    fillParameter();
+
+    if (rank != parameters.root) return; // only run train steps on root
+
+    // train and evaluate for 10 iterations
+    int n_trees = 10;
+    const char* eval_names[2] = { "train", "test" };
+    const char* eval_result = NULL;
+    for (int i = 0; i < n_trees; ++i) {
+      safe_xgboost(XGBoosterUpdateOneIter(*booster.get(), i, *dtrain.get()));
+      safe_xgboost(XGBoosterEvalOneIter(*booster.get(), i, eval_dmats, eval_names, 2, &eval_result));
+      printf("%s\n", eval_result);
+    }
   }
 
   void fillParameter() {
@@ -144,59 +166,21 @@ public:
                   parameters.root, MPI_COMM_WORLD);
     }
   }
-
+  /**
+   * need to fix broadcast model to all
+   */
   void syncModel() {
     if(rank == parameters.root) {
       safe_xgboost(XGBoosterSaveModel(*booster.get(), url.c_str()));
     }
   }
 
-  void train() {
-    DMatrixHandle eval_dmats[2] = { *dtrain.get(), *dtrain.get() }; // hack
-    booster = std::make_unique<BoosterHandle>();
-    safe_xgboost(XGBoosterCreate(eval_dmats, 2, booster.get()));
-
-    bst_ulong num_feature = 0;
-    safe_xgboost(XGBoosterGetNumFeature(*booster.get(), &num_feature));
-    CHECK_EQ(num_feature, features());
-
-    fillParameter();
-
-    if (rank != parameters.root) return; // only run train steps on root
-
-    // train and evaluate for 10 iterations
-    int n_trees = 10;
-    const char* eval_names[2] = { "train", "test" };
-    const char* eval_result = NULL;
-    for (int i = 0; i < n_trees; ++i) {
-      safe_xgboost(XGBoosterUpdateOneIter(*booster.get(), i, *dtrain.get()));
-      safe_xgboost(XGBoosterEvalOneIter(*booster.get(), i, eval_dmats, eval_names, 2, &eval_result));
-      printf("%s\n", eval_result);
-    }
-  }
-
-  void predict() {
-    CHECK(dtest);
-
-    // predict
-    bst_ulong out_len = 0;
-    const float* out_result = NULL;
-    int n_print = 10;
-
-    safe_xgboost(XGBoosterPredict(*booster.get(), *dtest.get(), 0, 0, 0, &out_len, &out_result));
-    printf("y_pred: ");
-    for (int i = 0; i < n_print; ++i) {
-      printf("%1.4f ", out_result[i]);
-    }
-    printf("\n");
-
-    // print true labels
-    safe_xgboost(XGDMatrixGetFloatInfo(*dtest.get(), "label", &out_len, &out_result));
-    printf("y_test: ");
-    for (int i = 0; i < n_print; ++i) {
-      printf("%1.4f ", out_result[i]);
-    }
-    printf("\n");
+  void predict(const float* test, const float* result, const bst_ulong row_count, int feature_num) {
+    dtest = std::make_unique<DMatrixHandle>();
+    safe_xgboost(XGDMatrixCreateFromMat(test, row_count, feature_num, -1, dtest.get()));
+    bst_ulong out_come = 0;
+    safe_xgboost(XGBoosterPredict(*booster.get(), *dtest.get(), 0, 0, 0, &out_come, &result));
+    CHECK_EQ(row_count, out_come);
   }
 };
 } // namespace table
