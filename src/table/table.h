@@ -8,6 +8,13 @@
 #include <cstdarg>
 #include <future>
 #include <math.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/mman.h>
 #include <mpi.h>
 #include "KMeanOperator.h"
 #include "Node.h"
@@ -100,6 +107,13 @@ public:
     memcpy(&_payload[offset], row.payload_ptr(), row.size()); // TODO(chenqin): should use fastcopy
     offset += row.size();
     _count++;
+  }
+
+  /**
+   * write buffer to file
+   */
+  void flush() {
+
   }
 
   void async_send(int d, size_t count, MPI_Request& request) {
