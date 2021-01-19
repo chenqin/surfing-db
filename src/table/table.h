@@ -184,18 +184,18 @@ public:
     readFields(op.fields, data);        // read from temptable
 
     float label[_count];                // label
-    readField(op.labelField, label);
+    memset(label, 0, sizeof(float ) * _count); // avoid dirty data
 
-    size_t total_row_count = _count;
-    op.gather(data, label, total_row_count, op.features()); //gather training dataset to root
     if(op.parameters.isTraining) {
-      LOG(INFO) << "start training on " << ptr->rank;
+      readField(op.labelField, label);
+      size_t total_row_count = _count;
+
+      op.gather(data, label, total_row_count, op.features()); //gather training dataset to root
       op.train(data, label, total_row_count, op.features());
       op.syncModel(); // send model to all processes from root
     } else {
       LOG(INFO) << "start prediction on " << ptr->rank;
-      memset(label, 0, sizeof(float ) * _count); // avoid dirty data
-      op.predict(data, label, total_row_count, op.features());
+      op.predict(data, label, _count, op.features());
       writeField(op.labelField, label);
     }
     ptr->forward();

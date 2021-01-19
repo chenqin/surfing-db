@@ -73,12 +73,11 @@ public:
    * @param column_count features number
    */
   void train(const float* train, const float* label, bst_ulong row_count, int feature_num) {
-    // if(rank != parameters.root) return; // only train on root process
-    LOG(INFO) << "total training dataset at root " << row_count << " rows";
     CHECK_NOTNULL(train);
     // CHECK_NOTNULL(test);
     CHECK_EQ(feature_num, fields.size());
     CHECK_GE(row_count, 1);
+
     dtrain = std::make_unique<DMatrixHandle>();
 
     // set row_count of features adding label column
@@ -86,29 +85,17 @@ public:
     safe_xgboost(XGDMatrixSetFloatInfo(*dtrain.get(), "label", label, row_count));
 
     DMatrixHandle eval_dmats[2] = { *dtrain.get(), *dtrain.get() }; // hack
+    // build booster for root to train, for rest to restore from json payload
     booster = std::make_unique<BoosterHandle>();
     safe_xgboost(XGBoosterCreate(eval_dmats, 2, booster.get()));
-
     bst_ulong num_feature = 0;
     safe_xgboost(XGBoosterGetNumFeature(*booster.get(), &num_feature));
     CHECK_EQ(num_feature, features());
 
-    fillParameter();
-
-    if (rank != parameters.root) return; // only run train steps on root
-
-    // train and evaluate for 10 iterations
-    int n_trees = 10;
-    const char* eval_names[2] = { "train", "test" };
-    const char* eval_result = NULL;
-    for (int i = 0; i < n_trees; ++i) {
-      safe_xgboost(XGBoosterUpdateOneIter(*booster.get(), i, *dtrain.get()));
-      safe_xgboost(XGBoosterEvalOneIter(*booster.get(), i, eval_dmats, eval_names, 2, &eval_result));
-      printf("%s\n", eval_result);
+    if (rank != parameters.root) {
+      LOG(INFO) << "exit, only run training on " << parameters.root;
+      return; // only run train steps on root
     }
-  }
-
-  void fillParameter() {
     // configure the training
     // available parameters are described here:
     //   https://xgboost.readthedocs.io/en/latest/parameter.html
@@ -122,6 +109,17 @@ public:
     safe_xgboost(XGBoosterSetParam(*booster.get(), "max_depth", std::to_string(parameters.max_depth).c_str()));
     safe_xgboost(XGBoosterSetParam(*booster.get(), "eval_metric", parameters.eval_metric.c_str()));
     safe_xgboost(XGBoosterSetParam(*booster.get(), "verbosity", std::to_string(parameters.verbosity).c_str()));
+    LOG(INFO) << "start training on " << parameters.root;
+    LOG(INFO) << "total training dataset at root " << row_count << " rows";
+    // train and evaluate for 10 iterations
+    int n_trees = 10;
+    const char* eval_names[2] = { "train", "test" };
+    const char* eval_result = NULL;
+    for (int i = 0; i < n_trees; ++i) {
+      safe_xgboost(XGBoosterUpdateOneIter(*booster.get(), i, *dtrain.get()));
+      safe_xgboost(XGBoosterEvalOneIter(*booster.get(), i, eval_dmats, eval_names, 2, &eval_result));
+      printf("%s\n", eval_result);
+    }
   }
 
   void gather(const float* train, const float* label, size_t& row_count, const int column_count) {
