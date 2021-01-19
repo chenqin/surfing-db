@@ -6,16 +6,17 @@
 #define SURFINGDB_TABLE_H
 
 #include <cstdarg>
+#include <fcntl.h>
 #include <future>
 #include <math.h>
-#include <unistd.h>
-#include <stdio.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/mman.h>
 #include <mpi.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/uio.h>
+#include <unistd.h>
 #include "KMeanOperator.h"
 #include "Node.h"
 #include "XGBOperator.h"
@@ -24,6 +25,11 @@
 #include "table/gen-cpp/schema_types.h"
 
 #pragma once
+
+#define FILE_IO_VECTOR 8
+
+// read/write ssd per 64KB chunk
+#define SSD_CHUNK_SIZ 65536
 
 namespace surfingdb {
 namespace table {
@@ -63,6 +69,10 @@ private:
   MPI_Datatype type; //used to run communication with other processes
 
   std::shared_ptr<std::unordered_map<size_t, std::set<size_t>>> _groups;
+
+  struct iovec iov[FILE_IO_VECTOR];
+  ssize_t nr;
+  int fd;
 
 public:
   TempTable(const std::shared_ptr<TableSchema> sharedPtr) {
@@ -110,10 +120,64 @@ public:
   }
 
   /**
-   * write buffer to file
+   * write buffer to file in batch
    */
-  void flush() {
+  void flush(const std::string& path) {
+    fd = open(path.c_str(), O_WRONLY | O_CREAT);
+    CHECK_NE(fd, -1);
 
+    size_t sig = schema_ptr->schema_sig();
+    write(fd, &sig, sizeof(size_t));
+    write(fd, reinterpret_cast<const void*>(&offset), sizeof(size_t));
+    write(fd, reinterpret_cast<const void*>(&_count), sizeof(size_t));
+
+    size_t index = 0;
+    /* fill out three iovec structures */
+    while(index < offset) {
+      int batch = 0;
+      for (int i = 0; i < FILE_IO_VECTOR && index < offset ; i++) {
+        iov[i].iov_base = &_payload[index];
+        size_t payload_size = index + SSD_CHUNK_SIZ < offset ? SSD_CHUNK_SIZ : offset - index;
+        iov[i].iov_len = payload_size;
+        index += payload_size;
+        batch++;
+      }
+      /* with a single call, entire batch */
+      nr = writev(fd, iov, batch);
+      CHECK_NE(nr, -1);
+    }
+    LOG(INFO) << "entire temptable were flushed to disk " << path;
+    close(fd);
+  }
+
+  void load(const std::string& path) {
+    fd = open(path.c_str(), O_RDONLY);
+    CHECK_NE(fd, -1);
+
+    size_t sig = 0;
+    ::read(fd, &sig, sizeof(size_t));
+    CHECK_EQ(sig, schema_ptr->schema_sig());
+    ::read(fd, &offset, sizeof(size_t));
+    ::read(fd, &_count, sizeof(size_t));
+    CHECK_EQ(offset/_count, schema_ptr->size());
+
+    size_t index = 0;
+    /* fill out three iovec structures */
+    while(index < offset) {
+      int batch = 0;
+      for (int i = 0; i < FILE_IO_VECTOR && index < offset ; i++) {
+        iov[i].iov_base = &_payload[index];
+        size_t payload_size = index + SSD_CHUNK_SIZ < offset ? SSD_CHUNK_SIZ : offset - index;
+        iov[i].iov_len = payload_size;
+        index += payload_size;
+        batch++;
+      }
+      /* with a single call, entire batch */
+      nr = readv(fd, iov, batch);
+      CHECK_NE(nr, -1);
+    }
+    LOG(INFO) << "entire temptable were read from disk " << path;
+    close(fd);
   }
 
   void async_send(int d, size_t count, MPI_Request& request) {
@@ -178,13 +242,13 @@ public:
     }
   }
 
-  void writeField (const Field& field, const float* data) {
+  void writeField(const Field& field, const float* data) {
     CHECK_NOTNULL(data);
     CHECK_EQ(field.type, RowType::DOUBLE);
     for (size_t i = 0; i < _count; i++) {
       const auto row = read(i);
       Value v;
-      v.p_val.double_val = (double) data[i];
+      v.p_val.double_val = (double)data[i];
       row->write(field, v);
     }
   }
@@ -197,10 +261,10 @@ public:
     float data[op.features() * _count]; // features
     readFields(op.fields, data);        // read from temptable
 
-    float label[_count];                // label
-    memset(label, 0, sizeof(float ) * _count); // avoid dirty data
+    float label[_count];                      // label
+    memset(label, 0, sizeof(float) * _count); // avoid dirty data
 
-    if(op.parameters.isTraining) {
+    if (op.parameters.isTraining) {
       readField(op.labelField, label);
       size_t total_row_count = _count;
 

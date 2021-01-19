@@ -149,21 +149,8 @@ TEST(TableTest, testRowBuffer) {
   EXPECT_EQ(v22.p_val.string_val, "hello");
   EXPECT_EQ(v44.list_value.size(), 1);
   EXPECT_EQ(v33.map_value.size(), 1);
-}
-
-TEST(TableTest, TestOutOfCore) {
-  int fd;
-  struct stat sb;
-  int page_size = getpagesize();
-  fd = open ("/tmp/test.bin", O_CREAT | O_RDWR | O_ASYNC);
-  EXPECT_NE(fstat (fd, &sb), -1);
-  EXPECT_TRUE(S_ISREG (sb.st_mode));
-  auto p = mmap (0, page_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-  auto payload = malloc(page_size);
-  memcpy(p, payload, page_size);
-  p = mmap (0, page_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, page_size);
-  memcpy(p, payload, page_size);
-  EXPECT_NE(p, MAP_FAILED);
+  t.flush("/tmp/test1.bin");
+  t.load("/tmp/test1.bin");
 }
 
 TEST(TableTest, TestXGBOperator) {
