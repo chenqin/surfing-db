@@ -168,11 +168,27 @@ public:
   }
   /**
    * need to fix broadcast model to all
+   * TODO(chenqin): (fix double free buffer)
    */
   void syncModel() {
+    const char* buffer = static_cast<char*>(malloc(HUGE_PAGE_SIZE));
+    bst_ulong model_len;
     if(rank == parameters.root) {
       safe_xgboost(XGBoosterSaveModel(*booster.get(), url.c_str()));
+      safe_xgboost(XGBoosterSaveJsonConfig(*booster.get(), &model_len, &buffer));
     }
+    MPI_Bcast(&model_len, 1, MPI_UNSIGNED_LONG, parameters.root, MPI_COMM_WORLD);
+    CHECK_GT(model_len, 0);
+    char* model = static_cast<char*>(malloc(model_len));
+    if(rank == parameters.root) {
+      memcpy((void*)model, buffer, model_len);
+    } else {
+      memset((void*) model, 0, model_len);
+    }
+    CHECK_NOTNULL(buffer);
+    MPI_Bcast((void*)model, model_len, MPI_CHAR, parameters.root, MPI_COMM_WORLD);
+    CHECK_NOTNULL(model);
+    safe_xgboost(XGBoosterLoadJsonConfig(*booster.get(), model));
   }
 
   void predict(const float* test, const float* result, const bst_ulong row_count, int feature_num) {
