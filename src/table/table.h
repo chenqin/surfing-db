@@ -127,9 +127,9 @@ public:
     CHECK_NE(fd, -1);
 
     size_t sig = schema_ptr->schema_sig();
-    write(fd, &sig, sizeof(size_t));
-    write(fd, reinterpret_cast<const void*>(&offset), sizeof(size_t));
-    write(fd, reinterpret_cast<const void*>(&_count), sizeof(size_t));
+    ::write(fd, &sig, sizeof(size_t));
+    ::write(fd, reinterpret_cast<const void*>(&offset), sizeof(size_t));
+    ::write(fd, reinterpret_cast<const void*>(&_count), sizeof(size_t));
 
     size_t index = 0;
     /* fill out three iovec structures */
@@ -146,7 +146,7 @@ public:
       nr = writev(fd, iov, batch);
       CHECK_NE(nr, -1);
     }
-    LOG(INFO) << "entire temptable were flushed to disk " << path;
+    LOG(INFO) << "flushed to " << path;
     close(fd);
   }
 
@@ -160,6 +160,7 @@ public:
     ::read(fd, &offset, sizeof(size_t));
     ::read(fd, &_count, sizeof(size_t));
     CHECK_EQ(offset/_count, schema_ptr->size());
+    _payload.resize(offset);
 
     size_t index = 0;
     /* fill out three iovec structures */
@@ -176,7 +177,7 @@ public:
       nr = readv(fd, iov, batch);
       CHECK_NE(nr, -1);
     }
-    LOG(INFO) << "entire temptable were read from disk " << path;
+    LOG(INFO) << "load from " << path;
     close(fd);
   }
 

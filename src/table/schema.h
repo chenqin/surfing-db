@@ -17,7 +17,7 @@ namespace table {
 
 #define MAX_STR_LEN 128
 #define HEADER_SIZE sizeof(long)
-#define HUGE_PAGE_SIZE 107374182 //100MB
+#define HUGE_PAGE_SIZE 1073741820 //1000MB
 
 /**
  * build a continous memory buffer

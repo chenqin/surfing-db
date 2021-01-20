@@ -149,8 +149,17 @@ TEST(TableTest, testRowBuffer) {
   EXPECT_EQ(v22.p_val.string_val, "hello");
   EXPECT_EQ(v44.list_value.size(), 1);
   EXPECT_EQ(v33.map_value.size(), 1);
+
+  for(int i = 0 ; i < 10000; i++) {
+    t.ingest(s);
+  }
+
   t.flush("/tmp/test1.bin");
   t.load("/tmp/test1.bin");
+  sptr = t.read(1);
+  Value v;
+  sptr->read(field7, v);
+  EXPECT_EQ(v.map_value.size(), 1);
 }
 
 TEST(TableTest, TestXGBOperator) {
