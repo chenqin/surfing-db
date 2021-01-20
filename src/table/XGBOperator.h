@@ -144,16 +144,17 @@ public:
     }
 
     if (rank == parameters.root) {
-      float train_all[total_row_count];
-      float label_all[total_row_count];
-      MPI_Gatherv(train, row_count * column_count, MPI_FLOAT, train_all, rcounts,
+      std::vector<float> train_all, label_all;
+      train_all.resize(total_row_count);
+      label_all.resize(total_row_count);
+      MPI_Gatherv(train, row_count * column_count, MPI_FLOAT, &train_all[0], rcounts,
                   displs, MPI_FLOAT,
                   parameters.root, MPI_COMM_WORLD);
-      MPI_Gatherv(label, row_count, MPI_FLOAT, label_all, rcounts,
+      MPI_Gatherv(label, row_count, MPI_FLOAT, &train_all[0], rcounts,
                   displs, MPI_FLOAT,
                   parameters.root, MPI_COMM_WORLD);
-      train = train_all;
-      label = label_all;
+      train = &train_all[0];
+      label = &label_all[0];
       row_count = total_row_count; //update row_count
     } else {
       MPI_Gatherv(train, row_count * column_count, MPI_FLOAT, nullptr, nullptr,

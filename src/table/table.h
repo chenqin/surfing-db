@@ -259,23 +259,24 @@ public:
   }
 
   void process(XGBOperator& op) {
-    float data[op.features() * _count]; // features
-    readFields(op.fields, data);        // read from temptable
+    std::vector<float> features;
+    features.resize(op.features() * _count); // number of features
+    readFields(op.fields, &features[0]);        // read from temp table
 
-    float label[_count];                      // label
-    memset(label, 0, sizeof(float) * _count); // avoid dirty data
+    std::vector<float> label;  // number of labels
+    label.resize(_count);      // number of rows
 
     if (op.parameters.isTraining) {
-      readField(op.labelField, label);
+      readField(op.labelField, &label[0]);
       size_t total_row_count = _count;
 
-      op.gather(data, label, total_row_count, op.features()); //gather training dataset to root
-      op.train(data, label, total_row_count, op.features());
+      op.gather(&features[0], &label[0], total_row_count, op.features()); //gather training dataset to root
+      op.train(&features[0], &label[0], total_row_count, op.features());
       op.syncModel(); // send model to all processes from root
     } else {
       LOG(INFO) << "start prediction on " << ptr->rank;
-      op.predict(data, label, _count, op.features());
-      writeField(op.labelField, label);
+      op.predict(&features[0], &label[0], _count, op.features());
+      writeField(op.labelField, &label[0]);
     }
     ptr->forward();
   }
