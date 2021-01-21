@@ -63,12 +63,15 @@ private:
   std::shared_ptr<TableSchema> schema_ptr;
   std::vector<uint8_t> _payload;
 
+  std::vector<size_t> _g_groups; // keep key, row counts on each process
+  size_t _global_group_size;     // apply to group_by
+
   size_t _count = 0; // number of rows in table
   size_t _pending = 0;
   size_t offset = 0; //current offset position
   MPI_Datatype type; //used to run communication with other processes
 
-  std::shared_ptr<std::unordered_map<size_t, std::set<size_t>>> _groups;
+  std::shared_ptr<std::unordered_map<size_t, std::vector<size_t>>> _groups;
 
   struct iovec iov[FILE_IO_VECTOR];
   ssize_t nr;
@@ -80,7 +83,8 @@ public:
     offset = 0;
     _payload.resize(HUGE_PAGE_SIZE);
     _count = 0;
-    _groups = std::make_shared<std::unordered_map<size_t, std::set<size_t>>>();
+    _global_group_size = 0;
+    _groups = std::make_shared<std::unordered_map<size_t, std::vector<size_t>>>();
     LOG(INFO) << "for testing only";
   }
   TempTable(const std::shared_ptr<Node> node, const std::shared_ptr<TableSchema> sharedPtr) {
@@ -88,7 +92,8 @@ public:
     _payload.resize(HUGE_PAGE_SIZE);
     offset = 0;
     _count = 0;
-    _groups = std::make_shared<std::unordered_map<size_t, std::set<size_t>>>();
+    _global_group_size = 0;
+    _groups = std::make_shared<std::unordered_map<size_t, std::vector<size_t>>>();
     this->ptr = node;
     MPI_Type_contiguous(sharedPtr->size(), MPI_CHAR, &type);
     MPI_Type_commit(&type);
@@ -123,7 +128,7 @@ public:
    * write buffer to file in batch
    */
   void flush(const std::string& path) {
-    fd = open(path.c_str(), O_WRONLY | O_CREAT);
+    fd = open(path.c_str(), O_CREAT | O_RDWR | O_APPEND, 0644);
     CHECK_NE(fd, -1);
 
     size_t sig = schema_ptr->schema_sig();
@@ -133,9 +138,9 @@ public:
 
     size_t index = 0;
     /* fill out three iovec structures */
-    while(index < offset) {
+    while (index < offset) {
       int batch = 0;
-      for (int i = 0; i < FILE_IO_VECTOR && index < offset ; i++) {
+      for (int i = 0; i < FILE_IO_VECTOR && index < offset; i++) {
         iov[i].iov_base = &_payload[index];
         size_t payload_size = index + SSD_CHUNK_SIZ < offset ? SSD_CHUNK_SIZ : offset - index;
         iov[i].iov_len = payload_size;
@@ -159,14 +164,14 @@ public:
     CHECK_EQ(sig, schema_ptr->schema_sig());
     ::read(fd, &offset, sizeof(size_t));
     ::read(fd, &_count, sizeof(size_t));
-    CHECK_EQ(offset/_count, schema_ptr->size());
+    CHECK_EQ(offset / _count, schema_ptr->size());
     _payload.resize(offset);
 
     size_t index = 0;
     /* fill out three iovec structures */
-    while(index < offset) {
+    while (index < offset) {
       int batch = 0;
-      for (int i = 0; i < FILE_IO_VECTOR && index < offset ; i++) {
+      for (int i = 0; i < FILE_IO_VECTOR && index < offset; i++) {
         iov[i].iov_base = &_payload[index];
         size_t payload_size = index + SSD_CHUNK_SIZ < offset ? SSD_CHUNK_SIZ : offset - index;
         iov[i].iov_len = payload_size;
@@ -261,10 +266,10 @@ public:
   void process(XGBOperator& op) {
     std::vector<float> features;
     features.resize(op.features() * _count); // number of features
-    readFields(op.fields, &features[0]);        // read from temp table
+    readFields(op.fields, &features[0]);     // read from temp table
 
-    std::vector<float> label;  // number of labels
-    label.resize(_count);      // number of rows
+    std::vector<float> label; // number of labels
+    label.resize(_count);     // number of rows
 
     if (op.parameters.isTraining) {
       readField(op.labelField, &label[0]);
@@ -375,10 +380,9 @@ public:
     return sqrt(sum);
   }
 
-  void group_by(Field f) {
-    CHECK(schema_ptr->exist(f));
+  void group_by(const Field& f) {
+    //CHECK(schema_ptr->exist(f));
     _groups->clear();
-    size_t max_size = 0;
     for (size_t i = 0; i < _count; i++) {
       auto r = read(i);
       Value v;
@@ -386,15 +390,52 @@ public:
       size_t key = value_hasher.operator()(v);
 
       if (_groups->find(key) == _groups->end()) {
-        std::set<size_t> set;
-        _groups->insert({ key, set });
+        std::vector<size_t> arr;
+        _groups->insert({ key, arr });
       }
-
-      _groups->at(key).insert(i);
-      max_size = max_size > _groups->at(key).size() ? max_size : _groups->at(key).size();
+      _groups->at(key).push_back(i);
     }
-    // EXCHANGE MAX_SIZE
-    // run all reduce to merge hash(value) | node | offsets,,,|
+    /**
+     * [hash_key, size, rank]
+     */
+    size_t key_count[_groups->size()][3];
+    auto it = _groups->begin();
+    int i = 0;
+    while (it != _groups->end()) {
+      key_count[i][0] = it->first;
+      key_count[i][1] = it->second.size();
+      key_count[i][2] = ptr->rank;
+      i++;
+      it++;
+    }
+    LOG(INFO) << "local group size is " << _groups->size() * 3 << " " << ptr->rank;
+    /*
+     * merge key_count array into one
+     */
+    size_t local_group_sizes[ptr->world];
+    memset(local_group_sizes, 0, ptr->world * sizeof(size_t)); //always clear memory before use
+
+    int recvcounts[ptr->world], displs[ptr->world];
+    memset(recvcounts, 0, ptr->world * sizeof(size_t));
+    memset(displs, 0, ptr->world * sizeof(size_t));
+
+    displs[0] = 0;
+    local_group_sizes[ptr->rank] = _groups->size() * 3;
+    MPI_Allreduce(&local_group_sizes, &recvcounts, ptr->world, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
+    _global_group_size = recvcounts[0];
+    for (i = 1; i < ptr->world; i++) {
+      displs[i] = displs[i - 1] + recvcounts[i - 1];
+      _global_group_size += recvcounts[i];
+    }
+    LOG(INFO) << "global group size is " << _global_group_size;
+    _g_groups.resize(_global_group_size);
+    MPI_Allgatherv(key_count, _groups->size() * 3, MPI_UNSIGNED_LONG, &_g_groups[0], recvcounts, displs, MPI_UNSIGNED_LONG, MPI_COMM_WORLD);
+    for (size_t j = 0; j < _global_group_size;) {
+      size_t key = _g_groups.at(j++);
+      size_t count = _g_groups.at(j++);
+      size_t rank = _g_groups.at(j++);
+      LOG(INFO) << key << " " << count << " " << rank;
+    }
   }
 };
 } // namespace table

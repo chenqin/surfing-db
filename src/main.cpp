@@ -164,6 +164,8 @@ int main() {
 
     xgbOperator.parameters.isTraining = false; // now switch to prediction
     tsed.process(xgbOperator);
+
+    tsed.group_by(field1);
   }
   return 0;
 }
