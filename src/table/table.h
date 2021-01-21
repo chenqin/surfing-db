@@ -63,9 +63,9 @@ private:
   std::shared_ptr<TableSchema> schema_ptr;
   std::vector<uint8_t> _payload;
 
-  Field _parition;
-  std::unordered_map<size_t, std::vector<std::pair<int, size_t>>> key_dist; // key hash and per node counts
-  std::shared_ptr<std::unordered_map<size_t, std::vector<size_t>>> _groups; // local key, offsets map
+  Field _parition; //partition field
+  std::unique_ptr<std::unordered_map<size_t, std::vector<std::pair<int, size_t>>>> _key_dist; // key hash and per node counts
+  std::unique_ptr<std::unordered_map<size_t, std::vector<size_t>>> _groups; // local key, offsets map
 
   size_t _count = 0; // number of rows in table
   size_t _pending = 0;
@@ -82,7 +82,8 @@ public:
     offset = 0;
     _payload.resize(HUGE_PAGE_SIZE);
     _count = 0;
-    _groups = std::make_shared<std::unordered_map<size_t, std::vector<size_t>>>();
+    _key_dist = std::make_unique<std::unordered_map<size_t, std::vector<std::pair<int, size_t>>>>();
+    _groups = std::make_unique<std::unordered_map<size_t, std::vector<size_t>>>();
     LOG(INFO) << "for testing only";
   }
   TempTable(const std::shared_ptr<Node> node, const std::shared_ptr<TableSchema> sharedPtr) {
@@ -90,7 +91,8 @@ public:
     _payload.resize(HUGE_PAGE_SIZE);
     offset = 0;
     _count = 0;
-    _groups = std::make_shared<std::unordered_map<size_t, std::vector<size_t>>>();
+    _key_dist = std::make_unique<std::unordered_map<size_t, std::vector<std::pair<int, size_t>>>>();
+    _groups = std::make_unique<std::unordered_map<size_t, std::vector<size_t>>>();
     this->ptr = node;
     MPI_Type_contiguous(sharedPtr->size(), MPI_CHAR, &type);
     MPI_Type_commit(&type);
@@ -443,12 +445,12 @@ public:
       size_t count = _g_groups.at(j + 1);
       size_t rank = _g_groups.at(j + 2);
       std::pair<int, size_t> pair(rank, count);
-      if (key_dist.find(key) == key_dist.end()) {
+      if (_key_dist->find(key) == _key_dist->end()) {
         std::vector<std::pair<int, size_t>> vector;
         vector.push_back(pair);
-        key_dist.insert({ key, vector });
+        _key_dist->insert({ key, vector });
       } else {
-        key_dist.at(key).push_back(pair);
+        _key_dist->at(key).push_back(pair);
       }
     }
 
