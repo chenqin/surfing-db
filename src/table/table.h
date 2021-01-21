@@ -63,15 +63,14 @@ private:
   std::shared_ptr<TableSchema> schema_ptr;
   std::vector<uint8_t> _payload;
 
-  std::vector<size_t> _g_groups; // keep key, row counts on each process
-  size_t _global_group_size;     // apply to group_by
+  Field _parition;
+  std::unordered_map<size_t, std::vector<std::pair<int, size_t>>> key_dist; // key hash and per node counts
+  std::shared_ptr<std::unordered_map<size_t, std::vector<size_t>>> _groups; // local key, offsets map
 
   size_t _count = 0; // number of rows in table
   size_t _pending = 0;
   size_t offset = 0; //current offset position
   MPI_Datatype type; //used to run communication with other processes
-
-  std::shared_ptr<std::unordered_map<size_t, std::vector<size_t>>> _groups;
 
   struct iovec iov[FILE_IO_VECTOR];
   ssize_t nr;
@@ -83,7 +82,6 @@ public:
     offset = 0;
     _payload.resize(HUGE_PAGE_SIZE);
     _count = 0;
-    _global_group_size = 0;
     _groups = std::make_shared<std::unordered_map<size_t, std::vector<size_t>>>();
     LOG(INFO) << "for testing only";
   }
@@ -92,7 +90,6 @@ public:
     _payload.resize(HUGE_PAGE_SIZE);
     offset = 0;
     _count = 0;
-    _global_group_size = 0;
     _groups = std::make_shared<std::unordered_map<size_t, std::vector<size_t>>>();
     this->ptr = node;
     MPI_Type_contiguous(sharedPtr->size(), MPI_CHAR, &type);
@@ -382,6 +379,7 @@ public:
 
   void group_by(const Field& f) {
     //CHECK(schema_ptr->exist(f));
+    _parition = f;
     _groups->clear();
     for (size_t i = 0; i < _count; i++) {
       auto r = read(i);
@@ -421,21 +419,40 @@ public:
 
     displs[0] = 0;
     local_group_sizes[ptr->rank] = _groups->size() * 3;
+
     MPI_Allreduce(&local_group_sizes, &recvcounts, ptr->world, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
+
+    std::vector<size_t> _g_groups;                                            // keep key, row counts on each process
+    size_t _global_group_size;                                                // apply to group_by
+
     _global_group_size = recvcounts[0];
     for (i = 1; i < ptr->world; i++) {
       displs[i] = displs[i - 1] + recvcounts[i - 1];
       _global_group_size += recvcounts[i];
     }
-    LOG(INFO) << "global group size is " << _global_group_size;
+
+    CHECK_GE(_global_group_size, _groups->size() * 3);
+    CHECK_LE(_global_group_size, HUGE_PAGE_SIZE);
     _g_groups.resize(_global_group_size);
+
     MPI_Allgatherv(key_count, _groups->size() * 3, MPI_UNSIGNED_LONG, &_g_groups[0], recvcounts, displs, MPI_UNSIGNED_LONG, MPI_COMM_WORLD);
-    for (size_t j = 0; j < _global_group_size;) {
-      size_t key = _g_groups.at(j++);
-      size_t count = _g_groups.at(j++);
-      size_t rank = _g_groups.at(j++);
-      LOG(INFO) << key << " " << count << " " << rank;
+
+    // build key_hash to node and row count map
+    for (size_t j = 0; j < _global_group_size; j += 3) {
+      size_t key = _g_groups.at(j);
+      size_t count = _g_groups.at(j + 1);
+      size_t rank = _g_groups.at(j + 2);
+      std::pair<int, size_t> pair(rank, count);
+      if (key_dist.find(key) == key_dist.end()) {
+        std::vector<std::pair<int, size_t>> vector;
+        vector.push_back(pair);
+        key_dist.insert({ key, vector });
+      } else {
+        key_dist.at(key).push_back(pair);
+      }
     }
+
+    ptr->forward();
   }
 };
 } // namespace table
