@@ -232,13 +232,15 @@ public:
   }
 
   bool exist(Field field){
+    CHECK_GT(fields.size(), 0);
     for(auto f : fields) {
-      if(field == f) return true;
+      if(field_hasher.operator()(field) == field_hasher.operator()(f)) return true;
     }
     return false;
   }
 
   TableSchema(const RowSchema& schema) {
+    this->fields = schema.fields;
     _offsets = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
     _max_unit = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
     validSchema(schema);

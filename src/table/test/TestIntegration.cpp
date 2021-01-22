@@ -162,6 +162,24 @@ TEST(TableTest, testRowBuffer) {
   EXPECT_EQ(v.map_value.size(), 1);
 }
 
+TEST(TableTest, TestGroupBy) {
+  auto r = std::make_shared<RowSchema>();
+  r->fields = std::vector<surfingdb::table::schema::Field>();
+
+  Field field1;
+  initField(field1, "pin_id", RowType::STRING, 64);
+  r->fields.push_back(field1);
+  auto rr = std::make_shared<TableSchema>(*r.get());
+  RowBuffer rowBuffer(rr);
+  Value v;
+  v.p_val.string_val = "hello";
+  rowBuffer.write(field1, v);
+  TempTable table1(rr);
+  table1.ingest(rowBuffer);
+  EXPECT_TRUE(rr->exist(field1));
+  //table1.group_by(field1);
+}
+
 TEST(TableTest, TestXGBOperator) {
   Field f;
   initField(f,"test", RowType::DOUBLE, sizeof(double));

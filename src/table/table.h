@@ -380,7 +380,7 @@ public:
   }
 
   void group_by(const Field& f) {
-    //CHECK(schema_ptr->exist(f));
+    CHECK(schema_ptr->exist(f));
     _parition = f;
     _groups->clear();
     for (size_t i = 0; i < _count; i++) {
@@ -408,7 +408,6 @@ public:
       i++;
       it++;
     }
-    LOG(INFO) << "local group size is " << _groups->size() * 3 << " " << ptr->rank;
     /*
      * merge key_count array into one
      */
@@ -422,15 +421,18 @@ public:
     displs[0] = 0;
     local_group_sizes[ptr->rank] = _groups->size() * 3;
 
-    MPI_Allreduce(&local_group_sizes, &recvcounts, ptr->world, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
+    size_t recv[ptr->world];  // type should be same as local_group_sizes
+    MPI_Allreduce(&local_group_sizes, &recv, ptr->world, MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
 
     std::vector<size_t> _g_groups;                                            // keep key, row counts on each process
     size_t _global_group_size;                                                // apply to group_by
 
-    _global_group_size = recvcounts[0];
+    _global_group_size = recv[0];
+    recvcounts[0] = recv[0];
     for (i = 1; i < ptr->world; i++) {
-      displs[i] = displs[i - 1] + recvcounts[i - 1];
-      _global_group_size += recvcounts[i];
+      displs[i] = displs[i - 1] + recv[i - 1];
+      _global_group_size += recv[i];
+      recvcounts[i] = (int) recv[i];
     }
 
     CHECK_GE(_global_group_size, _groups->size() * 3);
@@ -444,6 +446,7 @@ public:
       size_t key = _g_groups.at(j);
       size_t count = _g_groups.at(j + 1);
       size_t rank = _g_groups.at(j + 2);
+
       std::pair<int, size_t> pair(rank, count);
       if (_key_dist->find(key) == _key_dist->end()) {
         std::vector<std::pair<int, size_t>> vector;
@@ -453,7 +456,6 @@ public:
         _key_dist->at(key).push_back(pair);
       }
     }
-
     ptr->forward();
   }
 };
