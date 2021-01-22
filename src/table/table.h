@@ -63,9 +63,9 @@ private:
   std::shared_ptr<TableSchema> schema_ptr;
   std::vector<uint8_t> _payload;
 
-  Field _parition; //partition field
+  Field _parition;                                                                            //partition field
   std::unique_ptr<std::unordered_map<size_t, std::vector<std::pair<int, size_t>>>> _key_dist; // key hash and per node counts
-  std::unique_ptr<std::unordered_map<size_t, std::vector<size_t>>> _groups; // local key, offsets map
+  std::unique_ptr<std::unordered_map<size_t, std::vector<size_t>>> _groups;                   // local key, offsets map
 
   size_t _count = 0; // number of rows in table
   size_t _pending = 0;
@@ -421,18 +421,18 @@ public:
     displs[0] = 0;
     local_group_sizes[ptr->rank] = _groups->size() * 3;
 
-    size_t recv[ptr->world];  // type should be same as local_group_sizes
+    size_t recv[ptr->world]; // type should be same as local_group_sizes
     MPI_Allreduce(&local_group_sizes, &recv, ptr->world, MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
 
-    std::vector<size_t> _g_groups;                                            // keep key, row counts on each process
-    size_t _global_group_size;                                                // apply to group_by
+    std::vector<size_t> _g_groups; // keep key, row counts on each process
+    size_t _global_group_size;     // apply to group_by
 
     _global_group_size = recv[0];
     recvcounts[0] = recv[0];
     for (i = 1; i < ptr->world; i++) {
       displs[i] = displs[i - 1] + recv[i - 1];
       _global_group_size += recv[i];
-      recvcounts[i] = (int) recv[i];
+      recvcounts[i] = (int)recv[i];
     }
 
     CHECK_GE(_global_group_size, _groups->size() * 3);
@@ -457,6 +457,32 @@ public:
       }
     }
     ptr->forward();
+  }
+
+  // group table with
+  void join(const Field& f1, const Field& f2, TempTable& table2, TempTable& out) {
+    //local shuffle key distribution of each table
+    this->group_by(f1);
+    table2.group_by(f2);
+
+    // union key_distributions
+    for (auto pair : *_key_dist.get()) {
+      if (table2._key_dist->find(pair.first) != table2._key_dist->end()) {
+        // inner joined set
+        auto left = pair.second;
+        auto right = table2._key_dist->at(pair.first);
+
+        /**
+         * round robin collect data 
+         */
+         for(int i = 0 ; i < ptr->rank; i++) {
+           // allgatherv left m rows to i
+           // allgatherv right n rows to i
+           // do mxn rows in out
+         }
+
+      }
+    }
   }
 };
 } // namespace table
