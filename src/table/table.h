@@ -415,8 +415,8 @@ public:
     memset(local_group_sizes, 0, ptr->world * sizeof(size_t)); //always clear memory before use
 
     int recvcounts[ptr->world], displs[ptr->world];
-    memset(recvcounts, 0, ptr->world * sizeof(size_t));
-    memset(displs, 0, ptr->world * sizeof(size_t));
+    memset(recvcounts, 0, ptr->world * sizeof(int));
+    memset(displs, 0, ptr->world * sizeof(int));
 
     displs[0] = 0;
     local_group_sizes[ptr->rank] = _groups->size() * 3;
@@ -465,22 +465,58 @@ public:
     this->group_by(f1);
     table2.group_by(f2);
 
+    int r = 0;
     // union key_distributions
     for (auto pair : *_key_dist.get()) {
       if (table2._key_dist->find(pair.first) != table2._key_dist->end()) {
         // inner joined set
-        auto left = pair.second;
-        auto right = table2._key_dist->at(pair.first);
+        std::vector<std::pair<int, size_t>> left = pair.second;
+        std::vector<std::pair<int, size_t>> right = table2._key_dist->at(pair.first);
 
-        /**
-         * round robin collect data 
-         */
-         for(int i = 0 ; i < ptr->rank; i++) {
-           // allgatherv left m rows to i
-           // allgatherv right n rows to i
-           // do mxn rows in out
-         }
+        // allgatherv left m rows to i
+        int recvcounts[ptr->world], displs[ptr->world];
+        memset(recvcounts, 0, ptr->world * sizeof(int));
+        memset(displs, 0, ptr->world * sizeof(int));
+        displs[0] = 0;
+        size_t m_size = 0;
 
+        for (int i = 0; i < ptr->world; i++) {
+          for (auto s : left) {
+            if (s.first == i) {
+              recvcounts[i] = s.second;
+              m_size += s.second;
+            } else {
+              recvcounts[i] = 0;
+            }
+            if (i > 0) {
+              displs[i] = displs[i - 1] + recvcounts[i - 1];
+            }
+          }
+        }
+        auto key = pair.first;
+        TempTable mtable(schema_ptr);
+        if (this->_groups.get()->find(key) == this->_groups.get()->end()) {
+          mtable._payload.resize(0);
+        } else {
+          std::vector<size_t> offsets = this->_groups->at(key);
+          for (size_t it : offsets) {
+            mtable.ingest(*read(it).get());
+          }
+        }
+
+        TempTable global_mtable(schema_ptr);
+        global_mtable._count = m_size;
+        global_mtable._payload.resize(schema_ptr->size() * m_size);
+
+        if (ptr->rank == r) {
+          MPI_Gatherv(mtable.payload_ptr(), mtable._count, type, global_mtable.payload_ptr(), recvcounts, displs, type, r, MPI_COMM_WORLD);
+        } else {
+          MPI_Gatherv(mtable.payload_ptr(), mtable._count, type, global_mtable.payload_ptr(), recvcounts, displs, type, r, MPI_COMM_WORLD);
+        }
+
+        // allgatherv right n rows to i
+        // do mxn rows in out
+        r = (r + 1) % ptr->world;
       }
     }
   }
