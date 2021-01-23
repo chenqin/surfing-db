@@ -166,6 +166,12 @@ int main() {
     tsed.process(xgbOperator);
 
     tsed.group_by(field1);
+
+    TempTable t1(node, schema_ptr);
+    t1.ingest(b);
+    TempTable t2(node, schema_ptr);
+    t2.ingest(b);
+    t1.join(field1, field1, t2, t2);
   }
   return 0;
 }

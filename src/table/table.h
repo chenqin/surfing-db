@@ -459,8 +459,45 @@ public:
     ptr->forward();
   }
 
+  inline void gather(std::vector<std::pair<int, size_t>>& left, size_t key, int r, TempTable& global_mtable) {
+    CHECK_NOTNULL(global_mtable.schema_ptr.get());
+    // gatherv rows of key to r
+    int recvcounts[ptr->world], displs[ptr->world];
+    memset(recvcounts, 0, ptr->world * sizeof(int));
+    memset(displs, 0, ptr->world * sizeof(int));
+    displs[0] = 0;
+    size_t m_size = 0;
+
+    for (int i = 0; i < ptr->world; i++) {
+      for (auto s : left) {
+        if (s.first == i) {
+          recvcounts[i] = s.second;
+          m_size += s.second;
+        } else {
+          recvcounts[i] = 0;
+        }
+        if (i > 0) {
+          displs[i] = displs[i - 1] + recvcounts[i - 1];
+        }
+      }
+    }
+    TempTable mtable(global_mtable.ptr, schema_ptr);
+    if (this->_groups.get()->find(key) == this->_groups.get()->end()) {
+      mtable._payload.resize(0);
+    } else {
+      std::vector<size_t> offsets = this->_groups->at(key);
+      for (size_t it : offsets) {
+        mtable.ingest(*read(it).get());
+      }
+    }
+
+    global_mtable._count = m_size;
+    global_mtable._payload.resize(schema_ptr->size() * m_size);
+    MPI_Gatherv(mtable.payload_ptr(), mtable._count, global_mtable.type, global_mtable.payload_ptr(), recvcounts, displs, global_mtable.type, r, MPI_COMM_WORLD);
+  }
+
   // group table with
-  void join(const Field& f1, const Field& f2, TempTable& table2, TempTable& out) {
+  void join(const Field& f1, const Field& f2, TempTable& table2, TempTable&) {
     //local shuffle key distribution of each table
     this->group_by(f1);
     table2.group_by(f2);
@@ -473,48 +510,13 @@ public:
         std::vector<std::pair<int, size_t>> left = pair.second;
         std::vector<std::pair<int, size_t>> right = table2._key_dist->at(pair.first);
 
-        // allgatherv left m rows to i
-        int recvcounts[ptr->world], displs[ptr->world];
-        memset(recvcounts, 0, ptr->world * sizeof(int));
-        memset(displs, 0, ptr->world * sizeof(int));
-        displs[0] = 0;
-        size_t m_size = 0;
 
-        for (int i = 0; i < ptr->world; i++) {
-          for (auto s : left) {
-            if (s.first == i) {
-              recvcounts[i] = s.second;
-              m_size += s.second;
-            } else {
-              recvcounts[i] = 0;
-            }
-            if (i > 0) {
-              displs[i] = displs[i - 1] + recvcounts[i - 1];
-            }
-          }
-        }
-        auto key = pair.first;
-        TempTable mtable(schema_ptr);
-        if (this->_groups.get()->find(key) == this->_groups.get()->end()) {
-          mtable._payload.resize(0);
-        } else {
-          std::vector<size_t> offsets = this->_groups->at(key);
-          for (size_t it : offsets) {
-            mtable.ingest(*read(it).get());
-          }
-        }
+        TempTable global_mtable(this->ptr, schema_ptr), global_ntable(table2.ptr, table2.schema_ptr);
+        gather(left, pair.first, r, global_mtable);
+        gather(right, pair.first, r, global_ntable);
 
-        TempTable global_mtable(schema_ptr);
-        global_mtable._count = m_size;
-        global_mtable._payload.resize(schema_ptr->size() * m_size);
+        // permutation of m elements with n elements
 
-        if (ptr->rank == r) {
-          MPI_Gatherv(mtable.payload_ptr(), mtable._count, type, global_mtable.payload_ptr(), recvcounts, displs, type, r, MPI_COMM_WORLD);
-        } else {
-          MPI_Gatherv(mtable.payload_ptr(), mtable._count, type, global_mtable.payload_ptr(), recvcounts, displs, type, r, MPI_COMM_WORLD);
-        }
-
-        // allgatherv right n rows to i
         // do mxn rows in out
         r = (r + 1) % ptr->world;
       }
