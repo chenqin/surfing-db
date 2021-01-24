@@ -164,7 +164,7 @@ public:
     _schema_sig = schemaptr->schema_sig();
     CHECK_GT(schemaptr->size(), 0);
     CHECK_NE(payloadptr, _payload);
-    CHECK_EQ(_schema_sig, readSig(payloadptr));
+    // CHECK_EQ(_schema_sig, readSig(payloadptr));
     _payload = payloadptr;
   }
 

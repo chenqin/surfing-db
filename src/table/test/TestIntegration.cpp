@@ -174,10 +174,11 @@ TEST(TableTest, TestGroupBy) {
   Value v;
   v.p_val.string_val = "hello";
   rowBuffer.write(field1, v);
-  TempTable table1(rr);
+  auto n = std::make_shared<Node>(0, 1, "a");
+  TempTable table1(n, rr);
   table1.ingest(rowBuffer);
   EXPECT_TRUE(rr->exist(field1));
-  //table1.group_by(field1);
+  table1.group_by(field1);
 }
 
 TEST(TableTest, TestXGBOperator) {

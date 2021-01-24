@@ -20,6 +20,7 @@ Node::Node() {
   MPI_Get_processor_name(processor_name, &name_len);
   processor = std::string(processor_name);
   stage = 0;
+  istesting = false;
   outstanding_requests.clear();
   // LOG(INFO) << "cluster size " << world << " node rank " << rank << " alias " << processor;
 }
@@ -48,6 +49,20 @@ long Node::forward() {
 }
 void Node::keep(std::unique_ptr<MPI_Request> req) {
   outstanding_requests.push_back(std::move(req));
+}
+/**
+ * for testing use
+ * @param rank
+ * @param world
+ * @param processor
+ */
+Node::Node(int rank, int world, std::string processor) {
+  this->rank = rank;
+  this->world = world;
+  this->processor = processor;
+  stage = 0;
+  istesting = true;
+  outstanding_requests.clear();
 }
 } // namespace node
 } // namespace surfingdb

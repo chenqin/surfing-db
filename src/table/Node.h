@@ -14,7 +14,7 @@ namespace node {
 class Node {
 public:
   Node();
-
+  Node(int, int, std::string);
   ~Node();
 
   long forward(); // move to next stage of compute
@@ -22,6 +22,7 @@ public:
   int world;
   int rank;
   long stage;
+  bool istesting = false;
   std::vector<std::unique_ptr<MPI_Request>> outstanding_requests;
   std::string processor;
 };

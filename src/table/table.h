@@ -94,8 +94,10 @@ public:
     _key_dist = std::make_unique<std::unordered_map<size_t, std::vector<std::pair<int, size_t>>>>();
     _groups = std::make_unique<std::unordered_map<size_t, std::vector<size_t>>>();
     this->ptr = node;
-    MPI_Type_contiguous(sharedPtr->size(), MPI_CHAR, &type);
-    MPI_Type_commit(&type);
+    if(!ptr->istesting) {
+      MPI_Type_contiguous(sharedPtr->size(), MPI_CHAR, &type);
+      MPI_Type_commit(&type);
+    }
   }
 
   ~TempTable() {
@@ -490,7 +492,6 @@ public:
         mtable.ingest(*read(it).get());
       }
     }
-
     global_mtable._count = m_size;
     global_mtable._payload.resize(schema_ptr->size() * m_size);
     MPI_Gatherv(mtable.payload_ptr(), mtable._count, global_mtable.type, global_mtable.payload_ptr(), recvcounts, displs, global_mtable.type, r, MPI_COMM_WORLD);
@@ -512,7 +513,7 @@ public:
       }
     }
 
-    // primitive one by one gather, assume not many union_keys and each match has lots of rows evenly distributed e.g advertiser_id join impressions
+    // physical gather join, r should be where rows aggregated
     for(const auto s : union_keys) {
       std::vector<std::pair<int, size_t>> left = _key_dist->at(s);
       std::vector<std::pair<int, size_t>> right = table2._key_dist->at(s);
@@ -522,13 +523,19 @@ public:
       gather(right, s, r, global_ntable);
 
       // permutation of m elements with n elements
-
+      Value v;
+      global_mtable.read(0)->read(f1, v);
+      LOG(INFO) << v.p_val.int_val;
       // do mxn rows in out
       r = (r + 1) % ptr->world;
     }
 
-    // bucket left and right total number of rows per process with all union keys, hash and buffer async send to partitioned buckets e.g create_pin join impressions
+    // unlike gather model where all rows are physically aggregated to same processes sequentially
+    // TODO(chenqin): shuffle (broardcast, hash) could write to disk buffer with dest |key1| rows|key2|rows| and run async send
+    // since _key_dist is shared in all process, each communication could be reasoned independently hence reciver could starts async recv as well
   }
+
+
 };
 } // namespace table
 } // namespace surfingdb

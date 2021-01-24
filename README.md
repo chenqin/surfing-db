@@ -3,12 +3,11 @@ Ride wave of streams with SQL/Python on HPC architectures (NUMA, GPU, RMA) The o
 
 ## data prep, training and serving all in one place with SQL.
 
-## high throughput on both cheap server cluster or super commputer if needed without code change
+## high throughput & very low latency on both cheap server cluster or super computer
 
 
 pre-requesite
-- sudo apt install libjemalloc-dev
-- install mpich2
+- install mpich 3.3.2
 - https://mpitutorial.com/tutorials/installing-mpich2/
 
 How to run
