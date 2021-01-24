@@ -503,24 +503,31 @@ public:
     table2.group_by(f2);
 
     int r = 0;
+    std::vector<size_t> union_keys; // find list of keys where join matches
     // union key_distributions
     for (auto pair : *_key_dist.get()) {
       if (table2._key_dist->find(pair.first) != table2._key_dist->end()) {
         // inner joined set
-        std::vector<std::pair<int, size_t>> left = pair.second;
-        std::vector<std::pair<int, size_t>> right = table2._key_dist->at(pair.first);
-
-
-        TempTable global_mtable(this->ptr, schema_ptr), global_ntable(table2.ptr, table2.schema_ptr);
-        gather(left, pair.first, r, global_mtable);
-        gather(right, pair.first, r, global_ntable);
-
-        // permutation of m elements with n elements
-
-        // do mxn rows in out
-        r = (r + 1) % ptr->world;
+        union_keys.push_back(pair.first);
       }
     }
+
+    // primitive one by one gather, assume not many union_keys and each match has lots of rows evenly distributed e.g advertiser_id join impressions
+    for(const auto s : union_keys) {
+      std::vector<std::pair<int, size_t>> left = _key_dist->at(s);
+      std::vector<std::pair<int, size_t>> right = table2._key_dist->at(s);
+
+      TempTable global_mtable(this->ptr, schema_ptr), global_ntable(table2.ptr, table2.schema_ptr);
+      gather(left, s, r, global_mtable);
+      gather(right, s, r, global_ntable);
+
+      // permutation of m elements with n elements
+
+      // do mxn rows in out
+      r = (r + 1) % ptr->world;
+    }
+
+    // bucket left and right total number of rows per process with all union keys, hash and buffer async send to partitioned buckets e.g create_pin join impressions
   }
 };
 } // namespace table
