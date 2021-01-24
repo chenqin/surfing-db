@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <future>
 #include <math.h>
+#include <omp.h>
 #include <mpi.h>
 #include <stdio.h>
 #include <string.h>
@@ -189,17 +190,18 @@ public:
 
   void async_send(int d, size_t count, MPI_Request& request) {
     CHECK_LE(count, _count);
-    MPI_Send(&count, 1, MPI_UNSIGNED_LONG, d, 0, MPI_COMM_WORLD);
-    MPI_Isend(&_payload[0], count, type, d, 0, MPI_COMM_WORLD, &request);
+    MPI_Send(&count, 1, MPI_UNSIGNED_LONG, d, omp_get_thread_num(), MPI_COMM_WORLD);
+
+    MPI_Isend(&_payload[0], count, type, d, omp_get_thread_num(), MPI_COMM_WORLD, &request);
   }
 
   void async_recv(int s, MPI_Request& request) {
     CHECK_EQ(_pending, 0);
     size_t count;
-    MPI_Recv(&count, 1, MPI_UNSIGNED_LONG, s, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(&count, 1, MPI_UNSIGNED_LONG, s, omp_get_thread_num(), MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     _pending = count;
     CHECK_LE(schema_ptr->size() * count, HUGE_PAGE_SIZE);
-    MPI_Irecv(&_payload[0], count, type, s, 0, MPI_COMM_WORLD, &request);
+    MPI_Irecv(&_payload[0], count, type, s, omp_get_thread_num(), MPI_COMM_WORLD, &request);
   }
   /**
    * directly read from temptable memory
@@ -514,6 +516,7 @@ public:
     }
 
     // physical gather join, r should be where rows aggregated
+#pragma omp parallel for shared(_key_dist, union_keys, r)
     for(const auto s : union_keys) {
       std::vector<std::pair<int, size_t>> left = _key_dist->at(s);
       std::vector<std::pair<int, size_t>> right = table2._key_dist->at(s);
@@ -531,7 +534,7 @@ public:
     }
 
     // unlike gather model where all rows are physically aggregated to same processes sequentially
-    // TODO(chenqin): shuffle (broardcast, hash) could write to disk buffer with dest |key1| rows|key2|rows| and run async send
+    // TODO(chenqin): shuffle (broadcast, hash) could write to disk buffer with dest |key1| rows|key2|rows| and run async send
     // since _key_dist is shared in all process, each communication could be reasoned independently hence reciver could starts async recv as well
   }
 

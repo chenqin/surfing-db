@@ -13,7 +13,7 @@ namespace node {
 
 class Node {
 public:
-  Node();
+  Node(int* argc, char ***argv);
   Node(int, int, std::string);
   ~Node();
 

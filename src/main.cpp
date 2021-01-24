@@ -27,12 +27,12 @@ using namespace surfingdb::table;
  * mpirun -np 12 ./MainTest
  * @return
  */
-int main() {
+int main(int argc, char **argv) {
   auto num = omp_get_thread_num();
   LOG(INFO) << "threads # " << num;
   //google::InitGoogleLogging(argv[0]);
   // create node of cluster
-  const auto node = std::make_shared<surfingdb::table::Node>();
+  const auto node = std::make_shared<surfingdb::table::Node>(&argc, &argv);
 
   RowSchema r;
   r.fields = std::vector<surfingdb::table::schema::Field>();

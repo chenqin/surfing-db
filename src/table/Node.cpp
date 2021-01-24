@@ -9,9 +9,12 @@
 namespace surfingdb {
 namespace node {
 
-Node::Node() {
+Node::Node(int* argc, char ***argv) {
   // Initialize the MPI environment
-  MPI_Init(NULL, NULL);
+  // MPI_Init(argc, argv);
+  int supported;
+  MPI_Init_thread(argc, argv, MPI_THREAD_MULTIPLE, &supported);
+  CHECK_EQ(supported, MPI_THREAD_MULTIPLE);
   MPI_Comm_size(MPI_COMM_WORLD, &this->world);
   MPI_Comm_rank(MPI_COMM_WORLD, &this->rank);
   // Get the name of the processor
