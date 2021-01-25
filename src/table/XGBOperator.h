@@ -93,7 +93,7 @@ public:
     CHECK_EQ(num_feature, features());
 
     if (rank != parameters.root) {
-      LOG(INFO) << "exit, only run training on " << parameters.root;
+      // LOG(INFO) << "exit, only run training on " << parameters.root;
       return; // only run train steps on root
     }
     // configure the training
@@ -170,7 +170,7 @@ public:
    * TODO(chenqin): (fix double free buffer)
    */
   void syncModel() {
-    const char* buffer = static_cast<char*>(malloc(HUGE_PAGE_SIZE));
+    const char* buffer = static_cast<char*>(malloc(MEM_PAGE_SIZE));
     bst_ulong model_len;
     if(rank == parameters.root) {
       safe_xgboost(XGBoosterSaveModel(*booster.get(), url.c_str()));

@@ -167,6 +167,9 @@ int main(int argc, char **argv) {
 
     tsed.group_by(field1);
 
+    Value v;
+    v.p_val.int_val = 1;
+    b.write(field1, v);
     TempTable t1(node, schema_ptr);
     t1.ingest(b);
     TempTable t2(node, schema_ptr);

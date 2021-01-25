@@ -27,11 +27,6 @@
 
 #pragma once
 
-#define FILE_IO_VECTOR 8
-
-// read/write ssd per 64KB chunk
-#define SSD_CHUNK_SIZ 65536
-
 namespace surfingdb {
 namespace table {
 using surfingdb::node::Node;
@@ -81,7 +76,7 @@ public:
   TempTable(const std::shared_ptr<TableSchema> sharedPtr) {
     this->schema_ptr = sharedPtr;
     offset = 0;
-    _payload.resize(HUGE_PAGE_SIZE);
+    _payload.resize(MEM_PAGE_SIZE);
     _count = 0;
     _key_dist = std::make_unique<std::unordered_map<size_t, std::vector<std::pair<int, size_t>>>>();
     _groups = std::make_unique<std::unordered_map<size_t, std::vector<size_t>>>();
@@ -89,7 +84,7 @@ public:
   }
   TempTable(const std::shared_ptr<Node> node, const std::shared_ptr<TableSchema> sharedPtr) {
     this->schema_ptr = sharedPtr;
-    _payload.resize(HUGE_PAGE_SIZE);
+    _payload.resize(MEM_PAGE_SIZE);
     offset = 0;
     _count = 0;
     _key_dist = std::make_unique<std::unordered_map<size_t, std::vector<std::pair<int, size_t>>>>();
@@ -124,6 +119,11 @@ public:
     memcpy(&_payload[offset], row.payload_ptr(), row.size()); // TODO(chenqin): should use fastcopy
     offset += row.size();
     _count++;
+
+    // expand table size if needed
+    if(offset >= MEM_PAGE_SIZE - row.size()) {
+      _payload.resize(_payload.size() + MEM_PAGE_SIZE);
+    }
   }
 
   /**
@@ -200,7 +200,10 @@ public:
     size_t count;
     MPI_Recv(&count, 1, MPI_UNSIGNED_LONG, s, omp_get_thread_num(), MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     _pending = count;
-    CHECK_LE(schema_ptr->size() * count, HUGE_PAGE_SIZE);
+    if(_pending * (schema_ptr->size()) > _payload.size()) {
+      _payload.resize(_pending * (schema_ptr->size()));
+    }
+    //CHECK_LE(schema_ptr->size() * count, HUGE_PAGE_SIZE);
     MPI_Irecv(&_payload[0], count, type, s, omp_get_thread_num(), MPI_COMM_WORLD, &request);
   }
   /**
@@ -282,7 +285,6 @@ public:
       op.train(&features[0], &label[0], total_row_count, op.features());
       op.syncModel(); // send model to all processes from root
     } else {
-      LOG(INFO) << "start prediction on " << ptr->rank;
       op.predict(&features[0], &label[0], _count, op.features());
       writeField(op.labelField, &label[0]);
     }
@@ -392,7 +394,6 @@ public:
       Value v;
       r->read(f, v);
       size_t key = value_hasher.operator()(v);
-
       if (_groups->find(key) == _groups->end()) {
         std::vector<size_t> arr;
         _groups->insert({ key, arr });
@@ -440,7 +441,7 @@ public:
     }
 
     CHECK_GE(_global_group_size, _groups->size() * 3);
-    CHECK_LE(_global_group_size, HUGE_PAGE_SIZE);
+    CHECK_LE(_global_group_size, MEM_PAGE_SIZE);
     _g_groups.resize(_global_group_size);
 
     MPI_Allgatherv(key_count, _groups->size() * 3, MPI_UNSIGNED_LONG, &_g_groups[0], recvcounts, displs, MPI_UNSIGNED_LONG, MPI_COMM_WORLD);
@@ -516,7 +517,6 @@ public:
     }
 
     // physical gather join, r should be where rows aggregated
-#pragma omp parallel for shared(_key_dist, union_keys, r)
     for(const auto s : union_keys) {
       std::vector<std::pair<int, size_t>> left = _key_dist->at(s);
       std::vector<std::pair<int, size_t>> right = table2._key_dist->at(s);
@@ -528,7 +528,6 @@ public:
       // permutation of m elements with n elements
       Value v;
       global_mtable.read(0)->read(f1, v);
-      LOG(INFO) << v.p_val.int_val;
       // do mxn rows in out
       r = (r + 1) % ptr->world;
     }
