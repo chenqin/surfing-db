@@ -81,7 +81,7 @@ public:
     dtrain = std::make_unique<DMatrixHandle>();
 
     // set row_count of features adding label column
-    safe_xgboost(XGDMatrixCreateFromMat(train, row_count, feature_num, -1, dtrain.get()));
+    safe_xgboost(XGDMatrixCreateFromMat_omp(train, row_count, feature_num, -1, dtrain.get(), omp_get_max_threads()));
     safe_xgboost(XGDMatrixSetFloatInfo(*dtrain.get(), "label", label, row_count));
 
     DMatrixHandle eval_dmats[2] = { *dtrain.get(), *dtrain.get() }; // hack
@@ -192,7 +192,7 @@ public:
 
   void predict(const float* test, const float* result, const bst_ulong row_count, int feature_num) {
     dtest = std::make_unique<DMatrixHandle>();
-    safe_xgboost(XGDMatrixCreateFromMat(test, row_count, feature_num, -1, dtest.get()));
+    safe_xgboost(XGDMatrixCreateFromMat_omp(test, row_count, feature_num, -1, dtest.get(), omp_get_max_threads()));
     bst_ulong out_come = 0;
     safe_xgboost(XGBoosterPredict(*booster.get(), *dtest.get(), 0, 0, 0, &out_come, &result));
     CHECK_EQ(row_count, out_come);

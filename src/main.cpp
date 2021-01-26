@@ -28,8 +28,8 @@ using namespace surfingdb::table;
  * @return
  */
 int main(int argc, char **argv) {
-  auto num = omp_get_thread_num();
-  LOG(INFO) << "threads # " << num;
+  LOG(INFO) << "total omp threads # " << omp_get_max_threads();
+  omp_set_num_threads(omp_get_max_threads());
   //google::InitGoogleLogging(argv[0]);
   // create node of cluster
   const auto node = std::make_shared<surfingdb::table::Node>(&argc, &argv);

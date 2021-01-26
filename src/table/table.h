@@ -515,8 +515,8 @@ public:
         union_keys.push_back(pair.first);
       }
     }
-
     // physical gather join, r should be where rows aggregated
+#pragma omp parallel for shared(_key_dist, union_keys, r)
     for(const auto s : union_keys) {
       std::vector<std::pair<int, size_t>> left = _key_dist->at(s);
       std::vector<std::pair<int, size_t>> right = table2._key_dist->at(s);
