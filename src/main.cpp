@@ -27,7 +27,7 @@ using namespace surfingdb::table;
  * mpirun -np 12 ./MainTest
  * @return
  */
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   LOG(INFO) << "total omp threads # " << omp_get_max_threads();
   omp_set_num_threads(omp_get_max_threads());
   //google::InitGoogleLogging(argv[0]);
@@ -125,7 +125,7 @@ int main(int argc, char **argv) {
         MPI_Wait(&request, &status);
         trecv.complete();
         // after recv all items, loop over and modify in parallel parDo
-        for(int i = 0 ; i < 3000 ; i++) {
+        for (int i = 0; i < 3000; i++) {
           auto s = trecv.read(i);
           Value v, vm;
           s->read(field1, v);
@@ -150,7 +150,8 @@ int main(int argc, char **argv) {
 
     // stage 3, run xgb
     tsed.ingest(b);
-    LOG(INFO) << "xgb operator" << " process "<< node->rank << " has " << tsed.count() << " rows";
+    LOG(INFO) << "xgb operator"
+              << " process " << node->rank << " has " << tsed.count() << " rows";
     XGBParameters parameters;
     parameters.tree_method = "exact";
     parameters.objective = "binary:logistic";
@@ -174,7 +175,14 @@ int main(int argc, char **argv) {
     t1.ingest(b);
     TempTable t2(node, schema_ptr);
     t2.ingest(b);
-    t1.join(field1, field1, t2, t2);
+    TempTable tout(node, schema_ptr);
+    t1.join(field1, field1, t2, tout);
+    Value outv;
+
+    if (tout.count() > 0) {
+      tout.read(0)->read(field1, outv);
+      LOG(INFO) << outv.p_val.int_val;
+    }
   }
   return 0;
 }

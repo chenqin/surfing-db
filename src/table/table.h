@@ -9,8 +9,8 @@
 #include <fcntl.h>
 #include <future>
 #include <math.h>
-#include <omp.h>
 #include <mpi.h>
+#include <omp.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/mman.h>
@@ -90,7 +90,7 @@ public:
     _key_dist = std::make_unique<std::unordered_map<size_t, std::vector<std::pair<int, size_t>>>>();
     _groups = std::make_unique<std::unordered_map<size_t, std::vector<size_t>>>();
     this->ptr = node;
-    if(!ptr->istesting) {
+    if (!ptr->istesting) {
       MPI_Type_contiguous(sharedPtr->size(), MPI_CHAR, &type);
       MPI_Type_commit(&type);
     }
@@ -121,7 +121,7 @@ public:
     _count++;
 
     // expand table size if needed
-    if(offset >= MEM_PAGE_SIZE - row.size()) {
+    if (offset >= MEM_PAGE_SIZE - row.size()) {
       _payload.resize(_payload.size() + MEM_PAGE_SIZE);
     }
   }
@@ -200,7 +200,7 @@ public:
     size_t count;
     MPI_Recv(&count, 1, MPI_UNSIGNED_LONG, s, omp_get_thread_num(), MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     _pending = count;
-    if(_pending * (schema_ptr->size()) > _payload.size()) {
+    if (_pending * (schema_ptr->size()) > _payload.size()) {
       _payload.resize(_pending * (schema_ptr->size()));
     }
     //CHECK_LE(schema_ptr->size() * count, HUGE_PAGE_SIZE);
@@ -492,7 +492,7 @@ public:
     } else {
       std::vector<size_t> offsets = this->_groups->at(key);
       for (size_t it : offsets) {
-        mtable.ingest(*read(it).get());
+        mtable.ingest(*read(it).get()); //todo use hindex to avoid copy
       }
     }
     global_mtable._count = m_size;
@@ -501,7 +501,11 @@ public:
   }
 
   // group table with
-  void join(const Field& f1, const Field& f2, TempTable& table2, TempTable&) {
+  void join(const Field& f1, const Field& f2, TempTable& table2, TempTable& out) {
+    CHECK(schema_ptr->exist(f1));
+    CHECK(table2.schema_ptr->exist(f2));
+    CHECK(f1.type == f2.type);                                     //key should be same type
+    CHECK(out.schema_ptr->exist(f1) || out.schema_ptr->exist(f2)); //force output has key columns
     //local shuffle key distribution of each table
     this->group_by(f1);
     table2.group_by(f2);
@@ -516,18 +520,48 @@ public:
       }
     }
     // physical gather join, r should be where rows aggregated
-#pragma omp parallel for shared(_key_dist, union_keys, r)
-    for(const auto s : union_keys) {
+    //#pragma omp parallel for shared(_key_dist, union_keys, r)
+    for (const auto s : union_keys) {
       std::vector<std::pair<int, size_t>> left = _key_dist->at(s);
       std::vector<std::pair<int, size_t>> right = table2._key_dist->at(s);
 
       TempTable global_mtable(this->ptr, schema_ptr), global_ntable(table2.ptr, table2.schema_ptr);
-      gather(left, s, r, global_mtable);
+      gather(left, s, r, global_mtable); // collect entire row, should collect used columns instead
       gather(right, s, r, global_ntable);
 
       // permutation of m elements with n elements
-      Value v;
-      global_mtable.read(0)->read(f1, v);
+      if (ptr->rank == r) {
+        for (size_t mi = 0; mi < global_mtable._count; mi++) {
+          auto m = global_mtable.read(mi);
+          for (size_t ni = 0; ni < global_ntable._count; ni++) {
+            auto n = global_ntable.read(ni);
+
+            RowBuffer row(out.schema_ptr);
+            // extract field from m , n respectively
+            for (auto f : out.schema_ptr->fields) {
+              // check m fields
+              for (auto mf : schema_ptr->fields) {
+                if (f == mf) {
+                  Value v;
+                  m->read(mf, v);
+                  row.write(f, v);
+                  break;
+                }
+              }
+              // check n fields
+              for (auto nf : table2.schema_ptr->fields) {
+                if (f == nf) {
+                  Value v;
+                  n->read(nf, v);
+                  row.write(f, v);
+                  break;
+                }
+              }
+            }
+            out.ingest(row); //write permutated result to out
+          }
+        }
+      }
       // do mxn rows in out
       r = (r + 1) % ptr->world;
     }
@@ -535,9 +569,8 @@ public:
     // unlike gather model where all rows are physically aggregated to same processes sequentially
     // TODO(chenqin): shuffle (broadcast, hash) could write to disk buffer with dest |key1| rows|key2|rows| and run async send
     // since _key_dist is shared in all process, each communication could be reasoned independently hence reciver could starts async recv as well
+    ptr->forward();
   }
-
-
 };
 } // namespace table
 } // namespace surfingdb
