@@ -465,7 +465,9 @@ public:
   }
 
   inline void gather(std::vector<std::pair<int, size_t>>& left, size_t key, int r, TempTable& global_mtable) {
-    CHECK_NOTNULL(global_mtable.schema_ptr.get());
+    auto pruned_schema = global_mtable.schema_ptr;
+    auto pruned_type = global_mtable.type;
+    CHECK_NOTNULL(pruned_schema.get());
     // gatherv rows of key to r
     int recvcounts[ptr->world], displs[ptr->world];
     memset(recvcounts, 0, ptr->world * sizeof(int));
@@ -486,18 +488,26 @@ public:
         }
       }
     }
-    TempTable mtable(global_mtable.ptr, schema_ptr);
+    TempTable mtable(global_mtable.ptr, pruned_schema); // after column pruning
+
     if (this->_groups.get()->find(key) == this->_groups.get()->end()) {
       mtable._payload.resize(0);
     } else {
       std::vector<size_t> offsets = this->_groups->at(key);
       for (size_t it : offsets) {
-        mtable.ingest(*read(it).get()); //todo use hindex to avoid copy
+        RowBuffer out(pruned_schema);
+        auto rorg = read(it);
+        for(auto f : pruned_schema.get()->fields) {
+          Value v;
+          rorg->read(f, v);
+          out.write(f, v);
+        }
+        mtable.ingest(out);
       }
     }
     global_mtable._count = m_size;
-    global_mtable._payload.resize(schema_ptr->size() * m_size);
-    MPI_Gatherv(mtable.payload_ptr(), mtable._count, global_mtable.type, global_mtable.payload_ptr(), recvcounts, displs, global_mtable.type, r, MPI_COMM_WORLD);
+    global_mtable._payload.resize(pruned_schema->size() * m_size);
+    MPI_Gatherv(mtable.payload_ptr(), mtable._count, pruned_type, global_mtable.payload_ptr(), recvcounts, displs, pruned_type, r, MPI_COMM_WORLD);
   }
 
   // group table with
@@ -525,8 +535,22 @@ public:
       std::vector<std::pair<int, size_t>> left = _key_dist->at(s);
       std::vector<std::pair<int, size_t>> right = table2._key_dist->at(s);
 
-      TempTable global_mtable(this->ptr, schema_ptr), global_ntable(table2.ptr, table2.schema_ptr);
-      gather(left, s, r, global_mtable); // collect entire row, should collect used columns instead
+      RowSchema ls, rs; //prune list of columns used in out table
+      for(auto of : out.schema_ptr->fields) {
+        if(schema_ptr->exist(of)) {
+          ls.fields.push_back(of);
+        }
+        // todo if field has same name and type
+        if (table2.schema_ptr->exist(of)){
+          rs.fields.push_back(of);
+        } else {
+          CHECK(false);
+        }
+      }
+
+      TempTable global_mtable(this->ptr, std::make_shared<TableSchema>(ls));
+      TempTable global_ntable(table2.ptr, std::make_shared<TableSchema>(rs));
+      gather(left, s, r, global_mtable); // collect selected columns of each table
       gather(right, s, r, global_ntable);
 
       // permutation of m elements with n elements
@@ -540,7 +564,7 @@ public:
             // extract field from m , n respectively
             for (auto f : out.schema_ptr->fields) {
               // check m fields
-              for (auto mf : schema_ptr->fields) {
+              for (auto mf : ls.fields) {
                 if (f == mf) {
                   Value v;
                   m->read(mf, v);
@@ -549,7 +573,7 @@ public:
                 }
               }
               // check n fields
-              for (auto nf : table2.schema_ptr->fields) {
+              for (auto nf : rs.fields) {
                 if (f == nf) {
                   Value v;
                   n->read(nf, v);
