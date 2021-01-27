@@ -129,8 +129,8 @@ public:
 
     size_t sig = schema_ptr->schema_sig();
     CHECK_GE(::write(fd, &sig, sizeof(size_t)), 0);
-    CHECK_GE(::write(fd, reinterpret_cast<const void*>(&offset), sizeof(size_t)),0);
-    CHECK_GE(::write(fd, reinterpret_cast<const void*>(&_count), sizeof(size_t)),0);
+    CHECK_GE(::write(fd, reinterpret_cast<const void*>(&offset), sizeof(size_t)), 0);
+    CHECK_GE(::write(fd, reinterpret_cast<const void*>(&_count), sizeof(size_t)), 0);
 
     size_t index = 0;
     /* fill out three iovec structures */
@@ -156,10 +156,10 @@ public:
     CHECK_NE(fd, -1);
 
     size_t sig = 0;
-    ::read(fd, &sig, sizeof(size_t));
+    CHECK_GE(::read(fd, &sig, sizeof(size_t)), 0);
     CHECK_EQ(sig, schema_ptr->schema_sig());
-    ::read(fd, &offset, sizeof(size_t));
-    ::read(fd, &_count, sizeof(size_t));
+    CHECK_GE(::read(fd, &offset, sizeof(size_t)), 0);
+    CHECK_GE(::read(fd, &_count, sizeof(size_t)), 0);
     CHECK_EQ(offset / _count, schema_ptr->size());
     _payload.resize(offset);
 
@@ -501,7 +501,7 @@ public:
       for (size_t it : offsets) {
         RowBuffer out(pruned_schema);
         auto rorg = read(it);
-        for(auto f : pruned_schema.get()->fields) {
+        for (auto f : pruned_schema.get()->fields) {
           Value v;
           rorg->read(f, v);
           out.write(f, v);
@@ -533,19 +533,19 @@ public:
         union_keys.push_back(pair.first);
       }
     }
-    // physical gather join, r should be where rows aggregated
-    #pragma omp parallel for shared(_key_dist, union_keys, r, out)
+// physical gather join, r should be where rows aggregated
+#pragma omp parallel for shared(_key_dist, union_keys, r, out)
     for (const auto s : union_keys) {
       std::vector<std::pair<int, size_t>> left = _key_dist->at(s);
       std::vector<std::pair<int, size_t>> right = table2._key_dist->at(s);
 
       RowSchema ls, rs; //prune list of columns used in out table
-      for(auto of : out.schema_ptr->fields) {
-        if(schema_ptr->exist(of)) {
+      for (auto of : out.schema_ptr->fields) {
+        if (schema_ptr->exist(of)) {
           ls.fields.push_back(of);
         }
         // todo if field has same name and type
-        if (table2.schema_ptr->exist(of)){
+        if (table2.schema_ptr->exist(of)) {
           rs.fields.push_back(of);
         } else {
           CHECK(false);
