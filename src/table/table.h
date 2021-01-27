@@ -66,7 +66,6 @@ private:
   size_t _count = 0; // number of rows in table
   size_t _pending = 0;
   size_t offset = 0; //current offset position
-  MPI_Datatype type; //used to run communication with other processes
 
   struct iovec iov[FILE_IO_VECTOR];
   ssize_t nr;
@@ -90,17 +89,12 @@ public:
     _key_dist = std::make_unique<std::unordered_map<size_t, std::vector<std::pair<int, size_t>>>>();
     _groups = std::make_unique<std::unordered_map<size_t, std::vector<size_t>>>();
     this->ptr = node;
-    if (!ptr->istesting) {
-      MPI_Type_contiguous(sharedPtr->size(), MPI_CHAR, &type);
-      MPI_Type_commit(&type);
-    }
   }
 
   ~TempTable() {
     _payload.clear();
     offset = 0;
     _count = 0;
-    MPI_Type_free(&type);
   }
 
   void complete() {
@@ -134,9 +128,9 @@ public:
     CHECK_NE(fd, -1);
 
     size_t sig = schema_ptr->schema_sig();
-    ::write(fd, &sig, sizeof(size_t));
-    ::write(fd, reinterpret_cast<const void*>(&offset), sizeof(size_t));
-    ::write(fd, reinterpret_cast<const void*>(&_count), sizeof(size_t));
+    CHECK_GE(::write(fd, &sig, sizeof(size_t)), 0);
+    CHECK_GE(::write(fd, reinterpret_cast<const void*>(&offset), sizeof(size_t)), 0);
+    CHECK_GE(::write(fd, reinterpret_cast<const void*>(&_count), sizeof(size_t)), 0);
 
     size_t index = 0;
     /* fill out three iovec structures */
@@ -192,7 +186,7 @@ public:
     CHECK_LE(count, _count);
     MPI_Send(&count, 1, MPI_UNSIGNED_LONG, d, omp_get_thread_num(), MPI_COMM_WORLD);
 
-    MPI_Isend(&_payload[0], count, type, d, omp_get_thread_num(), MPI_COMM_WORLD, &request);
+    MPI_Isend(&_payload[0], count, *schema_ptr->getType(), d, omp_get_thread_num(), MPI_COMM_WORLD, &request);
   }
 
   void async_recv(int s, MPI_Request& request) {
@@ -204,7 +198,7 @@ public:
       _payload.resize(_pending * (schema_ptr->size()));
     }
     //CHECK_LE(schema_ptr->size() * count, HUGE_PAGE_SIZE);
-    MPI_Irecv(&_payload[0], count, type, s, omp_get_thread_num(), MPI_COMM_WORLD, &request);
+    MPI_Irecv(&_payload[0], count, *schema_ptr->getType(), s, omp_get_thread_num(), MPI_COMM_WORLD, &request);
   }
   /**
    * directly read from temptable memory
@@ -466,7 +460,7 @@ public:
 
   inline void gather(std::vector<std::pair<int, size_t>>& left, size_t key, int r, TempTable& global_mtable) {
     auto pruned_schema = global_mtable.schema_ptr;
-    auto pruned_type = global_mtable.type;
+    auto pruned_type = pruned_schema->getType();
     CHECK_NOTNULL(pruned_schema.get());
     // gatherv rows of key to r
     int recvcounts[ptr->world], displs[ptr->world];
@@ -497,7 +491,7 @@ public:
       for (size_t it : offsets) {
         RowBuffer out(pruned_schema);
         auto rorg = read(it);
-        for(auto f : pruned_schema.get()->fields) {
+        for (auto f : pruned_schema.get()->fields) {
           Value v;
           rorg->read(f, v);
           out.write(f, v);
@@ -507,7 +501,7 @@ public:
     }
     global_mtable._count = m_size;
     global_mtable._payload.resize(pruned_schema->size() * m_size);
-    MPI_Gatherv(mtable.payload_ptr(), mtable._count, pruned_type, global_mtable.payload_ptr(), recvcounts, displs, pruned_type, r, MPI_COMM_WORLD);
+    MPI_Gatherv(mtable.payload_ptr(), mtable._count, *pruned_type, global_mtable.payload_ptr(), recvcounts, displs, *pruned_type, r, MPI_COMM_WORLD);
   }
 
   // group table with
@@ -529,19 +523,19 @@ public:
         union_keys.push_back(pair.first);
       }
     }
-    // physical gather join, r should be where rows aggregated
-    //#pragma omp parallel for shared(_key_dist, union_keys, r)
+// physical gather join, r should be where rows aggregated
+#pragma omp parallel for shared(_key_dist, union_keys, r, out)
     for (const auto s : union_keys) {
       std::vector<std::pair<int, size_t>> left = _key_dist->at(s);
       std::vector<std::pair<int, size_t>> right = table2._key_dist->at(s);
 
       RowSchema ls, rs; //prune list of columns used in out table
-      for(auto of : out.schema_ptr->fields) {
-        if(schema_ptr->exist(of)) {
+      for (auto of : out.schema_ptr->fields) {
+        if (schema_ptr->exist(of)) {
           ls.fields.push_back(of);
         }
         // todo if field has same name and type
-        if (table2.schema_ptr->exist(of)){
+        if (table2.schema_ptr->exist(of)) {
           rs.fields.push_back(of);
         } else {
           CHECK(false);

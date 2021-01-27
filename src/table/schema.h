@@ -67,12 +67,12 @@ struct ValueHasher {
     result ^= hash<long>()(k.p_val.long_val) << 2;
     result ^= hash<double>()(k.p_val.double_val) << 3;
     result ^= hash<bool>()(k.p_val.bool_val) << 4;
-    for(auto l : k.list_value) {
-      result ^=operator()(l);
+    for (auto l : k.list_value) {
+      result ^= operator()(l);
     }
-    for(auto p : k.map_value) {
-      result ^=operator()(p.first) << 1;
-      result ^=operator()(p.second) << 2;
+    for (auto p : k.map_value) {
+      result ^= operator()(p.first) << 1;
+      result ^= operator()(p.second) << 2;
     }
     return result;
   }
@@ -218,12 +218,15 @@ inline void initMapField(Field& field, const std::string& name, const RowType::t
 
 class TableSchema : public RowSchema {
 private:
-  int _size; // fixed size of each row
-  size_t _schema_sig; //schema fields hash
+  int _size;              // fixed size of each row
+  size_t _schema_sig;     //schema fields hash
+  MPI_Datatype _row_type; //type of entire row
+  bool _is_testing = false;
 
 public:
   std::shared_ptr<std::unordered_map<Field, uint64_t, FieldHasher>> _offsets;
   std::shared_ptr<std::unordered_map<Field, uint64_t, FieldHasher>> _max_unit;
+  std::shared_ptr<std::unordered_map<Field, MPI_Datatype, FieldHasher>> _field_types;
   int size() {
     CHECK_GT(_size, 0);
     return _size;
@@ -233,10 +236,14 @@ public:
     return _schema_sig;
   }
 
-  bool exist(Field field){
+  MPI_Datatype* getType() {
+    return &_row_type;
+  }
+
+  bool exist(Field field) {
     CHECK_GT(fields.size(), 0);
-    for(auto f : fields) {
-      if(field_hasher.operator()(field) == field_hasher.operator()(f)) return true;
+    for (auto f : fields) {
+      if (field_hasher.operator()(field) == field_hasher.operator()(f)) return true;
     }
     return false;
   }
@@ -245,6 +252,7 @@ public:
     this->fields = schema.fields;
     _offsets = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
     _max_unit = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
+    _field_types = std::make_shared<std::unordered_map<Field, MPI_Datatype, FieldHasher>>();
     validSchema(schema);
     _schema_sig = schema_hasher.operator()(schema);
     _size = sizeof(size_t); // store _schema_sig
@@ -253,6 +261,15 @@ public:
       _offsets->emplace(f, _size);
       _max_unit->emplace(f, f.max_unit_size);
       _size += getFieldSize(f);
+    }
+    if (!_is_testing) {
+      MPI_Type_contiguous(_size, MPI_CHAR, &_row_type);
+      MPI_Type_commit(&_row_type);
+    }
+  }
+  ~TableSchema() {
+    if (!_is_testing) {
+      MPI_Type_free(&_row_type);
     }
   }
 };
