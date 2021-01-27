@@ -60,8 +60,8 @@ private:
   std::vector<uint8_t> _payload;
 
   Field _parition;                                                                            //partition field
-  std::unique_ptr<std::unordered_map<size_t, std::vector<std::pair<int, size_t>>>> _key_dist; // key hash and per node counts
-  std::unique_ptr<std::unordered_map<size_t, std::vector<size_t>>> _groups;                   // local key, offsets map
+  std::unique_ptr<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>> _key_dist; // key hash and per node counts
+  std::unique_ptr<std::map<size_t, std::vector<size_t>, std::less<size_t>>> _groups;                   // local key, offsets map
 
   size_t _count = 0; // number of rows in table
   size_t _pending = 0;
@@ -77,8 +77,8 @@ public:
     offset = 0;
     _payload.resize(MEM_PAGE_SIZE);
     _count = 0;
-    _key_dist = std::make_unique<std::unordered_map<size_t, std::vector<std::pair<int, size_t>>>>();
-    _groups = std::make_unique<std::unordered_map<size_t, std::vector<size_t>>>();
+    _key_dist = std::make_unique<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>>();
+    _groups = std::make_unique<std::map<size_t, std::vector<size_t>, std::less<size_t>>>();
     LOG(INFO) << "for testing only";
   }
   TempTable(const std::shared_ptr<Node> node, const std::shared_ptr<TableSchema> sharedPtr) {
@@ -86,8 +86,8 @@ public:
     _payload.resize(MEM_PAGE_SIZE);
     offset = 0;
     _count = 0;
-    _key_dist = std::make_unique<std::unordered_map<size_t, std::vector<std::pair<int, size_t>>>>();
-    _groups = std::make_unique<std::unordered_map<size_t, std::vector<size_t>>>();
+    _key_dist = std::make_unique<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>>();
+    _groups = std::make_unique<std::map<size_t, std::vector<size_t>, std::less<size_t>>>();
     this->ptr = node;
   }
 
@@ -514,7 +514,7 @@ public:
   }
 
   // group table with
-  void join(const Field& f1, const Field& f2, TempTable& table2, TempTable& out) {
+  void gather_join(const Field& f1, const Field& f2, TempTable& table2, TempTable& out) {
     CHECK(schema_ptr->exist(f1));
     CHECK(table2.schema_ptr->exist(f2));
     CHECK(f1.type == f2.type);                                     //key should be same type

@@ -190,7 +190,7 @@ int main(int argc, char** argv) {
     std::shared_ptr<TableSchema> out_schema_ptr = std::make_shared<TableSchema>(rr);
 
     TempTable tout(node, out_schema_ptr);
-    t1.join(field1, field1, t2, tout);
+    t1.gather_join(field1, field1, t2, tout);
     Value outv;
 
     if (tout.count() > 0) {
