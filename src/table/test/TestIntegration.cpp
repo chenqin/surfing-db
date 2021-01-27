@@ -5,7 +5,6 @@
 #include <fstream>
 #include <gtest/gtest.h>
 #include <iostream>
-#include <jemalloc/jemalloc.h>
 #include <kll_sketch.hpp>
 #include <random>
 #include "frequent_items_sketch.hpp"
@@ -269,6 +268,7 @@ TEST(TableTest, TestSketchQuantile) {
     sketch1.serialize(os1);
 
     datasketches::kll_sketch<float> sketch2; // default k=200
+    //assert(nd != null);
     for (int i = 0; i < 10000; i++) {
       sketch2.update(nd(generator) + 1); // shift the mean for the second sketch
     }

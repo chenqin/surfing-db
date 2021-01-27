@@ -154,7 +154,7 @@ int main(int argc, char** argv) {
               << " process " << node->rank << " has " << tsed.count() << " rows";
     XGBParameters parameters;
     parameters.tree_method = "exact";
-    parameters.objective = "binary:logistic";
+    parameters.objective = "reg:linear";
     parameters.min_child_weight = 1;
     parameters.gamma = 0.1;
     parameters.max_depth = 2;

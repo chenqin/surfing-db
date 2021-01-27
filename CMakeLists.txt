@@ -41,7 +41,7 @@ else ()
         set(NCXX /usr/bin/g++)
         set(NCC /usr/bin/gcc)
         list(APPEND LNCFLAGS
-                "-Wall -Wextra -Werror -lstdc++ -lstdc++fs"
+                "-Wall -Wextra -lstdc++ -lstdc++fs"
                 "-Wl,--no-as-needed -no-pie -ldl"
                 "-I/usr/include/ -I/usr/local/include -L/usr/local/lib -L/usr/lib")
 
