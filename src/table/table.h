@@ -552,21 +552,21 @@ public:
         }
       }
 
-      TempTable global_mtable(this->ptr, std::make_shared<TableSchema>(ls));
-      TempTable global_ntable(table2.ptr, std::make_shared<TableSchema>(rs));
-      gather(left, s, r, global_mtable); // collect selected columns of each table
-      gather(right, s, r, global_ntable);
+      TempTable global_mtable_per_key(this->ptr, std::make_shared<TableSchema>(ls));
+      TempTable global_ntable_per_key(table2.ptr, std::make_shared<TableSchema>(rs));
+      gather(left, s, r, global_mtable_per_key); // collect selected columns of each table
+      gather(right, s, r, global_ntable_per_key);
 
       // permutation of m elements with n elements
       if (ptr->rank == r) {
-        for (size_t mi = 0; mi < global_mtable._count; mi++) {
-          auto m = global_mtable.read(mi);
-          for (size_t ni = 0; ni < global_ntable._count; ni++) {
-            auto n = global_ntable.read(ni);
-
-            RowBuffer row(out.schema_ptr);
+        for (size_t mi = 0; mi < global_mtable_per_key._count; mi++) {
+          auto m = global_mtable_per_key.read(mi);
+          for (size_t ni = 0; ni < global_ntable_per_key._count; ni++) {
+            auto n = global_ntable_per_key.read(ni);
+            auto out_schema_ptr = out.schema_ptr;
+            RowBuffer row(out_schema_ptr);
             // extract field from m , n respectively
-            for (auto f : out.schema_ptr->fields) {
+            for (auto f : out_schema_ptr->fields) {
               // check m fields
               for (auto mf : ls.fields) {
                 if (f == mf) {
