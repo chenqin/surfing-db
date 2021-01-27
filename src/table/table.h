@@ -445,7 +445,6 @@ public:
     }
 
     CHECK_GE(_global_group_size, _groups->size() * 3);
-    CHECK_LE(_global_group_size, MEM_PAGE_SIZE);
     _g_groups.resize(_global_group_size);
 
     MPI_Allgatherv(key_count, _groups->size() * 3, MPI_UNSIGNED_LONG, &_g_groups[0], recvcounts, displs, MPI_UNSIGNED_LONG, MPI_COMM_WORLD);
@@ -533,8 +532,9 @@ public:
         union_keys.push_back(pair.first);
       }
     }
-// physical gather join, r should be where rows aggregated
-#pragma omp parallel for shared(_key_dist, union_keys, r, out)
+
+    LOG(INFO) << "TOTAL KEYS " << union_keys.size();
+    // physical gather join, r should be where rows aggregated
     for (const auto s : union_keys) {
       std::vector<std::pair<int, size_t>> left = _key_dist->at(s);
       std::vector<std::pair<int, size_t>> right = table2._key_dist->at(s);
