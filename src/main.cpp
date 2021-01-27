@@ -172,10 +172,20 @@ int main(int argc, char** argv) {
     v.p_val.int_val = 1;
     b.write(field1, v);
     TempTable t1(node, schema_ptr);
-    t1.ingest(b);
+    for(int i = 0 ;i < 100; i++) {
+      t1.ingest(b);
+    }
+
     TempTable t2(node, schema_ptr);
-    t2.ingest(b);
-    TempTable tout(node, schema_ptr);
+    for(int i = 0 ;i < 100; i++) {
+      t2.ingest(b);
+    }
+    RowSchema rr;
+    rr.fields = std::vector<surfingdb::table::schema::Field>();
+    rr.fields.push_back(field1);
+    std::shared_ptr<TableSchema> out_schema_ptr = std::make_shared<TableSchema>(rr);
+
+    TempTable tout(node, out_schema_ptr);
     t1.join(field1, field1, t2, tout);
     Value outv;
 
