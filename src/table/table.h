@@ -129,8 +129,8 @@ public:
 
     size_t sig = schema_ptr->schema_sig();
     CHECK_GE(::write(fd, &sig, sizeof(size_t)), 0);
-    CHECK_GE(::write(fd, reinterpret_cast<const void*>(&offset), sizeof(size_t)), 0);
-    CHECK_GE(::write(fd, reinterpret_cast<const void*>(&_count), sizeof(size_t)), 0);
+    CHECK_GE(::write(fd, reinterpret_cast<const void*>(&offset), sizeof(size_t)),0);
+    CHECK_GE(::write(fd, reinterpret_cast<const void*>(&_count), sizeof(size_t)),0);
 
     size_t index = 0;
     /* fill out three iovec structures */
@@ -182,23 +182,33 @@ public:
     close(fd);
   }
 
-  void async_send(int d, size_t count, MPI_Request& request) {
-    CHECK_LE(count, _count);
-    MPI_Send(&count, 1, MPI_UNSIGNED_LONG, d, omp_get_thread_num(), MPI_COMM_WORLD);
-
-    MPI_Isend(&_payload[0], count, *schema_ptr->getType(), d, omp_get_thread_num(), MPI_COMM_WORLD, &request);
+  /**
+   * send entire column f to dest
+   * @param dest
+   * @param f
+   * @param count
+   * @param request
+   */
+  void async_send(int dest, const Field& f, MPI_Request& request) {
+    MPI_Send(&_count, 1, MPI_UNSIGNED_LONG, dest, omp_get_thread_num(), MPI_COMM_WORLD);
+    MPI_Isend(&_payload[0], _count, (schema_ptr->_field_types->at(f)), dest, omp_get_thread_num(), MPI_COMM_WORLD, &request);
   }
 
-  void async_recv(int s, MPI_Request& request) {
+  /**
+   * recv entire column f from source, _payload will be modified
+   * @param source
+   * @param f
+   * @param request
+   */
+  void async_recv(int source, const Field& f, MPI_Request& request) {
     CHECK_EQ(_pending, 0);
     size_t count;
-    MPI_Recv(&count, 1, MPI_UNSIGNED_LONG, s, omp_get_thread_num(), MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(&count, 1, MPI_UNSIGNED_LONG, source, omp_get_thread_num(), MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     _pending = count;
     if (_pending * (schema_ptr->size()) > _payload.size()) {
       _payload.resize(_pending * (schema_ptr->size()));
     }
-    //CHECK_LE(schema_ptr->size() * count, HUGE_PAGE_SIZE);
-    MPI_Irecv(&_payload[0], count, *schema_ptr->getType(), s, omp_get_thread_num(), MPI_COMM_WORLD, &request);
+    MPI_Irecv(&_payload[0], count, (schema_ptr->_field_types->at(f)), source, omp_get_thread_num(), MPI_COMM_WORLD, &request);
   }
   /**
    * directly read from temptable memory
@@ -491,7 +501,7 @@ public:
       for (size_t it : offsets) {
         RowBuffer out(pruned_schema);
         auto rorg = read(it);
-        for (auto f : pruned_schema.get()->fields) {
+        for(auto f : pruned_schema.get()->fields) {
           Value v;
           rorg->read(f, v);
           out.write(f, v);
@@ -523,19 +533,19 @@ public:
         union_keys.push_back(pair.first);
       }
     }
-// physical gather join, r should be where rows aggregated
-#pragma omp parallel for shared(_key_dist, union_keys, r, out)
+    // physical gather join, r should be where rows aggregated
+    #pragma omp parallel for shared(_key_dist, union_keys, r, out)
     for (const auto s : union_keys) {
       std::vector<std::pair<int, size_t>> left = _key_dist->at(s);
       std::vector<std::pair<int, size_t>> right = table2._key_dist->at(s);
 
       RowSchema ls, rs; //prune list of columns used in out table
-      for (auto of : out.schema_ptr->fields) {
-        if (schema_ptr->exist(of)) {
+      for(auto of : out.schema_ptr->fields) {
+        if(schema_ptr->exist(of)) {
           ls.fields.push_back(of);
         }
         // todo if field has same name and type
-        if (table2.schema_ptr->exist(of)) {
+        if (table2.schema_ptr->exist(of)){
           rs.fields.push_back(of);
         } else {
           CHECK(false);

@@ -113,13 +113,13 @@ int main(int argc, char** argv) {
     if (node->rank == 0) {
       for (int j = 1; j < node->world; j++) {
         MPI_Request req;
-        tsed.async_send(j, 3000, req);
+        tsed.async_send(j, field1, req);
         node->keep(std::make_unique<MPI_Request>(req));
       }
     } else {
       TempTable trecv(node, schema_ptr);
       MPI_Request request;
-      trecv.async_recv(0, request);
+      trecv.async_recv(0, field1, request);
       auto revcallback = std::async(std::launch::deferred, [&request, &trecv, field1]() {
         MPI_Status status;
         MPI_Wait(&request, &status);

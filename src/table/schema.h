@@ -261,6 +261,17 @@ public:
       _offsets->emplace(f, _size);
       _max_unit->emplace(f, f.max_unit_size);
       _size += getFieldSize(f);
+
+      if (!_is_testing) {
+        MPI_Datatype type;
+        int blocklength;
+        MPI_Aint displ;
+        blocklength = getFieldSize(f);
+        displ = _size - getFieldSize(f);
+        MPI_Type_hvector(1, blocklength, displ, MPI_CHAR, &type);
+        MPI_Type_commit(&type);
+        _field_types->insert({f, type});
+      }
     }
     if (!_is_testing) {
       MPI_Type_contiguous(_size, MPI_CHAR, &_row_type);
@@ -270,6 +281,9 @@ public:
   ~TableSchema() {
     if (!_is_testing) {
       MPI_Type_free(&_row_type);
+      for(auto s : *_field_types.get()) {
+        MPI_Type_free(&s.second);
+      }
     }
   }
 };
