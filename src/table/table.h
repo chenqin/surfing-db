@@ -59,7 +59,7 @@ private:
   std::shared_ptr<TableSchema> schema_ptr;
   std::vector<uint8_t> _payload;
 
-  Field _parition;                                                                            //partition field
+  Field _parition;                                                                                     //partition field
   std::unique_ptr<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>> _key_dist; // key hash and per node counts
   std::unique_ptr<std::map<size_t, std::vector<size_t>, std::less<size_t>>> _groups;                   // local key, offsets map
 
@@ -192,6 +192,49 @@ public:
   void async_send(int dest, const Field& f, MPI_Request& request) {
     MPI_Send(&_count, 1, MPI_UNSIGNED_LONG, dest, omp_get_thread_num(), MPI_COMM_WORLD);
     MPI_Isend(&_payload[0], _count, (schema_ptr->_field_types->at(f)), dest, omp_get_thread_num(), MPI_COMM_WORLD, &request);
+  }
+
+  void async_send_per_key(size_t key, int dest, MPI_Request& request) {
+    CHECK(_groups->find(key) != _groups->end());
+    CHECK(dest < ptr->world);
+    int n = _groups->at(key).size();
+    int array_of_blocklengths[n], displ[n];
+    for (int i = 0; i < n; i++) {
+      array_of_blocklengths[i] = 1;
+      displ[i] = (int)_groups->at(key).at(i);
+    }
+    MPI_Datatype keyType;
+    MPI_Type_indexed(n, array_of_blocklengths, displ, *schema_ptr->getType(), &keyType);
+    MPI_Type_commit(&keyType);
+    MPI_Isend(&_payload[0], 1, keyType, dest, omp_get_thread_num(), MPI_COMM_WORLD, &request);
+    MPI_Type_free(&keyType);
+  }
+
+  /**
+   * for dest process, find all process aim to send data
+   * @param key
+   * @param dest
+   * @param request
+   */
+  void async_recv_per_key(size_t key, int dest, TempTable& out) {
+    if (dest != ptr->rank) return; // current process is not dest
+    CHECK(out.schema_ptr->schema_sig() == this->schema_ptr->schema_sig());
+    auto list = _key_dist->at(key); // use _key_dist check if source has rows of key
+    MPI_Request requests[list.size()];
+    int i = 0;
+    out._payload.resize(0);
+    for (auto n : list) {
+      int source = n.first;
+      size_t rows = n.second;
+      size_t org_size = out._payload.size();
+      out._payload.resize(org_size + schema_ptr->size() * rows);
+      out._count += rows;
+      MPI_Irecv(&out._payload[org_size], rows, *schema_ptr->getType(), source, omp_get_thread_num(), MPI_COMM_WORLD, &requests[i++]);
+    }
+    for (i = 0; i < list.size(); i++) {
+      MPI_Status status;
+      MPI_Wait(&requests[i], &status);
+    }
   }
 
   /**
@@ -467,7 +510,62 @@ public:
     ptr->forward();
   }
 
-  inline void gather(std::vector<std::pair<int, size_t>>& left, size_t key, int r, TempTable& global_mtable) {
+  // group table with
+  void join(const Field& f1, const Field& f2, TempTable& table2, TempTable& out) {
+    CHECK(schema_ptr->exist(f1));
+    CHECK(table2.schema_ptr->exist(f2));
+    CHECK(f1.type == f2.type);                                     //key should be same type
+    CHECK(out.schema_ptr->exist(f1) || out.schema_ptr->exist(f2)); //force output has key columns
+    //local shuffle key distribution of each table
+    this->group_by(f1);
+    table2.group_by(f2);
+
+    std::vector<size_t> union_keys; // find list of keys where join matches
+    // union key_distributions
+    for (auto pair : *_key_dist.get()) {
+      if (table2._key_dist->find(pair.first) != table2._key_dist->end()) {
+        // inner joined set
+        union_keys.push_back(pair.first);
+      }
+    }
+
+    LOG(INFO) << "TOTAL KEYS " << union_keys.size();
+    gather_join(union_keys, table2, out);
+    int r = 0, i = 0;
+    std::vector<MPI_Request> requests;
+
+    //send all keyed elements out
+    for (const auto s : union_keys) {
+      // contains element of key s
+      if (_groups->find(s) != _groups->end()) {
+        MPI_Request request;
+        this->async_send_per_key(s, r, request);
+        requests.push_back(request);
+      }
+      r = (r + 1) % ptr->world;
+    }
+
+    r = 0; // maching recv elements per key
+    for (const auto s : union_keys) {
+      // if myself is recv
+      if (ptr->rank == r) {
+        TempTable t(ptr, schema_ptr);
+        this->async_recv_per_key(s, r, t);
+      }
+      r = (r + 1) % ptr->world;
+    }
+
+    for (auto r : requests) {
+      MPI_Status status;
+      MPI_Wait(&r, &status);
+    }
+    // unlike gather model where all rows are physically aggregated to same processes sequentially
+    // TODO(chenqin): shuffle (broadcast, hash) could write to disk buffer with dest |key1| rows|key2|rows| and run async send
+    // since _key_dist is shared in all process, each communication could be reasoned independently hence reciver could starts async recv as well
+    ptr->forward();
+  }
+
+  void gather(std::vector<std::pair<int, size_t>>& left, size_t key, int r, TempTable& global_mtable) {
     auto pruned_schema = global_mtable.schema_ptr;
     auto pruned_type = pruned_schema->getType();
     CHECK_NOTNULL(pruned_schema.get());
@@ -513,28 +611,15 @@ public:
     MPI_Gatherv(mtable.payload_ptr(), mtable._count, *pruned_type, global_mtable.payload_ptr(), recvcounts, displs, *pruned_type, r, MPI_COMM_WORLD);
   }
 
-  // group table with
-  void gather_join(const Field& f1, const Field& f2, TempTable& table2, TempTable& out) {
-    CHECK(schema_ptr->exist(f1));
-    CHECK(table2.schema_ptr->exist(f2));
-    CHECK(f1.type == f2.type);                                     //key should be same type
-    CHECK(out.schema_ptr->exist(f1) || out.schema_ptr->exist(f2)); //force output has key columns
-    //local shuffle key distribution of each table
-    this->group_by(f1);
-    table2.group_by(f2);
-
-    int r = 0;
-    std::vector<size_t> union_keys; // find list of keys where join matches
-    // union key_distributions
-    for (auto pair : *_key_dist.get()) {
-      if (table2._key_dist->find(pair.first) != table2._key_dist->end()) {
-        // inner joined set
-        union_keys.push_back(pair.first);
-      }
-    }
-
-    LOG(INFO) << "TOTAL KEYS " << union_keys.size();
+  /**
+   * for small number of keys
+   * @param union_keys
+   * @param table2
+   * @param out
+   */
+  void gather_join(const std::vector<size_t>& union_keys, TempTable& table2, TempTable& out) {
     // physical gather join, r should be where rows aggregated
+    int r = 0;
     for (const auto s : union_keys) {
       std::vector<std::pair<int, size_t>> left = _key_dist->at(s);
       std::vector<std::pair<int, size_t>> right = table2._key_dist->at(s);
@@ -593,11 +678,6 @@ public:
       // do mxn rows in out
       r = (r + 1) % ptr->world;
     }
-
-    // unlike gather model where all rows are physically aggregated to same processes sequentially
-    // TODO(chenqin): shuffle (broadcast, hash) could write to disk buffer with dest |key1| rows|key2|rows| and run async send
-    // since _key_dist is shared in all process, each communication could be reasoned independently hence reciver could starts async recv as well
-    ptr->forward();
   }
 };
 } // namespace table

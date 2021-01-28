@@ -172,7 +172,7 @@ int main(int argc, char** argv) {
     v.p_val.int_val = 1;
     b.write(field1, v);
     TempTable t1(node, schema_ptr);
-    for(int i = 0 ;i < 1000; i++) {
+    for(int i = 0 ;i < 10; i++) {
       v.p_val.int_val = i;
       b.write(field1, v);
       t1.ingest(b);
@@ -180,7 +180,7 @@ int main(int argc, char** argv) {
 
     TempTable t2(node, schema_ptr);
     for(int i = 0 ;i < 10000; i++) {
-      v.p_val.int_val = i%1000;
+      v.p_val.int_val = i%10;
       b.write(field1, v);
       t2.ingest(b);
     }
@@ -190,13 +190,15 @@ int main(int argc, char** argv) {
     std::shared_ptr<TableSchema> out_schema_ptr = std::make_shared<TableSchema>(rr);
 
     TempTable tout(node, out_schema_ptr);
-    t1.gather_join(field1, field1, t2, tout);
+    t1.join(field1, field1, t2, tout);
     Value outv;
 
     if (tout.count() > 0) {
       tout.read(0)->read(field1, outv);
       LOG(INFO) << outv.p_val.int_val;
     }
+
+    node->forward();
   }
   return 0;
 }
