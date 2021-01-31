@@ -193,46 +193,81 @@ public:
     MPI_Isend(&_payload[0], _count, (schema_ptr->_field_types->at(f)), dest, omp_get_thread_num(), MPI_COMM_WORLD, &request);
   }
 
-  void async_send_per_key(size_t key, int dest, std::vector<MPI_Request>& requests) {
-    CHECK(_groups->find(key) != _groups->end());
+  /**
+   * find better hash function
+   * @param key
+   * @return
+   */
+  size_t decidePlacement(size_t key) {
+    return key%ptr->world;
+  }
+
+  void async_send_per_rank(int dest, std::vector<MPI_Request>& requests) {
     CHECK(dest < ptr->world);
-    int n = _groups->at(key).size();
-    int array_of_blocklengths[n], displ[n];
-    for (int i = 0; i < n; i++) {
-      array_of_blocklengths[i] = 1;
-      displ[i] = (int)_groups->at(key).at(i);
+    int n = 0;
+    for(auto g : *_groups) {
+      size_t placement = decidePlacement(g.first);
+      if(placement == (size_t)dest) {
+        n += g.second.size();
+      }
+      // LOG(INFO) << placement << " send " << ptr->world;
     }
+    int i = 0;
+    int array_of_blocklengths[n], displ[n];
+    for(auto g : *_groups) {
+      size_t placement = decidePlacement(g.first);
+      if(placement == (size_t)dest) {
+        for(auto item : g.second) {
+          array_of_blocklengths[i] = 1;
+          displ[i] = (int) item;
+          i++;
+        }
+      }
+    }
+    CHECK_EQ(i, n);
     // LOG(INFO) << "send key " << key << " offset " << displ[0] << " to " << dest << "@" << ptr->rank;
     MPI_Datatype keyType;
     MPI_Type_indexed(n, array_of_blocklengths, displ, *schema_ptr->getType(), &keyType);
     MPI_Type_commit(&keyType);
     MPI_Request request;
-    MPI_Isend(&_payload[0], 1, keyType, dest, dest, MPI_COMM_WORLD, &request);
+    MPI_Isend(&_payload[0], 1, keyType, dest, getTag(ptr->rank, dest), MPI_COMM_WORLD, &request);
     requests.push_back(request);
     MPI_Type_free(&keyType);
   }
 
   /**
-   * for dest process, find all process aim to send data
+   * for dest process, find all aim to send data
    * @param key
    * @param dest
    * @param request
    */
-  void async_recv_per_key(size_t key, int dest, TempTable& out, std::vector<MPI_Request>& requests) {
-    CHECK_EQ(dest, ptr->rank);
+  void async_recv_per_rank(int source, TempTable& out, std::vector<MPI_Request>& requests) {
     CHECK(out.schema_ptr->schema_sig() == this->schema_ptr->schema_sig());
-    auto list = _key_dist->at(key); // use _key_dist check if source has rows of key
-    for (auto n : list) {
-      int source = n.first;
-      size_t rows = n.second;
-      // LOG(INFO) << "recv " <<  key << " from " << source << " " << rows << "@" << dest;
-      size_t org_size = out._payload.size();
-      out._payload.resize(org_size + schema_ptr->size() * rows);
-      out._count += rows;
-      MPI_Request request;
-      MPI_Irecv(&out._payload[org_size], rows, *schema_ptr->getType(), source, dest, MPI_COMM_WORLD, &request);
-      requests.push_back(request);
+    size_t rows = 0;
+
+    for(auto g : *_key_dist) {
+      size_t placement = decidePlacement(g.first);
+      // LOG(INFO) << placement << " recv " << ptr->world;
+      if(placement == (size_t) ptr->rank) {
+        for(auto item : g.second) {
+          if(item.first == source) {
+            rows += item.second;
+          }
+        }
+      }
     }
+
+    // LOG(INFO) << "recv " <<  key << " from " << source << " " << rows << "@" << dest;
+    size_t org_size = out._payload.size();
+    out._payload.resize(org_size + schema_ptr->size() * rows);
+    out._count += rows;
+    MPI_Request request;
+    MPI_Irecv(&out._payload[org_size], rows, *schema_ptr->getType(), source, getTag(source, ptr->rank), MPI_COMM_WORLD, &request);
+    requests.push_back(request);
+  }
+
+  inline int getTag(int source, int dest) {
+    return source << 5 + dest;
   }
 
   /**
@@ -509,7 +544,7 @@ public:
   }
 
   // group table with
-  void join(const Field& f1, const Field& f2, TempTable& table2, TempTable& out, bool flush) {
+  void co_group(const Field& f1, const Field& f2, TempTable& table2, TempTable& out, bool flush) {
     CHECK(schema_ptr->exist(f1));
     CHECK(table2.schema_ptr->exist(f2));
     CHECK(f1.type == f2.type);                                     //key should be same type
@@ -518,53 +553,28 @@ public:
     this->group_by(f1);
     table2.group_by(f2);
 
-    std::vector<size_t> union_keys; // find list of keys where join matches
-    // union key_distributions
-    for (auto pair : *_key_dist.get()) {
-      if (table2._key_dist->find(pair.first) != table2._key_dist->end()) {
-        // inner joined set
-        union_keys.push_back(pair.first);
-      }
-    }
-
-    int r = 0;
     std::vector<MPI_Request> requests;
     TempTable recv(ptr, schema_ptr);
     TempTable recv2(ptr, table2.schema_ptr);
     recv._payload.resize(0);
     recv2._payload.resize(0);
 
-    //send all keyed elements out
-    for (const auto s : union_keys) {
-      // contains element of key s
-      if (_groups->find(s) != _groups->end()) {
-        this->async_send_per_key(s, r, requests);
-      }
-      if (table2._groups->find(s) != table2._groups->end()) {
-        table2.async_send_per_key(s, r, requests);
-      }
-
-      // for each process init async recv from senders
-      if (ptr->rank == r) {
-        this->async_recv_per_key(s, r, recv, requests);
-        table2.async_recv_per_key(s, r, recv2, requests);
-      }
-      r = (r + 1) % ptr->world;
+    // hash shuffle to world
+    for(auto peer = 0 ; peer < ptr->world; peer++) {
+      this->async_send_per_rank(peer, requests);
+      table2.async_send_per_rank(peer, requests);
     }
 
-    for (auto r : requests) {
+    // read from each rank
+    for(auto peer = 0 ; peer < ptr->world; peer++) {
+      this->async_recv_per_rank(peer, recv, requests);
+      table2.async_recv_per_rank(peer, recv2, requests);
+    }
+
+    for(auto request : requests) {
       MPI_Status status;
-      MPI_Wait(&r, &status);
+      MPI_Wait(&request, &status);
     }
-
-    /* DEBUG
-    for (size_t t = 0; t < recv.count(); t++) {
-      Value test1, test2;
-      recv.read(t)->read(f1, test1);
-      recv2.read(t)->read(f1, test2);
-      LOG(INFO) << "v1:" << test1.p_val.int_val << " v2:" << test2.p_val.int_val << " @" << ptr->rank;
-    }
-     */
 
     for (size_t l = 0; l < recv.count(); l++) {
       for (size_t r = 0; r < recv2.count(); r++) {
@@ -573,8 +583,8 @@ public:
         Value lv, rv;
         left->read(f1, lv);
         right->read(f2, rv);
-        if (lv != rv) continue; //skip those not matched rows
-        // LOG(INFO) << "left " << lv.p_val.int_val << " right " << rv.p_val.int_val << " @" << ptr->rank;
+        if(value_hasher.operator()(lv) != value_hasher.operator()(rv)) continue; //skip those not matched rows
+        LOG(INFO) << "left " << lv.p_val.int_val << " right " << rv.p_val.int_val << " @" << ptr->rank;
         RowBuffer row(out.schema_ptr);
         for (auto f : out.schema_ptr->fields) {
           if (this->schema_ptr->exist(f)) {
