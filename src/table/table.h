@@ -225,6 +225,8 @@ public:
       }
     }
     CHECK_EQ(i, n);
+    if(n == 0) return; //nothing to send to dest
+
     // LOG(INFO) << "send key " << key << " offset " << displ[0] << " to " << dest << "@" << ptr->rank;
     MPI_Datatype keyType;
     MPI_Type_indexed(n, array_of_blocklengths, displ, *schema_ptr->getType(), &keyType);
@@ -256,6 +258,8 @@ public:
         }
       }
     }
+
+    if(rows == 0) return; //nothing to recv from source
 
     // LOG(INFO) << "recv " <<  key << " from " << source << " " << rows << "@" << dest;
     size_t org_size = out._payload.size();
