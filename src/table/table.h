@@ -147,7 +147,6 @@ public:
       nr = writev(fd, iov, batch);
       CHECK_NE(nr, -1);
     }
-    LOG(INFO) << "flushed to " << path;
     close(fd);
   }
 
@@ -203,11 +202,12 @@ public:
       array_of_blocklengths[i] = 1;
       displ[i] = (int)_groups->at(key).at(i);
     }
+    // LOG(INFO) << "send key " << key << " offset " << displ[0] << " to " << dest << "@" << ptr->rank;
     MPI_Datatype keyType;
     MPI_Type_indexed(n, array_of_blocklengths, displ, *schema_ptr->getType(), &keyType);
     MPI_Type_commit(&keyType);
     MPI_Request request;
-    MPI_Isend(&_payload[0], 1, keyType, dest, omp_get_thread_num(), MPI_COMM_WORLD, &request);
+    MPI_Isend(&_payload[0], 1, keyType, dest, dest, MPI_COMM_WORLD, &request);
     requests.push_back(request);
     MPI_Type_free(&keyType);
   }
@@ -222,15 +222,15 @@ public:
     CHECK_EQ(dest, ptr->rank);
     CHECK(out.schema_ptr->schema_sig() == this->schema_ptr->schema_sig());
     auto list = _key_dist->at(key); // use _key_dist check if source has rows of key
-    out._payload.resize(0);
     for (auto n : list) {
       int source = n.first;
       size_t rows = n.second;
+      // LOG(INFO) << "recv " <<  key << " from " << source << " " << rows << "@" << dest;
       size_t org_size = out._payload.size();
       out._payload.resize(org_size + schema_ptr->size() * rows);
       out._count += rows;
       MPI_Request request;
-      MPI_Irecv(&out._payload[org_size], rows, *schema_ptr->getType(), source, omp_get_thread_num(), MPI_COMM_WORLD, &request);
+      MPI_Irecv(&out._payload[org_size], rows, *schema_ptr->getType(), source, dest, MPI_COMM_WORLD, &request);
       requests.push_back(request);
     }
   }
@@ -509,7 +509,7 @@ public:
   }
 
   // group table with
-  void join(const Field& f1, const Field& f2, TempTable& table2, TempTable& out) {
+  void join(const Field& f1, const Field& f2, TempTable& table2, TempTable& out, bool flush) {
     CHECK(schema_ptr->exist(f1));
     CHECK(table2.schema_ptr->exist(f2));
     CHECK(f1.type == f2.type);                                     //key should be same type
@@ -531,6 +531,9 @@ public:
     std::vector<MPI_Request> requests;
     TempTable recv(ptr, schema_ptr);
     TempTable recv2(ptr, table2.schema_ptr);
+    recv._payload.resize(0);
+    recv2._payload.resize(0);
+
     //send all keyed elements out
     for (const auto s : union_keys) {
       // contains element of key s
@@ -554,19 +557,31 @@ public:
       MPI_Wait(&r, &status);
     }
 
-    for(size_t l = 0 ; l < recv.count(); l++) {
-      //TODO (chenqin): recv is flat buffer of continuous key1 v1...vn|key2....| in same order as recv2
-      // should find cluster of each key and permutate
-      for(size_t r = 0 ; r < recv2.count(); r++) {
+    /* DEBUG
+    for (size_t t = 0; t < recv.count(); t++) {
+      Value test1, test2;
+      recv.read(t)->read(f1, test1);
+      recv2.read(t)->read(f1, test2);
+      LOG(INFO) << "v1:" << test1.p_val.int_val << " v2:" << test2.p_val.int_val << " @" << ptr->rank;
+    }
+     */
+
+    for (size_t l = 0; l < recv.count(); l++) {
+      for (size_t r = 0; r < recv2.count(); r++) {
         auto left = recv.read(l);
         auto right = recv2.read(r);
+        Value lv, rv;
+        left->read(f1, lv);
+        right->read(f2, rv);
+        if (lv != rv) continue; //skip those not matched rows
+        // LOG(INFO) << "left " << lv.p_val.int_val << " right " << rv.p_val.int_val << " @" << ptr->rank;
         RowBuffer row(out.schema_ptr);
-        for(auto f : out.schema_ptr->fields) {
-          if(this->schema_ptr->exist(f)) {
+        for (auto f : out.schema_ptr->fields) {
+          if (this->schema_ptr->exist(f)) {
             Value v;
             left->read(f, v);
             row.write(f, v);
-          } else if(table2.schema_ptr->exist(f)) {
+          } else if (table2.schema_ptr->exist(f)) {
             Value v;
             right->read(f, v);
             row.write(f, v);
@@ -575,7 +590,10 @@ public:
         out.ingest(row);
       }
     }
-
+    if (flush) {
+      this->flush("/dev/null");
+      table2.flush("/dev/null");
+    }
     ptr->forward();
   }
 };
