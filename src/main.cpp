@@ -172,7 +172,7 @@ int main(int argc, char** argv) {
     v.p_val.int_val = 1;
     b.write(field1, v);
     TempTable t1(node, schema_ptr);
-    for(int i = 0 ;i < 10; i++) {
+    for(int i = 0 ;i < 10000; i++) {
       v.p_val.int_val = i;
       b.write(field1, v);
       t1.ingest(b);
@@ -180,7 +180,7 @@ int main(int argc, char** argv) {
 
     TempTable t2(node, schema_ptr);
     for(int i = 0 ;i < 10000; i++) {
-      v.p_val.int_val = i%10;
+      v.p_val.int_val = i;
       b.write(field1, v);
       t2.ingest(b);
     }

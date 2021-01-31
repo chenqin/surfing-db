@@ -194,7 +194,7 @@ public:
     MPI_Isend(&_payload[0], _count, (schema_ptr->_field_types->at(f)), dest, omp_get_thread_num(), MPI_COMM_WORLD, &request);
   }
 
-  void async_send_per_key(size_t key, int dest, MPI_Request& request) {
+  void async_send_per_key(size_t key, int dest, std::vector<MPI_Request>& requests) {
     CHECK(_groups->find(key) != _groups->end());
     CHECK(dest < ptr->world);
     int n = _groups->at(key).size();
@@ -206,7 +206,9 @@ public:
     MPI_Datatype keyType;
     MPI_Type_indexed(n, array_of_blocklengths, displ, *schema_ptr->getType(), &keyType);
     MPI_Type_commit(&keyType);
+    MPI_Request request;
     MPI_Isend(&_payload[0], 1, keyType, dest, omp_get_thread_num(), MPI_COMM_WORLD, &request);
+    requests.push_back(request);
     MPI_Type_free(&keyType);
   }
 
@@ -216,12 +218,10 @@ public:
    * @param dest
    * @param request
    */
-  void async_recv_per_key(size_t key, int dest, TempTable& out) {
-    if (dest != ptr->rank) return; // current process is not dest
+  void async_recv_per_key(size_t key, int dest, TempTable& out, std::vector<MPI_Request>& requests) {
+    CHECK_EQ(dest, ptr->rank);
     CHECK(out.schema_ptr->schema_sig() == this->schema_ptr->schema_sig());
     auto list = _key_dist->at(key); // use _key_dist check if source has rows of key
-    MPI_Request requests[list.size()];
-    int i = 0;
     out._payload.resize(0);
     for (auto n : list) {
       int source = n.first;
@@ -229,11 +229,9 @@ public:
       size_t org_size = out._payload.size();
       out._payload.resize(org_size + schema_ptr->size() * rows);
       out._count += rows;
-      MPI_Irecv(&out._payload[org_size], rows, *schema_ptr->getType(), source, omp_get_thread_num(), MPI_COMM_WORLD, &requests[i++]);
-    }
-    for (i = 0; i < list.size(); i++) {
-      MPI_Status status;
-      MPI_Wait(&requests[i], &status);
+      MPI_Request request;
+      MPI_Irecv(&out._payload[org_size], rows, *schema_ptr->getType(), source, omp_get_thread_num(), MPI_COMM_WORLD, &request);
+      requests.push_back(request);
     }
   }
 
@@ -529,28 +527,24 @@ public:
       }
     }
 
-    LOG(INFO) << "TOTAL KEYS " << union_keys.size();
-    gather_join(union_keys, table2, out);
-    int r = 0, i = 0;
+    int r = 0;
     std::vector<MPI_Request> requests;
-
+    TempTable recv(ptr, schema_ptr);
+    TempTable recv2(ptr, table2.schema_ptr);
     //send all keyed elements out
     for (const auto s : union_keys) {
       // contains element of key s
       if (_groups->find(s) != _groups->end()) {
-        MPI_Request request;
-        this->async_send_per_key(s, r, request);
-        requests.push_back(request);
+        this->async_send_per_key(s, r, requests);
       }
-      r = (r + 1) % ptr->world;
-    }
+      if (table2._groups->find(s) != table2._groups->end()) {
+        table2.async_send_per_key(s, r, requests);
+      }
 
-    r = 0; // maching recv elements per key
-    for (const auto s : union_keys) {
-      // if myself is recv
+      // for each process init async recv from senders
       if (ptr->rank == r) {
-        TempTable t(ptr, schema_ptr);
-        this->async_recv_per_key(s, r, t);
+        this->async_recv_per_key(s, r, recv, requests);
+        table2.async_recv_per_key(s, r, recv2, requests);
       }
       r = (r + 1) % ptr->world;
     }
@@ -559,125 +553,30 @@ public:
       MPI_Status status;
       MPI_Wait(&r, &status);
     }
-    // unlike gather model where all rows are physically aggregated to same processes sequentially
-    // TODO(chenqin): shuffle (broadcast, hash) could write to disk buffer with dest |key1| rows|key2|rows| and run async send
-    // since _key_dist is shared in all process, each communication could be reasoned independently hence reciver could starts async recv as well
-    ptr->forward();
-  }
 
-  void gather(std::vector<std::pair<int, size_t>>& left, size_t key, int r, TempTable& global_mtable) {
-    auto pruned_schema = global_mtable.schema_ptr;
-    auto pruned_type = pruned_schema->getType();
-    CHECK_NOTNULL(pruned_schema.get());
-    // gatherv rows of key to r
-    int recvcounts[ptr->world], displs[ptr->world];
-    memset(recvcounts, 0, ptr->world * sizeof(int));
-    memset(displs, 0, ptr->world * sizeof(int));
-    displs[0] = 0;
-    size_t m_size = 0;
-
-    for (int i = 0; i < ptr->world; i++) {
-      for (auto s : left) {
-        if (s.first == i) {
-          recvcounts[i] = s.second;
-          m_size += s.second;
-        } else {
-          recvcounts[i] = 0;
-        }
-        if (i > 0) {
-          displs[i] = displs[i - 1] + recvcounts[i - 1];
-        }
-      }
-    }
-    TempTable mtable(global_mtable.ptr, pruned_schema); // after column pruning
-
-    if (this->_groups.get()->find(key) == this->_groups.get()->end()) {
-      mtable._payload.resize(0);
-    } else {
-      std::vector<size_t> offsets = this->_groups->at(key);
-      for (size_t it : offsets) {
-        RowBuffer out(pruned_schema);
-        auto rorg = read(it);
-        for (auto f : pruned_schema.get()->fields) {
-          Value v;
-          rorg->read(f, v);
-          out.write(f, v);
-        }
-        mtable.ingest(out);
-      }
-    }
-    global_mtable._count = m_size;
-    global_mtable._payload.resize(pruned_schema->size() * m_size);
-    MPI_Gatherv(mtable.payload_ptr(), mtable._count, *pruned_type, global_mtable.payload_ptr(), recvcounts, displs, *pruned_type, r, MPI_COMM_WORLD);
-  }
-
-  /**
-   * for small number of keys
-   * @param union_keys
-   * @param table2
-   * @param out
-   */
-  void gather_join(const std::vector<size_t>& union_keys, TempTable& table2, TempTable& out) {
-    // physical gather join, r should be where rows aggregated
-    int r = 0;
-    for (const auto s : union_keys) {
-      std::vector<std::pair<int, size_t>> left = _key_dist->at(s);
-      std::vector<std::pair<int, size_t>> right = table2._key_dist->at(s);
-
-      RowSchema ls, rs; //prune list of columns used in out table
-      for (auto of : out.schema_ptr->fields) {
-        if (schema_ptr->exist(of)) {
-          ls.fields.push_back(of);
-        }
-        // todo if field has same name and type
-        if (table2.schema_ptr->exist(of)) {
-          rs.fields.push_back(of);
-        } else {
-          CHECK(false);
-        }
-      }
-
-      TempTable global_mtable_per_key(this->ptr, std::make_shared<TableSchema>(ls));
-      TempTable global_ntable_per_key(table2.ptr, std::make_shared<TableSchema>(rs));
-      gather(left, s, r, global_mtable_per_key); // collect selected columns of each table
-      gather(right, s, r, global_ntable_per_key);
-
-      // permutation of m elements with n elements
-      if (ptr->rank == r) {
-        for (size_t mi = 0; mi < global_mtable_per_key._count; mi++) {
-          auto m = global_mtable_per_key.read(mi);
-          for (size_t ni = 0; ni < global_ntable_per_key._count; ni++) {
-            auto n = global_ntable_per_key.read(ni);
-            auto out_schema_ptr = out.schema_ptr;
-            RowBuffer row(out_schema_ptr);
-            // extract field from m , n respectively
-            for (auto f : out_schema_ptr->fields) {
-              // check m fields
-              for (auto mf : ls.fields) {
-                if (f == mf) {
-                  Value v;
-                  m->read(mf, v);
-                  row.write(f, v);
-                  break;
-                }
-              }
-              // check n fields
-              for (auto nf : rs.fields) {
-                if (f == nf) {
-                  Value v;
-                  n->read(nf, v);
-                  row.write(f, v);
-                  break;
-                }
-              }
-            }
-            out.ingest(row); //write permutated result to out
+    for(size_t l = 0 ; l < recv.count(); l++) {
+      //TODO (chenqin): recv is flat buffer of continuous key1 v1...vn|key2....| in same order as recv2
+      // should find cluster of each key and permutate
+      for(size_t r = 0 ; r < recv2.count(); r++) {
+        auto left = recv.read(l);
+        auto right = recv2.read(r);
+        RowBuffer row(out.schema_ptr);
+        for(auto f : out.schema_ptr->fields) {
+          if(this->schema_ptr->exist(f)) {
+            Value v;
+            left->read(f, v);
+            row.write(f, v);
+          } else if(table2.schema_ptr->exist(f)) {
+            Value v;
+            right->read(f, v);
+            row.write(f, v);
           }
         }
+        out.ingest(row);
       }
-      // do mxn rows in out
-      r = (r + 1) % ptr->world;
     }
+
+    ptr->forward();
   }
 };
 } // namespace table
