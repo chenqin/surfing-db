@@ -208,7 +208,7 @@ public:
     return key%ptr->world;
   }
 
-  void async_send_per_rank(int dest, std::vector<MPI_Request>& requests) {
+  void async_send_per_rank(int dest, MPI_Request& request) {
     CHECK(dest < ptr->world);
     int n = 0;
     for(auto g : *_groups) {
@@ -232,14 +232,10 @@ public:
     }
     CHECK_EQ(i, n);
     if(n == 0) return; //nothing to send to dest
-
-    LOG(INFO) << "send " << n << " to " << dest << "@" << ptr->rank;
     MPI_Datatype keyType;
     MPI_Type_indexed(n, array_of_blocklengths, displ, *schema_ptr->getType(), &keyType);
     MPI_Type_commit(&keyType);
-    MPI_Request request;
-    MPI_Isend(&_payload[0], 1, keyType, dest,   ptr->stage, MPI_COMM_WORLD, &request);
-    requests.push_back(request);
+    MPI_Isend(&_payload[0], 1, keyType, dest,   0, MPI_COMM_WORLD, &request);
     MPI_Type_free(&keyType);
   }
 
@@ -249,7 +245,7 @@ public:
    * @param dest
    * @param request
    */
-  void async_recv_per_rank(int source, TempTable& out) {
+  void async_recv_per_rank(int source, TempTable& out, MPI_Request& request) {
     CHECK(out.schema_ptr->schema_sig() == this->schema_ptr->schema_sig());
     size_t rows = 0;
 
@@ -266,13 +262,10 @@ public:
     }
 
     if(rows == 0) return; //nothing to recv from source
-    LOG(INFO) << "recv " << rows << " from " << source << "@" << ptr->rank;
-    // LOG(INFO) << "recv " <<  key << " from " << source << " " << rows << "@" << dest;
     size_t org_size = out._payload.size();
     out._payload.resize(org_size + schema_ptr->size() * rows);
     out._count += rows;
-    MPI_Request request;
-    MPI_Irecv(&out._payload[org_size], rows, *schema_ptr->getType(), source, ptr->stage, MPI_COMM_WORLD, &request);
+    MPI_Irecv(&out._payload[org_size], rows, *schema_ptr->getType(), source, 0, MPI_COMM_WORLD, &request);
     MPI_Status status;
     MPI_Wait(&request, &status);
   }
@@ -559,16 +552,20 @@ public:
     TempTable recv(ptr, schema_ptr);
     recv._payload.resize(0);
 
-    // hash shuffle to world
+    // hash shuffle world
     for(auto peer = 0 ; peer < ptr->world; peer++) {
-      this->async_send_per_rank(peer, requests);
+      MPI_Request  request;
+      this->async_send_per_rank(peer, request);
+      requests.push_back(request);
     }
 
-    // read from each rank
+    // read from world
     for(auto peer = 0 ; peer < ptr->world; peer++) {
-      this->async_recv_per_rank(peer, recv);
+      MPI_Request  request;
+      this->async_recv_per_rank(peer, recv, request);
     }
 
+    // since recv is blocking
     for(auto request : requests) {
       MPI_Status status;
       MPI_Wait(&request, &status);

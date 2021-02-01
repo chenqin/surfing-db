@@ -147,7 +147,7 @@ int main(int argc, char** argv) {
 
     KMeanOperator op(1, fields, 100);
     tsed.process(op);
-/*
+
     // stage 3, run xgb
     tsed.ingest(b);
     LOG(INFO) << "xgb operator"
@@ -167,13 +167,13 @@ int main(int argc, char** argv) {
     tsed.process(xgbOperator);
 
     tsed.group_by(field1);
-    //tsed.clear();
-*/
+    tsed.clear();
+
     Value v;
     v.p_val.int_val = 1;
     b.write(field1, v);
     TempTable t1(node, schema_ptr);
-    for (int i = 0; i < 200; i++) {
+    for (int i = 0; i < 20000; i++) {
       v.p_val.int_val = i + node->rank;
       b.write(field1, v);
       t1.ingest(b);
