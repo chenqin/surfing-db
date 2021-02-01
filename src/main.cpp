@@ -95,94 +95,60 @@ int main(int argc, char** argv) {
    */
   TempTable tsed(node, schema_ptr);
 
-  int iteration = 0;
-  while (iteration++ < 1) {
-    /**
+  /**
   * ingestion
   */
-    if (node->rank == 0) {
-      size_t i;
-      for (i = 0; i < 3000; i++) {
-        tsed.ingest(b);
-      }
+  if (node->rank == 0) {
+    size_t i;
+    for (i = 0; i < 3000; i++) {
+      tsed.ingest(b);
     }
-    node->forward();
-    /**
-   * broadcast, recve
-   */
-    if (node->rank == 0) {
-      for (int j = 1; j < node->world; j++) {
-        MPI_Request req;
-        tsed.async_send(j, field1, req);
-        node->keep(std::make_unique<MPI_Request>(req));
-      }
-    } else {
-      TempTable trecv(node, schema_ptr);
-      MPI_Request request;
-      trecv.async_recv(0, field1, request);
-      auto revcallback = std::async(std::launch::deferred, [&request, &trecv, field1]() {
-        MPI_Status status;
-        MPI_Wait(&request, &status);
-        trecv.complete();
-        // after recv all items, loop over and modify in parallel parDo
-        for (int i = 0; i < 3000; i++) {
-          auto s = trecv.read(i);
-          Value v, vm;
-          s->read(field1, v);
-          v.p_val.int_val = 2;
-          s->write(field1, v);
-          s->read(field1, vm);
-        }
-      });
-
-      // do something not waiting for sent data here
-      revcallback.wait();
-    }
-    node->forward(); // stage 1 broadcast data
-
-    // stage 2 run k_mean
-    std::vector<Field> fields;
-    fields.push_back(field4);
-    fields.resize(1);
-
-    KMeanOperator op(1, fields, 100);
-    tsed.process(op);
-
-    // stage 3, run xgb
-    tsed.ingest(b);
-    LOG(INFO) << "xgb operator"
-              << " process " << node->rank << " has " << tsed.count() << " rows";
-    XGBParameters parameters;
-    parameters.tree_method = "exact";
-    parameters.objective = "reg:linear";
-    parameters.min_child_weight = 1;
-    parameters.gamma = 0.1;
-    parameters.max_depth = 2;
-    parameters.verbosity = true;
-    parameters.eval_metric = "error";
-    XGBOperator xgbOperator(fields, field4, parameters, node->rank, node->world);
-    tsed.process(xgbOperator);
-
-    xgbOperator.parameters.isTraining = false; // now switch to prediction
-    tsed.process(xgbOperator);
-
-    tsed.group_by(field1);
-    tsed.clear();
-
-    Value v;
-    v.p_val.int_val = 1;
-    b.write(field1, v);
-    TempTable t1(node, schema_ptr);
-    for (int i = 0; i < 20000; i++) {
-      v.p_val.int_val = i + node->rank;
-      b.write(field1, v);
-      t1.ingest(b);
-    }
-
-    TempTable tout(node, schema_ptr);
-    t1.group_shuffle(field1, tout);
-    LOG(INFO) << node->rank << " " << tout.count();
-    node->forward();
   }
+
+  node->forward(); // stage 1 broadcast data
+
+  // stage 2 run k_mean
+  std::vector<Field> fields;
+  fields.push_back(field4);
+  fields.resize(1);
+
+  KMeanOperator op(1, fields, 100);
+  tsed.process(op);
+
+  // stage 3, run xgb
+  tsed.ingest(b);
+  LOG(INFO) << "xgb operator"
+            << " process " << node->rank << " has " << tsed.count() << " rows";
+  XGBParameters parameters;
+  parameters.tree_method = "exact";
+  parameters.objective = "reg:linear";
+  parameters.min_child_weight = 1;
+  parameters.gamma = 0.1;
+  parameters.max_depth = 2;
+  parameters.verbosity = true;
+  parameters.eval_metric = "error";
+  XGBOperator xgbOperator(fields, field4, parameters, node->rank, node->world);
+  tsed.process(xgbOperator);
+
+  xgbOperator.parameters.isTraining = false; // now switch to prediction
+  tsed.process(xgbOperator);
+
+  tsed.group_by(field1);
+  tsed.clear();
+
+  Value v;
+  v.p_val.int_val = 1;
+  b.write(field1, v);
+  TempTable t1(node, schema_ptr);
+  for (int i = 0; i < 10000; i++) {
+    v.p_val.int_val = i + node->rank;
+    b.write(field1, v);
+    t1.ingest(b);
+  }
+
+  TempTable tout(node, schema_ptr);
+  t1.group_shuffle(field1, tout);
+  LOG(INFO) << node->rank << " " << tout.count();
+  node->forward();
   return 0;
 }

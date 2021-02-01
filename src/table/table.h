@@ -58,7 +58,7 @@ private:
   std::shared_ptr<Node> ptr;
   std::shared_ptr<TableSchema> schema_ptr;
   std::vector<uint8_t> _payload;
-   //partition field
+  //partition field
   std::unique_ptr<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>> _key_dist; // key hash and per node counts
   std::unique_ptr<std::map<size_t, std::vector<size_t>, std::less<size_t>>> _groups;                   // local key, offsets map
 
@@ -205,37 +205,38 @@ public:
    * @return
    */
   size_t decidePlacement(size_t key) {
-    return key%ptr->world;
+    int base = ptr->world % 2 == 0 ? ptr->world - 1 : ptr->world;
+    return key % base;
   }
 
   void async_send_per_rank(int dest, MPI_Request& request) {
     CHECK(dest < ptr->world);
     int n = 0;
-    for(auto g : *_groups) {
+    for (auto g : *_groups) {
       size_t placement = decidePlacement(g.first);
-      if(placement == (size_t)dest) {
+      if (placement == (size_t)dest) {
         n += g.second.size();
       }
       // LOG(INFO) << placement << " send " << ptr->world;
     }
     int i = 0;
     int array_of_blocklengths[n], displ[n];
-    for(auto g : *_groups) {
+    for (auto g : *_groups) {
       size_t placement = decidePlacement(g.first);
-      if(placement == (size_t)dest) {
-        for(auto item : g.second) {
+      if (placement == (size_t)dest) {
+        for (auto item : g.second) {
           array_of_blocklengths[i] = 1;
-          displ[i] = (int) item;
+          displ[i] = (int)item;
           i++;
         }
       }
     }
     CHECK_EQ(i, n);
-    if(n == 0) return; //nothing to send to dest
+    //if (n == 0) return; //nothing to send to dest
     MPI_Datatype keyType;
     MPI_Type_indexed(n, array_of_blocklengths, displ, *schema_ptr->getType(), &keyType);
     MPI_Type_commit(&keyType);
-    MPI_Isend(&_payload[0], 1, keyType, dest,   0, MPI_COMM_WORLD, &request);
+    CHECK_EQ(MPI_Isend(&_payload[0], 1, keyType, dest, ptr->rank * 100 + dest, MPI_COMM_WORLD, &request), MPI_SUCCESS);
     MPI_Type_free(&keyType);
   }
 
@@ -249,25 +250,23 @@ public:
     CHECK(out.schema_ptr->schema_sig() == this->schema_ptr->schema_sig());
     size_t rows = 0;
 
-    for(auto g : *_key_dist) {
+    for (auto g : *_key_dist) {
       size_t placement = decidePlacement(g.first);
       // LOG(INFO) << placement << " recv " << ptr->world;
-      if(placement == (size_t) ptr->rank) {
-        for(auto item : g.second) {
-          if(item.first == source) {
+      if (placement == (size_t)ptr->rank) {
+        for (auto item : g.second) {
+          if (item.first == source) {
             rows += item.second;
           }
         }
       }
     }
 
-    if(rows == 0) return; //nothing to recv from source
     size_t org_size = out._payload.size();
     out._payload.resize(org_size + schema_ptr->size() * rows);
     out._count += rows;
-    MPI_Irecv(&out._payload[org_size], rows, *schema_ptr->getType(), source, 0, MPI_COMM_WORLD, &request);
     MPI_Status status;
-    MPI_Wait(&request, &status);
+    CHECK_EQ(MPI_Irecv(&out._payload[org_size], rows, *schema_ptr->getType(), source, source * 100 + ptr->rank, MPI_COMM_WORLD, &request), MPI_SUCCESS);
   }
 
   /**
@@ -548,38 +547,29 @@ public:
     CHECK_EQ(schema_ptr->schema_sig(), out.schema_ptr->schema_sig());
     //local shuffle key distribution of each table
     this->group_by(f1);
-    std::vector<MPI_Request> requests;
-    TempTable recv(ptr, schema_ptr);
-    recv._payload.resize(0);
 
     // hash shuffle world
-    for(auto peer = 0 ; peer < ptr->world; peer++) {
-      MPI_Request  request;
-      this->async_send_per_rank(peer, request);
-      requests.push_back(request);
+    MPI_Request send_requests[ptr->world];
+    for (int peer = 0; peer < ptr->world; peer++) {
+      this->async_send_per_rank(peer, send_requests[peer]);
+      MPI_Request_free(&send_requests[peer]);
     }
 
     // read from world
-    for(auto peer = 0 ; peer < ptr->world; peer++) {
-      MPI_Request  request;
-      this->async_recv_per_rank(peer, recv, request);
-    }
-
-    // since recv is blocking
-    for(auto request : requests) {
+    for (auto peer = 0; peer < ptr->world; peer++) {
       MPI_Status status;
+      MPI_Request request;
+      TempTable recv(ptr, schema_ptr);
+      this->async_recv_per_rank(peer, recv, request);
       MPI_Wait(&request, &status);
+      for (size_t s = 0; s < recv.count(); s++) {
+        Value v;
+        auto item = recv.read(s);
+        item->read(f1, v);
+        out.ingest(*item.get());
+      }
     }
     this->clear();
-
-    for(size_t s = 0 ; s < recv.count(); s++) {
-      Value v;
-      auto item = recv.read(s);
-      item->read(f1,v);
-      out.ingest(*item.get());
-    }
-
-    recv.clear();
     ptr->forward();
   }
 };
