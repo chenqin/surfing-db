@@ -147,7 +147,7 @@ int main(int argc, char** argv) {
 
     KMeanOperator op(1, fields, 100);
     tsed.process(op);
-
+/*
     // stage 3, run xgb
     tsed.ingest(b);
     LOG(INFO) << "xgb operator"
@@ -167,32 +167,21 @@ int main(int argc, char** argv) {
     tsed.process(xgbOperator);
 
     tsed.group_by(field1);
-
+    //tsed.clear();
+*/
     Value v;
     v.p_val.int_val = 1;
     b.write(field1, v);
     TempTable t1(node, schema_ptr);
-    for(int i = 0 ;i < 200; i++) {
-      v.p_val.int_val = i;
+    for (int i = 0; i < 200; i++) {
+      v.p_val.int_val = i + node->rank;
       b.write(field1, v);
       t1.ingest(b);
     }
 
-    TempTable t2(node, schema_ptr);
-    for(int i = 0 ;i < 100; i++) {
-      v.p_val.int_val = i;
-      b.write(field1, v);
-      t2.ingest(b);
-    }
-    RowSchema rr;
-    rr.fields = std::vector<surfingdb::table::schema::Field>();
-    rr.fields.push_back(field1);
-    std::shared_ptr<TableSchema> out_schema_ptr = std::make_shared<TableSchema>(rr);
-
-    TempTable tout(node, out_schema_ptr);
-    t1.co_group(field1, field1, t2, tout, true);
-
-
+    TempTable tout(node, schema_ptr);
+    t1.group_shuffle(field1, tout);
+    LOG(INFO) << node->rank << " " << tout.count();
     node->forward();
   }
   return 0;
