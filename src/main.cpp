@@ -140,7 +140,7 @@ int main(int argc, char** argv) {
   v.p_val.int_val = 1;
   b.write(field1, v);
   TempTable t1(node, schema_ptr);
-  for (int i = 0; i < 10000; i++) {
+  for (int i = 1; i < 10000; i++) {
     v.p_val.int_val = i + node->rank;
     b.write(field1, v);
     t1.ingest(b);
