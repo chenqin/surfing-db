@@ -149,6 +149,5 @@ int main(int argc, char** argv) {
   TempTable tout(node, schema_ptr);
   t1.group_shuffle(field1, tout);
   LOG(INFO) << node->rank << " " << tout.count();
-  node->forward();
   return 0;
 }

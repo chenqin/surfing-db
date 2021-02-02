@@ -200,7 +200,12 @@ public:
     return key % base;
   }
 
+  /**
+   * sort rows based on destination process and update _start_index map
+   */
   void in_place_sort() {
+    _start_index->clear();
+
     TempTable sender(ptr, schema_ptr);
     int index = 0;
     for (int i = 0; i < ptr->world; i++) {
@@ -216,11 +221,14 @@ public:
         }
       }
     }
-    memcpy(&_payload[0], &sender._payload[0], index * schema_ptr->size());
+    memcpy(payload_ptr(), sender.payload_ptr(), index * schema_ptr->size());
   }
 
   void async_send_per_rank(int dest, MPI_Request& request) {
     CHECK(dest < ptr->world);
+    CHECK(!_start_index->empty());
+    CHECK(_start_index->find(dest) != _start_index->end());
+
     int n = 0;
     for (auto g : *_groups) {
       size_t placement = decidePlacement(g.first);
@@ -228,8 +236,6 @@ public:
         n += g.second.size();
       }
     }
-    //LOG(INFO) << "send " << n << " from " << ptr->rank << " to " << dest;
-    CHECK(_start_index->find(dest) != _start_index->end());
     int index = _start_index->at(dest);
     CHECK_EQ(MPI_Isend(this->range_ptr(index), n, *(schema_ptr->getType()), dest, ptr->rank * 100 + dest, MPI_COMM_WORLD, &request), MPI_SUCCESS);
   }
@@ -240,7 +246,7 @@ public:
    * @param dest
    * @param request
    */
-  void async_recv_per_rank(int source, TempTable& out) {
+  void recv_per_rank(int source, TempTable& out) {
     CHECK(out.schema_ptr->schema_sig() == this->schema_ptr->schema_sig());
     size_t rows = 0;
     MPI_Status status;
@@ -265,6 +271,7 @@ public:
     for (size_t s = 0; s < tempTable.count(); s++) {
       Value v;
       auto item = tempTable.read(s);
+#pragma omp critical
       out.ingest(*item.get());
     }
   }
@@ -535,16 +542,19 @@ public:
     // share key distribution with world
     this->group_by(f1);
 
-    // hash shuffle world
-    MPI_Request requests[ptr->world];
-    for (int peer = 0; peer < ptr->world; peer++) {
-      this->async_send_per_rank(peer, requests[peer]);
-      MPI_Request_free(&requests[peer]);
+    int peer;
+    // send out to each process
+#pragma omp parallel for
+    for (peer = 0; peer < ptr->world; peer++) {
+      MPI_Request request;
+      this->async_send_per_rank(peer, request);
+      MPI_Request_free(&request);
     }
 
-    // read from world
-    for (auto peer = 0; peer < ptr->world; peer++) {
-      this->async_recv_per_rank(peer, out);
+    // read from each process
+#pragma omp parallel for
+    for (peer = 0; peer < ptr->world; peer++) {
+      this->recv_per_rank(peer, out);
     }
     this->clear();
     ptr->forward();
