@@ -61,7 +61,7 @@ private:
   //partition field
   std::unique_ptr<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>> _key_dist; // key hash and per node counts
   std::unique_ptr<std::map<size_t, std::vector<size_t>, std::less<size_t>>> _groups;                   // local key, offsets map
-  std::unique_ptr<std::map<int, size_t>> _start_index;                   // local key, offsets map
+  std::unique_ptr<std::map<int, size_t>> _start_index;                                                 // local key, offsets map
 
   size_t _count = 0; // number of rows in table
   size_t _pending = 0;
@@ -104,18 +104,18 @@ public:
     _count = 0;
     _groups->clear();
     _key_dist->clear();
-  }
-
-  void complete() {
-    this->_count = _pending;
-    _pending = 0;
+    _start_index->clear();
   }
 
   uint8_t* payload_ptr() {
     return &this->_payload[0];
   }
 
-  void ingest(RowBuffer row) {
+  uint8_t* range_ptr(int index) {
+    return &this->_payload[index * schema_ptr->size()];
+  }
+
+  void ingest(RowBuffer& row) {
     CHECK_EQ(row.schema_sig(), schema_ptr->schema_sig());     //check schema signature
     CHECK_EQ(schema_ptr->size(), row.size());                 //check row size
     CHECK_LT(row.size() + offset, _payload.max_size());       // check capacity of temp table
@@ -190,7 +190,6 @@ public:
     close(fd);
   }
 
-
   /**
    * find better hash function
    * @param key
@@ -204,8 +203,8 @@ public:
   void in_place_sort() {
     TempTable sender(ptr, schema_ptr);
     int index = 0;
-    for(int i = 0 ; i < ptr->world; i++) {
-      _start_index->insert({i, index});
+    for (int i = 0; i < ptr->world; i++) {
+      _start_index->insert({ i, index });
       for (auto g : *_groups) {
         size_t placement = decidePlacement(g.first);
         if (placement == (size_t)i) {
@@ -217,10 +216,10 @@ public:
         }
       }
     }
-    memcpy(&_payload[0], &sender._payload[0], index*schema_ptr->size());
+    memcpy(&_payload[0], &sender._payload[0], index * schema_ptr->size());
   }
 
-  bool async_send_per_rank(int dest, MPI_Request& request) {
+  void async_send_per_rank(int dest, MPI_Request& request) {
     CHECK(dest < ptr->world);
     int n = 0;
     for (auto g : *_groups) {
@@ -232,8 +231,7 @@ public:
     //LOG(INFO) << "send " << n << " from " << ptr->rank << " to " << dest;
     CHECK(_start_index->find(dest) != _start_index->end());
     int index = _start_index->at(dest);
-    CHECK_EQ(MPI_Isend(&_payload[index*schema_ptr->size()], n, *(schema_ptr->getType()), dest, ptr->rank * 100 + dest, MPI_COMM_WORLD, &request), MPI_SUCCESS);
-    return true;
+    CHECK_EQ(MPI_Isend(this->range_ptr(index), n, *(schema_ptr->getType()), dest, ptr->rank * 100 + dest, MPI_COMM_WORLD, &request), MPI_SUCCESS);
   }
 
   /**
@@ -250,7 +248,6 @@ public:
 
     for (auto g : *_key_dist) {
       size_t placement = decidePlacement(g.first);
-      // LOG(INFO) << placement << " recv " << ptr->world;
       if (placement == (size_t)ptr->rank) {
         for (auto item : g.second) {
           if (item.first == source) {
@@ -262,14 +259,12 @@ public:
     TempTable tempTable(ptr, schema_ptr);
     tempTable._payload.resize(schema_ptr->size() * rows);
     tempTable._count += rows;
-    //LOG(INFO) << "expect to recv rows " << rows << " from " << source << "@" << ptr->rank;
+
     CHECK_EQ(MPI_Irecv(tempTable.payload_ptr(), rows, *(schema_ptr->getType()), source, source * 100 + ptr->rank, MPI_COMM_WORLD, &request), MPI_SUCCESS);
     MPI_Wait(&request, &status);
     for (size_t s = 0; s < tempTable.count(); s++) {
       Value v;
       auto item = tempTable.read(s);
-      item->read(schema_ptr->fields.at(0), v);
-      LOG(INFO) << v.p_val.int_val;
       out.ingest(*item.get());
     }
   }
@@ -541,11 +536,10 @@ public:
     this->group_by(f1);
 
     // hash shuffle world
-    MPI_Request send_requests[ptr->world];
+    MPI_Request requests[ptr->world];
     for (int peer = 0; peer < ptr->world; peer++) {
-      if(this->async_send_per_rank(peer, send_requests[peer])) {
-        MPI_Request_free(&send_requests[peer]);
-      }
+      this->async_send_per_rank(peer, requests[peer]);
+      MPI_Request_free(&requests[peer]);
     }
 
     // read from world
