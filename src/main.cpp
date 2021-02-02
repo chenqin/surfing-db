@@ -133,21 +133,22 @@ int main(int argc, char** argv) {
   xgbOperator.parameters.isTraining = false; // now switch to prediction
   tsed.process(xgbOperator);
 
-  tsed.group_by(field1);
+  tsed.groupBy(field1);
   tsed.clear();
 
   Value v;
   v.p_val.int_val = 1;
   b.write(field1, v);
   TempTable t1(node, schema_ptr);
-  for (int i = 1; i < 10000; i++) {
+  for (int i = 0; i < 30000; i++) {
     v.p_val.int_val = i + node->rank;
     b.write(field1, v);
     t1.ingest(b);
   }
 
   TempTable tout(node, schema_ptr);
-  t1.group_shuffle(field1, tout);
-  LOG(INFO) << node->rank << " " << tout.count();
+  t1.groupShuffle(field1, tout);
+  t1.verifyShufflePlacement(field1);
+
   return 0;
 }

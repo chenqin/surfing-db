@@ -55,17 +55,16 @@ void reducer(void* a, void* b, int* len, MPI_Datatype*) {
 class TempTable {
 private:
   // defines the node row table bind to
-  std::shared_ptr<Node> ptr;
+  std::shared_ptr<Node> node_ptr;
   std::shared_ptr<TableSchema> schema_ptr;
-  std::vector<uint8_t> _payload;
+  std::vector<uint8_t> payload;
   //partition field
-  std::unique_ptr<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>> _key_dist; // key hash and per node counts
-  std::unique_ptr<std::map<size_t, std::vector<size_t>, std::less<size_t>>> _groups;                   // local key, offsets map
-  std::unique_ptr<std::map<int, size_t>> _start_index;                                                 // local key, offsets map
+  std::unique_ptr<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>> key_dist; // key hash and per node counts
+  std::unique_ptr<std::map<size_t, std::vector<size_t>, std::less<size_t>>> key_groups;               // local key, offsets map
+  std::unique_ptr<std::map<int, size_t>> placement_index;                                             // placement , start index of rows
 
-  size_t _count = 0; // number of rows in table
-  size_t _pending = 0;
-  size_t offset = 0; //current offset position
+  size_t row_count = 0; // number of rows in table
+  size_t offset = 0;    //current offset position
 
   struct iovec iov[FILE_IO_VECTOR];
   ssize_t nr;
@@ -75,22 +74,22 @@ public:
   TempTable(const std::shared_ptr<TableSchema> sharedPtr) {
     this->schema_ptr = sharedPtr;
     offset = 0;
-    _payload.resize(MEM_PAGE_SIZE);
-    _count = 0;
-    _key_dist = std::make_unique<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>>();
-    _groups = std::make_unique<std::map<size_t, std::vector<size_t>, std::less<size_t>>>();
-    _start_index = std::make_unique<std::map<int, size_t>>();
+    payload.resize(MEM_PAGE_SIZE);
+    row_count = 0;
+    key_dist = std::make_unique<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>>();
+    key_groups = std::make_unique<std::map<size_t, std::vector<size_t>, std::less<size_t>>>();
+    placement_index = std::make_unique<std::map<int, size_t>>();
     LOG(INFO) << "for testing only";
   }
   TempTable(const std::shared_ptr<Node> node, const std::shared_ptr<TableSchema> sharedPtr) {
     this->schema_ptr = sharedPtr;
-    _payload.resize(MEM_PAGE_SIZE);
+    payload.resize(MEM_PAGE_SIZE);
     offset = 0;
-    _count = 0;
-    _key_dist = std::make_unique<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>>();
-    _groups = std::make_unique<std::map<size_t, std::vector<size_t>, std::less<size_t>>>();
-    _start_index = std::make_unique<std::map<int, size_t>>();
-    this->ptr = node;
+    row_count = 0;
+    key_dist = std::make_unique<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>>();
+    key_groups = std::make_unique<std::map<size_t, std::vector<size_t>, std::less<size_t>>>();
+    placement_index = std::make_unique<std::map<int, size_t>>();
+    this->node_ptr = node;
   }
 
   ~TempTable() {
@@ -98,34 +97,42 @@ public:
   }
 
   void clear() {
-    _payload.clear();
+    payload.clear();
     offset = 0;
-    _pending = 0;
-    _count = 0;
-    _groups->clear();
-    _key_dist->clear();
-    _start_index->clear();
+    row_count = 0;
+    key_groups->clear();
+    key_dist->clear();
+    placement_index->clear();
   }
 
   uint8_t* payload_ptr() {
-    return &this->_payload[0];
+    return &this->payload[0];
   }
+  /**
+   * after in place sort, return starting addr of rows should place on dest
+   * @param dest rank of process
+   * @return
+   */
+  uint8_t* range_ptr(int dest) {
+    CHECK(!key_groups->empty());
+    CHECK(!placement_index->empty());
+    CHECK(dest < node_ptr->world);
 
-  uint8_t* range_ptr(int index) {
-    return &this->_payload[index * schema_ptr->size()];
+    int index = placement_index->at(dest);
+    return &this->payload[index * schema_ptr->size()];
   }
 
   void ingest(RowBuffer& row) {
-    CHECK_EQ(row.schema_sig(), schema_ptr->schema_sig());     //check schema signature
-    CHECK_EQ(schema_ptr->size(), row.size());                 //check row size
-    CHECK_LT(row.size() + offset, _payload.max_size());       // check capacity of temp table
-    memcpy(&_payload[offset], row.payload_ptr(), row.size()); // TODO(chenqin): should use fastcopy
+    CHECK_EQ(row.schema_sig(), schema_ptr->schema_sig()); //check schema signature
+    CHECK_EQ(schema_ptr->size(), row.size());             //check row size
+    CHECK_LT(row.size() + offset, payload.max_size());    // check capacity of temp table
+    memcpy(&payload[offset], row.payload_ptr(), row.size());
     offset += row.size();
-    _count++;
+    row_count++;
 
     // expand table size if needed
     if (offset >= MEM_PAGE_SIZE - row.size()) {
-      _payload.resize(_payload.size() + MEM_PAGE_SIZE);
+      payload.resize(payload.size() + MEM_PAGE_SIZE);
     }
   }
 
@@ -139,14 +146,14 @@ public:
     size_t sig = schema_ptr->schema_sig();
     CHECK_GE(::write(fd, &sig, sizeof(size_t)), 0);
     CHECK_GE(::write(fd, reinterpret_cast<const void*>(&offset), sizeof(size_t)), 0);
-    CHECK_GE(::write(fd, reinterpret_cast<const void*>(&_count), sizeof(size_t)), 0);
+    CHECK_GE(::write(fd, reinterpret_cast<const void*>(&row_count), sizeof(size_t)), 0);
 
     size_t index = 0;
     /* fill out three iovec structures */
     while (index < offset) {
       int batch = 0;
       for (int i = 0; i < FILE_IO_VECTOR && index < offset; i++) {
-        iov[i].iov_base = &_payload[index];
+        iov[i].iov_base = &payload[index];
         size_t payload_size = index + SSD_CHUNK_SIZ < offset ? SSD_CHUNK_SIZ : offset - index;
         iov[i].iov_len = payload_size;
         index += payload_size;
@@ -167,16 +174,16 @@ public:
     CHECK_GE(::read(fd, &sig, sizeof(size_t)), 0);
     CHECK_EQ(sig, schema_ptr->schema_sig());
     CHECK_GE(::read(fd, &offset, sizeof(size_t)), 0);
-    CHECK_GE(::read(fd, &_count, sizeof(size_t)), 0);
-    CHECK_EQ(offset / _count, schema_ptr->size());
-    _payload.resize(offset);
+    CHECK_GE(::read(fd, &row_count, sizeof(size_t)), 0);
+    CHECK_EQ(offset / row_count, schema_ptr->size());
+    payload.resize(offset);
 
     size_t index = 0;
     /* fill out three iovec structures */
     while (index < offset) {
       int batch = 0;
       for (int i = 0; i < FILE_IO_VECTOR && index < offset; i++) {
-        iov[i].iov_base = &_payload[index];
+        iov[i].iov_base = &payload[index];
         size_t payload_size = index + SSD_CHUNK_SIZ < offset ? SSD_CHUNK_SIZ : offset - index;
         iov[i].iov_len = payload_size;
         index += payload_size;
@@ -196,25 +203,41 @@ public:
    * @return
    */
   size_t decidePlacement(size_t key) {
-    int base = ptr->world % 2 == 0 ? ptr->world - 1 : ptr->world;
+    int base = node_ptr->world % 2 == 0 ? node_ptr->world - 1 : node_ptr->world;
     return key % base;
   }
 
   /**
    * sort rows based on destination process and update _start_index map
    */
-  void in_place_sort() {
-    _start_index->clear();
+  void in_place_sort(const Field& f) {
+    placement_index->clear();
+    key_groups->clear();
 
-    TempTable sender(ptr, schema_ptr);
+    for (size_t i = 0; i < row_count; i++) {
+      auto r = read(i);
+      Value v;
+      r->read(f, v);
+      size_t key = value_hasher.operator()(v);
+      if (key_groups->find(key) == key_groups->end()) {
+        std::vector<size_t> arr;
+        key_groups->insert({ key, arr });
+      }
+      key_groups->at(key).push_back(i);
+    }
+
+    TempTable sender(node_ptr, schema_ptr);
     int index = 0;
-    for (int i = 0; i < ptr->world; i++) {
-      _start_index->insert({ i, index });
-      for (auto g : *_groups) {
+    for (int i = 0; i < node_ptr->world; i++) {
+      placement_index->insert({ i, index });
+      for (auto g : *key_groups) {
         size_t placement = decidePlacement(g.first);
         if (placement == (size_t)i) {
           for (auto item : g.second) {
             auto row = this->read(item);
+            Value v;
+            row->read(f, v);
+            // LOG(INFO) << v.p_val.int_val << " on " << placement;
             sender.ingest(*row.get());
             index++;
           }
@@ -225,19 +248,18 @@ public:
   }
 
   void async_send_per_rank(int dest, MPI_Request& request) {
-    CHECK(dest < ptr->world);
-    CHECK(!_start_index->empty());
-    CHECK(_start_index->find(dest) != _start_index->end());
+    CHECK(dest < node_ptr->world);
+    CHECK(!placement_index->empty());
+    CHECK(placement_index->find(dest) != placement_index->end());
 
     int n = 0;
-    for (auto g : *_groups) {
+    for (auto g : *key_groups) {
       size_t placement = decidePlacement(g.first);
       if (placement == (size_t)dest) {
         n += g.second.size();
       }
     }
-    int index = _start_index->at(dest);
-    CHECK_EQ(MPI_Isend(this->range_ptr(index), n, *(schema_ptr->getType()), dest, ptr->rank * 100 + dest, MPI_COMM_WORLD, &request), MPI_SUCCESS);
+    CHECK_EQ(MPI_Isend(this->range_ptr(dest), n, *(schema_ptr->getType()), dest, node_ptr->rank * 100 + dest, MPI_COMM_WORLD, &request), MPI_SUCCESS);
   }
 
   /**
@@ -252,9 +274,9 @@ public:
     MPI_Status status;
     MPI_Request request;
 
-    for (auto g : *_key_dist) {
+    for (auto g : *key_dist) {
       size_t placement = decidePlacement(g.first);
-      if (placement == (size_t)ptr->rank) {
+      if (placement == (size_t)node_ptr->rank) {
         for (auto item : g.second) {
           if (item.first == source) {
             rows += item.second;
@@ -262,11 +284,11 @@ public:
         }
       }
     }
-    TempTable tempTable(ptr, schema_ptr);
-    tempTable._payload.resize(schema_ptr->size() * rows);
-    tempTable._count += rows;
+    TempTable tempTable(node_ptr, schema_ptr);
+    tempTable.payload.resize(schema_ptr->size() * rows);
+    tempTable.row_count += rows;
 
-    CHECK_EQ(MPI_Irecv(tempTable.payload_ptr(), rows, *(schema_ptr->getType()), source, source * 100 + ptr->rank, MPI_COMM_WORLD, &request), MPI_SUCCESS);
+    CHECK_EQ(MPI_Irecv(tempTable.payload_ptr(), rows, *(schema_ptr->getType()), source, source * 100 + node_ptr->rank, MPI_COMM_WORLD, &request), MPI_SUCCESS);
     MPI_Wait(&request, &status);
     for (size_t s = 0; s < tempTable.count(); s++) {
       Value v;
@@ -282,9 +304,9 @@ public:
    * @return
    */
   inline std::unique_ptr<RowBuffer> read(int index) {
-    CHECK_LT(index, _count);
+    CHECK_LT(index, row_count);
     CHECK_NOTNULL(schema_ptr);
-    return std::make_unique<RowBuffer>(schema_ptr, &_payload[schema_ptr->size() * index]);
+    return std::make_unique<RowBuffer>(schema_ptr, &payload[schema_ptr->size() * index]);
   }
 
   /**
@@ -301,8 +323,8 @@ public:
     }
 
     size_t columns = fields.size();
-    memset(data, 0, sizeof(float) * columns * _count);
-    for (size_t i = 0; i < _count; i++) {
+    memset(data, 0, sizeof(float) * columns * row_count);
+    for (size_t i = 0; i < row_count; i++) {
       const auto row = read(i);
       for (size_t j = 0; j < columns; j++) {
         Value v;
@@ -315,8 +337,8 @@ public:
   void readField(const Field& field, float* data) {
     CHECK_NOTNULL(data);
     CHECK_EQ(field.type, RowType::DOUBLE);
-    memset(data, 0, sizeof(float) * _count);
-    for (size_t i = 0; i < _count; i++) {
+    memset(data, 0, sizeof(float) * row_count);
+    for (size_t i = 0; i < row_count; i++) {
       const auto row = read(i);
       Value v;
       row->read(field, v);
@@ -327,7 +349,7 @@ public:
   void writeField(const Field& field, const float* data) {
     CHECK_NOTNULL(data);
     CHECK_EQ(field.type, RowType::DOUBLE);
-    for (size_t i = 0; i < _count; i++) {
+    for (size_t i = 0; i < row_count; i++) {
       const auto row = read(i);
       Value v;
       v.p_val.double_val = (double)data[i];
@@ -336,29 +358,29 @@ public:
   }
 
   size_t count() {
-    return this->_count;
+    return this->row_count;
   }
 
   void process(XGBOperator& op) {
     std::vector<float> features;
-    features.resize(op.features() * _count); // number of features
-    readFields(op.fields, &features[0]);     // read from temp table
+    features.resize(op.features() * row_count); // number of features
+    readFields(op.fields, &features[0]);        // read from temp table
 
     std::vector<float> label; // number of labels
-    label.resize(_count);     // number of rows
+    label.resize(row_count);  // number of rows
 
     if (op.parameters.isTraining) {
       readField(op.labelField, &label[0]);
-      size_t total_row_count = _count;
+      size_t total_row_count = row_count;
 
       op.gather(&features[0], &label[0], total_row_count, op.features()); //gather training dataset to root
       op.train(&features[0], &label[0], total_row_count, op.features());
       op.syncModel(); // send model to all processes from root
     } else {
-      op.predict(&features[0], &label[0], _count, op.features());
+      op.predict(&features[0], &label[0], row_count, op.features());
       writeField(op.labelField, &label[0]);
     }
-    ptr->forward();
+    node_ptr->forward();
   }
 
   void process(KMeanOperator& op) {
@@ -369,7 +391,7 @@ public:
 
     if (!op.inited) {
       std::unordered_map<int, size_t> local_picks;
-      op.init(_count, ptr->rank, ptr->world, local_picks);
+      op.init(row_count, node_ptr->rank, node_ptr->world, local_picks);
       for (auto pick : local_picks) {
         for (size_t i = 0; i < fields.size(); i++) {
           Value v;
@@ -387,7 +409,7 @@ public:
     // step 4, caculate distance and group to k, group to k clusters
     double dist[k]; // each row distance to recvcenter[i]
 
-    for (size_t j = 0; j < _count; j++) {
+    for (size_t j = 0; j < row_count; j++) {
       for (int point = 0; point < k; point++) {
         auto center = final_centers[point];
         dist[point] = distance(fields, j, center);
@@ -436,7 +458,7 @@ public:
 
     if (op.shouldStop()) {
       LOG(INFO) << "complete k-mean training";
-      ptr->forward();
+      node_ptr->forward();
     } else {
       //LOG(INFO) << "next iteration of k-mean";
       process(op);
@@ -455,64 +477,74 @@ public:
     return sqrt(sum);
   }
 
-  void group_by(const Field& f) {
+  void verifyShufflePlacement(const Field& field) {
+    for (size_t i = 0; i < row_count; i++) {
+      auto r = read(i);
+      Value v;
+      r->read(field, v);
+      size_t key = value_hasher.operator()(v);
+      CHECK_EQ(decidePlacement(key), node_ptr->rank);
+    }
+  }
+
+  void groupBy(const Field& f) {
     CHECK(schema_ptr->exist(f));
-    _groups->clear();
-    for (size_t i = 0; i < _count; i++) {
+    key_groups->clear();
+    for (size_t i = 0; i < row_count; i++) {
       auto r = read(i);
       Value v;
       r->read(f, v);
       size_t key = value_hasher.operator()(v);
-      if (_groups->find(key) == _groups->end()) {
+      if (key_groups->find(key) == key_groups->end()) {
         std::vector<size_t> arr;
-        _groups->insert({ key, arr });
+        key_groups->insert({ key, arr });
       }
-      _groups->at(key).push_back(i);
+      key_groups->at(key).push_back(i);
     }
     /**
      * [hash_key, size, rank]
      */
-    size_t key_count[_groups->size()][3];
-    auto it = _groups->begin();
+    size_t key_count[key_groups->size()][3];
+    auto it = key_groups->begin();
     int i = 0;
-    while (it != _groups->end()) {
+    while (it != key_groups->end()) {
       key_count[i][0] = it->first;
       key_count[i][1] = it->second.size();
-      key_count[i][2] = ptr->rank;
+      key_count[i][2] = node_ptr->rank;
       i++;
       it++;
     }
     /*
      * merge key_count array into one
      */
-    size_t local_group_sizes[ptr->world];
-    memset(local_group_sizes, 0, ptr->world * sizeof(size_t)); //always clear memory before use
+    size_t local_group_sizes[node_ptr->world];
+    memset(local_group_sizes, 0, node_ptr->world * sizeof(size_t)); //always clear memory before use
 
-    int recvcounts[ptr->world], displs[ptr->world];
-    memset(recvcounts, 0, ptr->world * sizeof(int));
-    memset(displs, 0, ptr->world * sizeof(int));
+    int recvcounts[node_ptr->world], displs[node_ptr->world];
+    memset(recvcounts, 0, node_ptr->world * sizeof(int));
+    memset(displs, 0, node_ptr->world * sizeof(int));
 
     displs[0] = 0;
-    local_group_sizes[ptr->rank] = _groups->size() * 3;
+    local_group_sizes[node_ptr->rank] = key_groups->size() * 3;
 
-    size_t recv[ptr->world]; // type should be same as local_group_sizes
-    MPI_Allreduce(&local_group_sizes, &recv, ptr->world, MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
+    size_t recv[node_ptr->world]; // type should be same as local_group_sizes
+    MPI_Allreduce(&local_group_sizes, &recv, node_ptr->world, MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
 
     std::vector<size_t> _g_groups; // keep key, row counts on each process
     size_t _global_group_size;     // apply to group_by
 
     _global_group_size = recv[0];
     recvcounts[0] = recv[0];
-    for (i = 1; i < ptr->world; i++) {
+    for (i = 1; i < node_ptr->world; i++) {
       displs[i] = displs[i - 1] + recv[i - 1];
       _global_group_size += recv[i];
       recvcounts[i] = (int)recv[i];
     }
 
-    CHECK_GE(_global_group_size, _groups->size() * 3);
+    CHECK_GE(_global_group_size, key_groups->size() * 3);
     _g_groups.resize(_global_group_size);
 
-    MPI_Allgatherv(key_count, _groups->size() * 3, MPI_UNSIGNED_LONG, &_g_groups[0], recvcounts, displs, MPI_UNSIGNED_LONG, MPI_COMM_WORLD);
+    MPI_Allgatherv(key_count, key_groups->size() * 3, MPI_UNSIGNED_LONG, &_g_groups[0], recvcounts, displs, MPI_UNSIGNED_LONG, MPI_COMM_WORLD);
 
     // build key_hash to node and row count map
     for (size_t j = 0; j < _global_group_size; j += 3) {
@@ -521,31 +553,31 @@ public:
       size_t rank = _g_groups.at(j + 2);
 
       std::pair<int, size_t> pair(rank, count);
-      if (_key_dist->find(key) == _key_dist->end()) {
+      if (key_dist->find(key) == key_dist->end()) {
         std::vector<std::pair<int, size_t>> vector;
         vector.push_back(pair);
-        _key_dist->insert({ key, vector });
+        key_dist->insert({ key, vector });
       } else {
-        _key_dist->at(key).push_back(pair);
+        key_dist->at(key).push_back(pair);
       }
     }
-    ptr->forward();
+    node_ptr->forward();
   }
 
   // group table with
-  void group_shuffle(const Field& f1, TempTable& out) {
+  void groupShuffle(const Field& f1, TempTable& out) {
     CHECK(schema_ptr->exist(f1));
     CHECK_EQ(schema_ptr->schema_sig(), out.schema_ptr->schema_sig());
     // sort rows based on placement in world
-    in_place_sort();
+    in_place_sort(f1);
 
     // share key distribution with world
-    this->group_by(f1);
+    this->groupBy(f1);
 
     int peer;
+
     // send out to each process
-#pragma omp parallel for
-    for (peer = 0; peer < ptr->world; peer++) {
+    for (peer = 0; peer < node_ptr->world; peer++) {
       MPI_Request request;
       this->async_send_per_rank(peer, request);
       MPI_Request_free(&request);
@@ -553,11 +585,11 @@ public:
 
     // read from each process
 #pragma omp parallel for
-    for (peer = 0; peer < ptr->world; peer++) {
+    for (peer = 0; peer < node_ptr->world; peer++) {
       this->recv_per_rank(peer, out);
     }
     this->clear();
-    ptr->forward();
+    node_ptr->forward();
   }
 };
 } // namespace table
