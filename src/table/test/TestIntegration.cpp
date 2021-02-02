@@ -177,7 +177,7 @@ TEST(TableTest, TestGroupBy) {
   TempTable table1(n, rr);
   table1.ingest(rowBuffer);
   EXPECT_TRUE(rr->exist(field1));
-  table1.groupBy(field1);
+  table1.group(field1);
 }
 
 TEST(TableTest, TestXGBOperator) {

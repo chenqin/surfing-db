@@ -133,22 +133,27 @@ int main(int argc, char** argv) {
   xgbOperator.parameters.isTraining = false; // now switch to prediction
   tsed.process(xgbOperator);
 
-  tsed.groupBy(field1);
-  tsed.clear();
+  tsed.group(field1);
+  tsed.clear(); //release resources
 
   Value v;
   v.p_val.int_val = 1;
   b.write(field1, v);
   TempTable t1(node, schema_ptr);
-  for (int i = 0; i < 30000; i++) {
+  TempTable t2(node, schema_ptr);
+  for (int i = 0; i < 3000; i++) {
     v.p_val.int_val = i + node->rank;
     b.write(field1, v);
     t1.ingest(b);
+    t2.ingest(b);
   }
 
-  TempTable tout(node, schema_ptr);
-  t1.groupShuffle(field1, tout);
-  t1.verifyShufflePlacement(field1);
-
+  TempTable tout1(node, schema_ptr);
+  TempTable tout2(node, schema_ptr);
+  t1.shuffle(field1, tout1);
+  t2.shuffle(field1, tout2);
+  tout1.verify(field1);
+  tout2.verify(field1);
+  // tout1 and tout2 shared with same key to each process, per key co_group is straight forward
   return 0;
 }

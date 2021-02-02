@@ -477,7 +477,7 @@ public:
     return sqrt(sum);
   }
 
-  void verifyShufflePlacement(const Field& field) {
+  void verify(const Field& field) {
     for (size_t i = 0; i < row_count; i++) {
       auto r = read(i);
       Value v;
@@ -487,7 +487,7 @@ public:
     }
   }
 
-  void groupBy(const Field& f) {
+  void group(const Field& f) {
     CHECK(schema_ptr->exist(f));
     key_groups->clear();
     for (size_t i = 0; i < row_count; i++) {
@@ -565,14 +565,14 @@ public:
   }
 
   // group table with
-  void groupShuffle(const Field& f1, TempTable& out) {
+  void shuffle(const Field& f1, TempTable& out) {
     CHECK(schema_ptr->exist(f1));
     CHECK_EQ(schema_ptr->schema_sig(), out.schema_ptr->schema_sig());
     // sort rows based on placement in world
     in_place_sort(f1);
 
     // share key distribution with world
-    this->groupBy(f1);
+    this->group(f1);
 
     int peer;
 
@@ -580,7 +580,7 @@ public:
     for (peer = 0; peer < node_ptr->world; peer++) {
       MPI_Request request;
       this->async_send_per_rank(peer, request);
-      MPI_Request_free(&request);
+      node_ptr->keep(std::make_unique<MPI_Request>(request));
     }
 
     // read from each process
