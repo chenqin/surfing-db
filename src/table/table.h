@@ -98,6 +98,7 @@ public:
 
   void clear() {
     payload.clear();
+    payload.resize(0);
     offset = 0;
     row_count = 0;
     key_groups->clear();
@@ -290,6 +291,7 @@ public:
 
     CHECK_EQ(MPI_Irecv(tempTable.payload_ptr(), rows, *(schema_ptr->getType()), source, source * 100 + node_ptr->rank, MPI_COMM_WORLD, &request), MPI_SUCCESS);
     MPI_Wait(&request, &status);
+
     for (size_t s = 0; s < tempTable.count(); s++) {
       Value v;
       auto item = tempTable.read(s);
@@ -489,7 +491,9 @@ public:
 
   void group(const Field& f) {
     CHECK(schema_ptr->exist(f));
-    key_groups->clear();
+    key_groups->clear(); // reset key_groups
+    key_dist->clear();  // reset key_dist
+
     for (size_t i = 0; i < row_count; i++) {
       auto r = read(i);
       Value v;
@@ -588,7 +592,6 @@ public:
     for (peer = 0; peer < node_ptr->world; peer++) {
       this->recv_per_rank(peer, out);
     }
-    this->clear();
     node_ptr->forward();
   }
 };
