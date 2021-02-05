@@ -17,7 +17,7 @@ namespace table {
 
 #define MAX_STR_LEN 128
 #define HEADER_SIZE sizeof(long)
-#define MEM_PAGE_SIZE 65536 //64KB
+#define MEM_PAGE_SIZE 1048576 // 1MB
 #define FILE_IO_VECTOR 8
 #define SSD_CHUNK_SIZ 65536 // read/write ssd per 64KB chunk
 

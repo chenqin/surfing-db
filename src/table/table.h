@@ -57,7 +57,6 @@ private:
   // defines the node row table bind to
   std::shared_ptr<Node> node_ptr;
   std::shared_ptr<TableSchema> schema_ptr;
-  std::vector<uint8_t> payload;
   //partition field
   std::unique_ptr<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>> key_dist; // key hash and per node counts
   std::unique_ptr<std::map<size_t, std::vector<size_t>, std::less<size_t>>> key_groups;               // local key, offsets map
@@ -71,10 +70,11 @@ private:
   int fd;
 
 public:
+  std::vector<uint8_t> payload;
   TempTable(const std::shared_ptr<TableSchema> sharedPtr) {
     this->schema_ptr = sharedPtr;
     offset = 0;
-    payload.resize(MEM_PAGE_SIZE);
+    payload.reserve(MEM_PAGE_SIZE);
     row_count = 0;
     key_dist = std::make_unique<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>>();
     key_groups = std::make_unique<std::map<size_t, std::vector<size_t>, std::less<size_t>>>();
@@ -98,7 +98,7 @@ public:
 
   void clear() {
     payload.clear();
-    payload.resize(0);
+    payload.shrink_to_fit();
     offset = 0;
     row_count = 0;
     key_groups->clear();
@@ -212,6 +212,7 @@ public:
    * sort rows based on destination process and update _start_index map
    */
   void in_place_sort(const Field& f) {
+    auto start = MPI_Wtime();
     placement_index->clear();
     key_groups->clear();
 
@@ -224,11 +225,12 @@ public:
         std::vector<size_t> arr;
         key_groups->insert({ key, arr });
       }
-      key_groups->at(key).push_back(i);
+      key_groups->at(key).emplace_back(i);
     }
 
     TempTable sender(node_ptr, schema_ptr);
     int index = 0;
+
     for (int i = 0; i < node_ptr->world; i++) {
       placement_index->insert({ i, index });
       for (auto g : *key_groups) {
@@ -239,13 +241,15 @@ public:
             Value v;
             row->read(f, v);
             // LOG(INFO) << v.p_val.int_val << " on " << placement;
+#pragma omp critical
             sender.ingest(*row.get());
             index++;
           }
         }
       }
     }
-    memcpy(payload_ptr(), sender.payload_ptr(), index * schema_ptr->size());
+    payload.swap(sender.payload);
+    LOG(INFO) << "in place sort costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
   }
 
   void async_send_per_rank(int dest, MPI_Request& request) {
@@ -291,7 +295,6 @@ public:
 
     CHECK_EQ(MPI_Irecv(tempTable.payload_ptr(), rows, *(schema_ptr->getType()), source, source * 100 + node_ptr->rank, MPI_COMM_WORLD, &request), MPI_SUCCESS);
     MPI_Wait(&request, &status);
-
     for (size_t s = 0; s < tempTable.count(); s++) {
       Value v;
       auto item = tempTable.read(s);
@@ -490,6 +493,7 @@ public:
   }
 
   void group(const Field& f) {
+    auto start = MPI_Wtime();
     CHECK(schema_ptr->exist(f));
     key_groups->clear(); // reset key_groups
     key_dist->clear();  // reset key_dist
@@ -503,7 +507,7 @@ public:
         std::vector<size_t> arr;
         key_groups->insert({ key, arr });
       }
-      key_groups->at(key).push_back(i);
+      key_groups->at(key).emplace_back(i);
     }
     /**
      * [hash_key, size, rank]
@@ -559,13 +563,14 @@ public:
       std::pair<int, size_t> pair(rank, count);
       if (key_dist->find(key) == key_dist->end()) {
         std::vector<std::pair<int, size_t>> vector;
-        vector.push_back(pair);
+        vector.emplace_back(pair);
         key_dist->insert({ key, vector });
       } else {
-        key_dist->at(key).push_back(pair);
+        key_dist->at(key).emplace_back(pair);
       }
     }
     node_ptr->forward();
+    LOG(INFO) << "group by costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
   }
 
   // group table with
@@ -577,10 +582,11 @@ public:
 
     // share key distribution with world
     this->group(f1);
-
+    auto start = MPI_Wtime();
     int peer;
 
     // send out to each process
+#pragma omp parallel for
     for (peer = 0; peer < node_ptr->world; peer++) {
       MPI_Request request;
       this->async_send_per_rank(peer, request);
@@ -592,6 +598,7 @@ public:
     for (peer = 0; peer < node_ptr->world; peer++) {
       this->recv_per_rank(peer, out);
     }
+    LOG(INFO) << "shuffle costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
     node_ptr->forward();
   }
 };

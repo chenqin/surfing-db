@@ -141,7 +141,7 @@ int main(int argc, char** argv) {
   b.write(field1, v);
   TempTable t1(node, schema_ptr);
   TempTable t2(node, schema_ptr);
-  for (int i = 0; i < 3000; i++) {
+  for (int i = 0; i < 2000; i++) {
     v.p_val.int_val = i + node->rank;
     b.write(field1, v);
     t1.ingest(b);
