@@ -153,10 +153,10 @@ int main(int argc, char** argv) {
     TempTable tout2(node, schema_ptr);
     t1.group(field1);
     t1.shuffle_put(field1);
-    //t1.shuffle(field1, tout1);
-    //t2.shuffle(field1, tout2);
-    //tout1.verify(field1);
-    //tout2.verify(field1);
+    t1.shuffle(field1, tout1);
+    t2.shuffle(field1, tout2);
+    tout1.verify(field1);
+    tout2.verify(field1);
   }
   // tout1 and tout2 shared with same key to each process, per key co_group is straight forward
   return 0;

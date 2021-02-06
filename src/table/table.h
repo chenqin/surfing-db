@@ -254,6 +254,8 @@ public:
   }
 
   void shuffle_put(const Field& f) {
+    //CHECK_EQ(out.schema_ptr->schema_sig(), this->schema_ptr->schema_sig());
+
     auto start = MPI_Wtime();
     placement_index->clear();
     key_groups->clear();
@@ -273,12 +275,12 @@ public:
       }
     }
 
-    for(int i = 1; i < node_ptr->world; i++) {
-      expected_start_index[i] = expected_start_index[i-1] + expected_rows[i-1];
+    for (int i = 1; i < node_ptr->world; i++) {
+      expected_start_index[i] = expected_start_index[i - 1] + expected_rows[i - 1];
     }
-    LOG(INFO) << "start exchange index " << node_ptr->rank;
+    // LOG(INFO) << "start exchange index " << node_ptr->rank;
     size_t target_disp[node_ptr->world]; // from each process, tell others start index of assigned memory
-    for(int i = 0 ; i < node_ptr->world; i++) {
+    for (int i = 0; i < node_ptr->world; i++) {
       size_t start_index;
       MPI_Scatter(expected_start_index, 1, MPI_UNSIGNED_LONG, &start_index, 1, MPI_UNSIGNED_LONG, i, MPI_COMM_WORLD);
       target_disp[i] = start_index;
@@ -286,9 +288,9 @@ public:
 
     MPI_Win win;
     uint8_t* schedule;
-    MPI_Alloc_mem(sizeof(int) * recv_buffer_len, MPI_INFO_NULL, &schedule);
-    MPI_Win_create(schedule, recv_buffer_len*sizeof(int), sizeof(int), MPI_INFO_NULL,
-                   MPI_COMM_WORLD, &win);
+    size_t row_size = schema_ptr->size();
+    MPI_Alloc_mem(row_size * recv_buffer_len, MPI_INFO_NULL, &schedule);
+    MPI_Win_create(schedule, recv_buffer_len * row_size, row_size, MPI_INFO_NULL, MPI_COMM_WORLD, &win);
 
     MPI_Win_fence(0, win);
     for (size_t i = 0; i < row_count; i++) {
@@ -298,20 +300,24 @@ public:
       size_t key = value_hasher.operator()(v);
       int dest = decidePlacement(key);
       uint8_t* row_ptr = r->payload_ptr() + schema_ptr->size() * i;
-      int index = (int) target_disp[dest];
+      int index = (int)target_disp[dest];
       target_disp[dest]++;
       MPI_Win_lock(MPI_LOCK_SHARED, decidePlacement(key), 0, win);
       RowBuffer sendr(schema_ptr, row_ptr);
       Value sendv;
       sendr.read(f, sendv);
-      LOG(INFO) << "put " << sendv.p_val.int_val << " to " << dest << " index " << index << " from " << node_ptr->rank;
-      MPI_Put(&sendv.p_val.int_val, 1, MPI_INT, dest, index, 1, MPI_INT, win);
+      // LOG(INFO) << "put " << sendv.p_val.int_val << " to " << dest << " index " << index << " from " << node_ptr->rank;
+      MPI_Put(row_ptr, 1, *(schema_ptr->getType()), dest, index, 1, *(schema_ptr->getType()), win);
       MPI_Win_unlock(decidePlacement(key), win);
     }
-    MPI_Barrier(MPI_COMM_WORLD);
-    for(int j = 0 ; j < recv_buffer_len; j++) {
-      int* ptr = reinterpret_cast<int*>(schedule + j*sizeof(int));
-      LOG(INFO) << "recv "<< *ptr << "@" << node_ptr->rank << " len " << recv_buffer_len;
+    MPI_Win_fence(0, win);
+    //MPI_Barrier(MPI_COMM_WORLD);
+    for (int j = 0; j < recv_buffer_len; j++) {
+      uint8_t* ptr = reinterpret_cast<uint8_t*>(schedule + j * row_size);
+      RowBuffer recr(schema_ptr, ptr);
+      Value recv;
+      recr.read(f, recv);
+      // LOG(INFO) << "recv " << recv.p_val.int_val << "@" << node_ptr->rank << " len " << recv_buffer_len;
       //CHECK(decidePlacement(v.p_val.int_val) == node_ptr->rank);
     }
     MPI_Win_free(&win);
