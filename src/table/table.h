@@ -254,8 +254,6 @@ public:
   }
 
   void shuffle_put(const Field& f) {
-    //CHECK_EQ(out.schema_ptr->schema_sig(), this->schema_ptr->schema_sig());
-
     auto start = MPI_Wtime();
     placement_index->clear();
     key_groups->clear();
@@ -306,19 +304,19 @@ public:
       RowBuffer sendr(schema_ptr, row_ptr);
       Value sendv;
       sendr.read(f, sendv);
-      // LOG(INFO) << "put " << sendv.p_val.int_val << " to " << dest << " index " << index << " from " << node_ptr->rank;
+      //LOG(INFO) << "put " << sendv.p_val.int_val << " to " << dest << " index " << index << " from " << node_ptr->rank;
       MPI_Put(row_ptr, 1, *(schema_ptr->getType()), dest, index, 1, *(schema_ptr->getType()), win);
       MPI_Win_unlock(decidePlacement(key), win);
     }
     MPI_Win_fence(0, win);
-    //MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);
     for (int j = 0; j < recv_buffer_len; j++) {
       uint8_t* ptr = reinterpret_cast<uint8_t*>(schedule + j * row_size);
       RowBuffer recr(schema_ptr, ptr);
       Value recv;
       recr.read(f, recv);
-      // LOG(INFO) << "recv " << recv.p_val.int_val << "@" << node_ptr->rank << " len " << recv_buffer_len;
-      //CHECK(decidePlacement(v.p_val.int_val) == node_ptr->rank);
+      //LOG(INFO) << "recv " << recv.p_val.int_val << "@" << node_ptr->rank << " len " << recv_buffer_len;
+      //CHECK(decidePlacement(recv.p_val.int_val) == node_ptr->rank);
     }
     MPI_Win_free(&win);
     MPI_Free_mem(schedule);

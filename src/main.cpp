@@ -140,23 +140,18 @@ int main(int argc, char** argv) {
   v.p_val.int_val = 1;
   b.write(field1, v);
   int itr = 0;
-  while (itr++ < 1) {
+  while (itr++ < 100) {
     TempTable t1(node, schema_ptr);
-    TempTable t2(node, schema_ptr);
-    for (int i = 0; i < 1; i++) {
+    for (int i = 0; i < 10000; i++) {
       v.p_val.int_val = i + node->rank;
       b.write(field1, v);
       t1.ingest(b);
-      t2.ingest(b);
     }
     TempTable tout1(node, schema_ptr);
-    TempTable tout2(node, schema_ptr);
     t1.group(field1);
     t1.shuffle_put(field1);
     t1.shuffle(field1, tout1);
-    t2.shuffle(field1, tout2);
     tout1.verify(field1);
-    tout2.verify(field1);
   }
   // tout1 and tout2 shared with same key to each process, per key co_group is straight forward
   return 0;
