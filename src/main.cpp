@@ -139,16 +139,16 @@ int main(int argc, char** argv) {
   Value v;
   v.p_val.int_val = 1;
   b.write(field1, v);
-  TempTable t1(node, schema_ptr);
-  TempTable t2(node, schema_ptr);
-  for (int i = 0; i < 2000; i++) {
-    v.p_val.int_val = i + node->rank;
-    b.write(field1, v);
-    t1.ingest(b);
-    t2.ingest(b);
-  }
   int itr = 0;
   while(itr++ < 100) {
+    TempTable t1(node, schema_ptr);
+    TempTable t2(node, schema_ptr);
+    for (int i = 0; i < 4000; i++) {
+      v.p_val.int_val = i + node->rank;
+      b.write(field1, v);
+      t1.ingest(b);
+      t2.ingest(b);
+    }
     TempTable tout1(node, schema_ptr);
     TempTable tout2(node, schema_ptr);
     t1.shuffle(field1, tout1);

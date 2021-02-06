@@ -230,7 +230,6 @@ public:
 
     TempTable sender(node_ptr, schema_ptr);
     int index = 0;
-
     for (int i = 0; i < node_ptr->world; i++) {
       placement_index->insert({ i, index });
       for (auto g : *key_groups) {
@@ -248,8 +247,33 @@ public:
         }
       }
     }
+
     payload.swap(sender.payload);
     LOG(INFO) << "in place sort costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
+  }
+
+  void shuffle_put(const Field& f) {
+    auto start = MPI_Wtime();
+    placement_index->clear();
+    key_groups->clear();
+    MPI_Win win;
+    int *schedule;
+    MPI_Alloc_mem(schema_ptr->size(), MPI_INFO_NULL, &schedule);
+    MPI_Win_create(schedule, schema_ptr->size(), sizeof(char), MPI_INFO_NULL,
+                   MPI_COMM_WORLD, &win);
+
+    for(size_t i = 0 ; i < row_count ; i++){
+      auto r = read(i);
+      Value v;
+      r->read(f, v);
+      size_t key = value_hasher.operator()(v);
+      MPI_Win_lock(MPI_LOCK_SHARED, decidePlacement(key), 0, win);
+      MPI_Put(r->payload_ptr(), 1, *(schema_ptr->getType()), decidePlacement(key), 0, 1, *(schema_ptr->getType()), win);
+      MPI_Win_unlock(decidePlacement(key), win);
+    }
+    MPI_Win_free(&win);
+    MPI_Free_mem(schedule);
+    LOG(INFO) << "shuffle put costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
   }
 
   void async_send_per_rank(int dest, MPI_Request& request) {
