@@ -148,8 +148,10 @@ int main(int argc, char** argv) {
       t1.ingest(b);
     }
     TempTable tout1(node, schema_ptr);
+    TempTable tout2(node, schema_ptr);
     t1.group(field1);
-    t1.shuffle_put(field1);
+    t1.shuffle_put(field1, tout2);
+    tout2.verify(field1);
     t1.shuffle(field1, tout1);
     tout1.verify(field1);
   }

@@ -256,7 +256,10 @@ public:
     LOG(INFO) << "in place sort costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
   }
 
-  void shuffle_put(const Field& f) {
+  void shuffle_put(const Field& f, TempTable& out) {
+    CHECK(schema_ptr->exist(f));
+    CHECK_EQ(schema_ptr->schema_sig(), out.schema_ptr->schema_sig());
+
     auto start = MPI_Wtime();
 
     in_place_sort(f); // experiment shows batching still make sense with 10% overhead
@@ -294,6 +297,7 @@ public:
     MPI_Win_create(schedule, recv_buffer_len * row_size, row_size, MPI_INFO_NULL, MPI_COMM_WORLD, &win);
 
     MPI_Win_fence(0, win);
+#pragma omp parallel for shared(schedule)
     for (int dest = 0; dest < node_ptr->world; dest++) {
       uint8_t* rangePtr = this->range_ptr(dest);
       int index = (int)target_disp[dest];
@@ -325,6 +329,14 @@ public:
     }
      */
     MPI_Win_free(&win);
+    if(row_size * recv_buffer_len > out.payload.max_size()) {
+      out.payload.resize(row_size * recv_buffer_len);
+    }
+    //TODO(chenqin): unit test copy memory based table constructor
+    memcpy(out.payload_ptr(), schedule, row_size * recv_buffer_len);
+    out.row_count = recv_buffer_len;
+    out.offset = row_size * recv_buffer_len;
+
     MPI_Free_mem(schedule); // gc memory in temptable
     LOG(INFO) << "shuffle put costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
   }
