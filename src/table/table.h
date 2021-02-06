@@ -109,6 +109,7 @@ public:
   uint8_t* payload_ptr() {
     return &this->payload[0];
   }
+
   /**
    * after in place sort, return starting addr of rows should place on dest
    * @param dest rank of process
@@ -256,20 +257,62 @@ public:
     auto start = MPI_Wtime();
     placement_index->clear();
     key_groups->clear();
+
+    MPI_Aint recv_buffer_len = 0;
+    size_t expected_rows[node_ptr->world], expected_start_index[node_ptr->world];
+    memset(expected_rows, 0, node_ptr->world * sizeof(size_t));
+    memset(expected_start_index, 0, node_ptr->world * sizeof(size_t));
+
+    for (auto k : *key_dist) {
+      int placement = decidePlacement(k.first);
+      if (placement == node_ptr->rank) {
+        for (auto p : k.second) {
+          recv_buffer_len += p.second;
+          expected_rows[p.first] += p.second;
+        }
+      }
+    }
+
+    for(int i = 1; i < node_ptr->world; i++) {
+      expected_start_index[i] = expected_start_index[i-1] + expected_rows[i-1];
+    }
+    LOG(INFO) << "start exchange index " << node_ptr->rank;
+    size_t target_disp[node_ptr->world]; // from each process, tell others start index of assigned memory
+    for(int i = 0 ; i < node_ptr->world; i++) {
+      size_t start_index;
+      MPI_Scatter(expected_start_index, 1, MPI_UNSIGNED_LONG, &start_index, 1, MPI_UNSIGNED_LONG, i, MPI_COMM_WORLD);
+      target_disp[i] = start_index;
+    }
+
     MPI_Win win;
-    int *schedule;
-    MPI_Alloc_mem(schema_ptr->size(), MPI_INFO_NULL, &schedule);
-    MPI_Win_create(schedule, schema_ptr->size(), sizeof(char), MPI_INFO_NULL,
+    uint8_t* schedule;
+    MPI_Alloc_mem(sizeof(int) * recv_buffer_len, MPI_INFO_NULL, &schedule);
+    MPI_Win_create(schedule, recv_buffer_len*sizeof(int), sizeof(int), MPI_INFO_NULL,
                    MPI_COMM_WORLD, &win);
 
-    for(size_t i = 0 ; i < row_count ; i++){
+    MPI_Win_fence(0, win);
+    for (size_t i = 0; i < row_count; i++) {
       auto r = read(i);
       Value v;
       r->read(f, v);
       size_t key = value_hasher.operator()(v);
+      int dest = decidePlacement(key);
+      uint8_t* row_ptr = r->payload_ptr() + schema_ptr->size() * i;
+      int index = (int) target_disp[dest];
+      target_disp[dest]++;
       MPI_Win_lock(MPI_LOCK_SHARED, decidePlacement(key), 0, win);
-      MPI_Put(r->payload_ptr(), 1, *(schema_ptr->getType()), decidePlacement(key), 0, 1, *(schema_ptr->getType()), win);
+      RowBuffer sendr(schema_ptr, row_ptr);
+      Value sendv;
+      sendr.read(f, sendv);
+      LOG(INFO) << "put " << sendv.p_val.int_val << " to " << dest << " index " << index << " from " << node_ptr->rank;
+      MPI_Put(&sendv.p_val.int_val, 1, MPI_INT, dest, index, 1, MPI_INT, win);
       MPI_Win_unlock(decidePlacement(key), win);
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+    for(int j = 0 ; j < recv_buffer_len; j++) {
+      int* ptr = reinterpret_cast<int*>(schedule + j*sizeof(int));
+      LOG(INFO) << "recv "<< *ptr << "@" << node_ptr->rank << " len " << recv_buffer_len;
+      //CHECK(decidePlacement(v.p_val.int_val) == node_ptr->rank);
     }
     MPI_Win_free(&win);
     MPI_Free_mem(schedule);
@@ -520,7 +563,7 @@ public:
     auto start = MPI_Wtime();
     CHECK(schema_ptr->exist(f));
     key_groups->clear(); // reset key_groups
-    key_dist->clear();  // reset key_dist
+    key_dist->clear();   // reset key_dist
 
     for (size_t i = 0; i < row_count; i++) {
       auto r = read(i);
