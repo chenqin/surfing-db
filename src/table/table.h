@@ -62,6 +62,8 @@ private:
   std::unique_ptr<std::map<size_t, std::vector<size_t>, std::less<size_t>>> key_groups;               // local key, offsets map
   std::unique_ptr<std::map<int, size_t>> placement_index;                                             // placement , start index of rows
 
+  std::vector<uint8_t> payload;
+  uint8_t* rma_payload_ptr; //used to manage RMA shared memory
   size_t row_count = 0; // number of rows in table
   size_t offset = 0;    //current offset position
 
@@ -70,11 +72,11 @@ private:
   int fd;
 
 public:
-  std::vector<uint8_t> payload;
   TempTable(const std::shared_ptr<TableSchema> sharedPtr) {
     this->schema_ptr = sharedPtr;
     offset = 0;
     payload.reserve(MEM_PAGE_SIZE);
+    rma_payload_ptr = &payload[0];
     row_count = 0;
     key_dist = std::make_unique<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>>();
     key_groups = std::make_unique<std::map<size_t, std::vector<size_t>, std::less<size_t>>>();
@@ -84,6 +86,7 @@ public:
   TempTable(const std::shared_ptr<Node> node, const std::shared_ptr<TableSchema> sharedPtr) {
     this->schema_ptr = sharedPtr;
     payload.resize(MEM_PAGE_SIZE);
+    rma_payload_ptr = &payload[0];
     offset = 0;
     row_count = 0;
     key_dist = std::make_unique<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>>();
@@ -255,8 +258,8 @@ public:
 
   void shuffle_put(const Field& f) {
     auto start = MPI_Wtime();
-    placement_index->clear();
-    key_groups->clear();
+
+    in_place_sort(f); // experiment shows batching still make sense with 10% overhead
 
     MPI_Aint recv_buffer_len = 0;
     size_t expected_rows[node_ptr->world], expected_start_index[node_ptr->world];
@@ -287,39 +290,42 @@ public:
     MPI_Win win;
     uint8_t* schedule;
     size_t row_size = schema_ptr->size();
-    MPI_Alloc_mem(row_size * recv_buffer_len, MPI_INFO_NULL, &schedule);
+    MPI_Alloc_mem(row_size * recv_buffer_len, MPI_INFO_NULL, &schedule); // allocate memory in temptable directly
     MPI_Win_create(schedule, recv_buffer_len * row_size, row_size, MPI_INFO_NULL, MPI_COMM_WORLD, &win);
 
     MPI_Win_fence(0, win);
-    for (size_t i = 0; i < row_count; i++) {
-      auto r = read(i);
-      Value v;
-      r->read(f, v);
-      size_t key = value_hasher.operator()(v);
-      int dest = decidePlacement(key);
-      uint8_t* row_ptr = r->payload_ptr() + schema_ptr->size() * i;
+    for (int dest = 0; dest < node_ptr->world; dest++) {
+      uint8_t* rangePtr = this->range_ptr(dest);
       int index = (int)target_disp[dest];
-      target_disp[dest]++;
-      MPI_Win_lock(MPI_LOCK_SHARED, decidePlacement(key), 0, win);
+      int count = 0;
+      if(dest != node_ptr->world -1) {
+        count = placement_index->at(dest + 1) - placement_index->at(dest);
+      } else {
+        count = row_count - placement_index->at(dest);
+      }
+      MPI_Win_lock(MPI_LOCK_SHARED, dest, 0, win);
+      /*
       RowBuffer sendr(schema_ptr, row_ptr);
       Value sendv;
       sendr.read(f, sendv);
-      //LOG(INFO) << "put " << sendv.p_val.int_val << " to " << dest << " index " << index << " from " << node_ptr->rank;
-      MPI_Put(row_ptr, 1, *(schema_ptr->getType()), dest, index, 1, *(schema_ptr->getType()), win);
-      MPI_Win_unlock(decidePlacement(key), win);
+      //LOG(INFO) << "put " << sendv.p_val.int_val << " to " << dest << " @ " << node_ptr->rank;
+       */
+      MPI_Put(rangePtr, count, *(schema_ptr->getType()), dest, index, count, *(schema_ptr->getType()), win);
+      MPI_Win_unlock(dest, win);
     }
     MPI_Win_fence(0, win);
-    MPI_Barrier(MPI_COMM_WORLD);
+    //MPI_Barrier(MPI_COMM_WORLD);
+    /*
     for (int j = 0; j < recv_buffer_len; j++) {
       uint8_t* ptr = reinterpret_cast<uint8_t*>(schedule + j * row_size);
       RowBuffer recr(schema_ptr, ptr);
       Value recv;
       recr.read(f, recv);
-      //LOG(INFO) << "recv " << recv.p_val.int_val << "@" << node_ptr->rank << " len " << recv_buffer_len;
-      //CHECK(decidePlacement(recv.p_val.int_val) == node_ptr->rank);
+      LOG(INFO) << "recv " << recv.p_val.int_val << "@" << node_ptr->rank;
     }
+     */
     MPI_Win_free(&win);
-    MPI_Free_mem(schedule);
+    MPI_Free_mem(schedule); // gc memory in temptable
     LOG(INFO) << "shuffle put costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
   }
 
