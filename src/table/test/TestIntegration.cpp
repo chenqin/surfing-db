@@ -25,10 +25,10 @@ TEST(TableTest, testRowBuffer) {
   initField(field1, "a", RowType::INT, sizeof(int));
   initField(field2, "b", RowType::LONG, sizeof(long));
   initField(field3, "c", RowType::BOOL, sizeof(bool));
-  initField(field4, "d", RowType::DOUBLE, sizeof(double));
+  initField(field4, "d", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
   initField(field5, "e", RowType::STRING, MAX_STR_LEN);
 
-  initListField(field6, "l", RowType::DOUBLE, 3, sizeof(double));
+  initListField(field6, "l", RowType::DOUBLE, 3, sizeof(DOUBLE_TYPE));
   initMapField(field7, "m", RowType::STRING, RowType::LONG, 3, MAX_STR_LEN, sizeof(long));
 
   r.fields.push_back(field1);
@@ -182,7 +182,7 @@ TEST(TableTest, TestGroupBy) {
 
 TEST(TableTest, TestXGBOperator) {
   Field f;
-  initField(f,"test", RowType::DOUBLE, sizeof(double));
+  initField(f,"test", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
   std::vector<Field> features;
   features.push_back(f);
   XGBParameters parameters;

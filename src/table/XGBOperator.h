@@ -25,8 +25,8 @@ struct XGBParameters {
   std::string tree_method;
   std::string objective;
   std::string eval_metric;
-  double min_child_weight;
-  double gamma;
+  DOUBLE_TYPE min_child_weight;
+  DOUBLE_TYPE gamma;
   uint8_t max_depth;
   bool verbosity;
   int root = 0;

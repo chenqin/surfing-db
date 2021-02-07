@@ -151,10 +151,6 @@ set(CMAKE_CXX_FLAGS ${NCFLAGS})
 set(CMAKE_CXX_FLAGS_DEBUG "-g -DNDBG")
 set(CMAKE_CXX_FLAGS_RELEASE ${NCFLAGS_RELEASE})
 
-
-# utils.h fastcopy need avx
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx2")
-
 # use openmp simd
 OPTION(USE_OpenMP "Use OpenMP" ON)
 

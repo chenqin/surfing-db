@@ -20,7 +20,7 @@ namespace table {
 #define MEM_PAGE_SIZE 67108864 // 64MB
 #define FILE_IO_VECTOR 8
 #define SSD_CHUNK_SIZ 65536 // read/write ssd per 64KB chunk
-
+#define DOUBLE_TYPE float //thrift lack float type
 /**
  * build a continous memory buffer
  */
@@ -125,7 +125,7 @@ inline size_t getFieldSize(const Field& f) {
     return sizeof(long);
   }
   case RowType::DOUBLE: {
-    return sizeof(double);
+    return sizeof(DOUBLE_TYPE);
   }
     //  |size|string|
   case RowType::STRING: {
@@ -270,7 +270,7 @@ public:
         displ = _size - getFieldSize(f);
         MPI_Type_hvector(1, blocklength, displ, MPI_CHAR, &type);
         MPI_Type_commit(&type);
-        _field_types->insert({f, type});
+        _field_types->insert({ f, type });
       }
     }
     if (!_is_testing) {
@@ -281,7 +281,7 @@ public:
   ~TableSchema() {
     if (!_is_testing) {
       MPI_Type_free(&_row_type);
-      for(auto s : *_field_types.get()) {
+      for (auto s : *_field_types.get()) {
         MPI_Type_free(&s.second);
       }
     }

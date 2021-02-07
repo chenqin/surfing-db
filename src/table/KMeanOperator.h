@@ -31,7 +31,7 @@ public:
   size_t max_iteration;
   size_t iteration;
   std::unordered_map<int, std::set<size_t>> groups;
-  double* centers;
+  DOUBLE_TYPE* centers;
   bool inited;
 
   KMeanOperator(int k, const std::vector<Field> fields, size_t max_iteration){
@@ -48,8 +48,8 @@ public:
     }
     this->max_iteration = max_iteration;
     iteration = 0;
-    centers = (double*) malloc(sizeof(double)*k*fields.size());
-    memset(centers, 0, sizeof(double)*k*fields.size());
+    centers = (DOUBLE_TYPE*) malloc(sizeof(double)*k*fields.size());
+    memset(centers, 0, sizeof(DOUBLE_TYPE)*k*fields.size());
     inited = false;
   }
 

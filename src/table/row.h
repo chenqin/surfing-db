@@ -9,7 +9,6 @@
 
 #include <unordered_map>
 #include "schema.h"
-#include "utils.h"
 #pragma once
 
 namespace surfingdb {
@@ -67,7 +66,7 @@ private:
       break;
     }
     case RowType::DOUBLE: {
-      memcpy((double*)(_payload + offset), data, sizeof(double));
+      memcpy((DOUBLE_TYPE*)(_payload + offset), data, sizeof(DOUBLE_TYPE));
       break;
     }
       /*
@@ -113,9 +112,9 @@ private:
       return sizeof(long);
     }
     case RowType::DOUBLE: {
-      double* double_ptr = (double*)(_payload + offset);
-      memcpy(dataptr, double_ptr, sizeof(double));
-      return sizeof(double);
+      DOUBLE_TYPE* double_ptr = (DOUBLE_TYPE*)(_payload + offset);
+      memcpy(dataptr, double_ptr, sizeof(DOUBLE_TYPE));
+      return sizeof(DOUBLE_TYPE);
     }
     case RowType::STRING: {
       // TODO(chenqin): use header
@@ -232,7 +231,8 @@ public:
       break;
     }
     case RowType::DOUBLE: {
-      _pwrite(f, &v.p_val.double_val, offset);
+      DOUBLE_TYPE dv = (DOUBLE_TYPE) v.p_val.double_val;
+      _pwrite(f, &dv, offset);
       break;
     }
     case RowType::STRING: {
@@ -305,7 +305,9 @@ public:
       return 1;
     }
     case RowType::DOUBLE: {
-      _pread(f, &v.p_val.double_val, offset);
+      DOUBLE_TYPE dv;
+      _pread(f, &dv, offset);
+      v.p_val.double_val = (double) dv;
       return 1;
     }
     case RowType::STRING: {
