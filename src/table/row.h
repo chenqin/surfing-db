@@ -140,8 +140,8 @@ private:
 public:
   explicit RowBuffer(std::shared_ptr<TableSchema> schemaptr) {
     _header.type = RowType::LONG;
-    _header.max_unit_size = getFieldSize(_header);
-    CHECK_EQ(sizeof(uint64_t), getFieldSize(_header));
+    _header.max_unit_size = SchemaUtils::getFieldSize(_header);
+    CHECK_EQ(sizeof(uint64_t), SchemaUtils::getFieldSize(_header));
     this->schemaptr = schemaptr;
     _schema_sig = schemaptr->schema_sig();
     CHECK_GT(schemaptr->size(), 0);
@@ -157,8 +157,8 @@ public:
    */
   explicit RowBuffer(std::shared_ptr<TableSchema> schemaptr, uint8_t* payloadptr) {
     _header.type = RowType::LONG;
-    _header.max_unit_size = getFieldSize(_header);
-    CHECK_EQ(sizeof(uint64_t), getFieldSize(_header));
+    _header.max_unit_size = SchemaUtils::getFieldSize(_header);
+    CHECK_EQ(sizeof(uint64_t), SchemaUtils::getFieldSize(_header));
     this->schemaptr = schemaptr;
     _schema_sig = schemaptr->schema_sig();
     CHECK_GT(schemaptr->size(), 0);

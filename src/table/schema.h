@@ -28,6 +28,7 @@ using namespace surfingdb::table::schema;
 using std::hash;
 using std::string;
 
+#pragma once
 struct FieldHasher {
   std::size_t operator()(const Field& k) const {
     using std::hash;
@@ -36,10 +37,11 @@ struct FieldHasher {
 
     return (hash<string>()(k.name));
   }
-} field_hasher;
+};
 
 struct SchemaHasher {
   std::size_t operator()(const RowSchema& k) const {
+    FieldHasher field_hasher;
     using std::hash;
     using std::size_t;
     using std::string;
@@ -49,7 +51,7 @@ struct SchemaHasher {
     }
     return result;
   }
-} schema_hasher;
+};
 
 struct ValueHasher {
   std::size_t operator()(const PValue& k) const {
@@ -76,121 +78,115 @@ struct ValueHasher {
     }
     return result;
   }
-} value_hasher;
+};
 
-bool surfingdb::table::schema::PValue::operator<(const PValue& k) const {
-  return (hash<string>()(this->string_val)) < (hash<string>()(k.string_val))
-         || this->double_val < k.double_val
-         || this->long_val < k.long_val
-         || this->int_val < k.int_val
-         || this->bool_val == k.bool_val;
-}
-
-/**
+class SchemaUtils {
+public:
+  /**
  * valid if schema is accepted
  * @param rowSchema
  */
-void validSchema(const RowSchema& rowSchema) {
-  CHECK_GT(rowSchema.fields.size(), 0);
-  std::set<std::string> name_set;
-  for (auto& field : rowSchema.fields) {
-    CHECK(name_set.find(field.name) == name_set.end());
+  static void validSchema(const RowSchema& rowSchema) {
+    CHECK_GT(rowSchema.fields.size(), 0);
+    std::set<std::string> name_set;
+    for (auto& field : rowSchema.fields) {
+      CHECK(name_set.find(field.name) == name_set.end());
 
-    name_set.insert(field.name);
+      name_set.insert(field.name);
 
-    if (field.type == RowType::LIST || field.type == RowType::MAP) {
-      CHECK(field.list_type != RowType::LIST);
-      CHECK(field.list_type != RowType::MAP);
-    } else {
-      CHECK(field.list_type == RowType::VOID);
-      CHECK(field.map_key_type == RowType::VOID);
-      CHECK(field.map_value_type == RowType::VOID);
+      if (field.type == RowType::LIST || field.type == RowType::MAP) {
+        CHECK(field.list_type != RowType::LIST);
+        CHECK(field.list_type != RowType::MAP);
+      } else {
+        CHECK(field.list_type == RowType::VOID);
+        CHECK(field.map_key_type == RowType::VOID);
+        CHECK(field.map_value_type == RowType::VOID);
+      }
     }
   }
-}
 
-inline size_t getFieldSize(const Field& f) {
-  switch (f.type) {
+  static size_t getFieldSize(const Field& f) {
+    switch (f.type) {
 
-  case RowType::VOID: {
-    return 0;
+    case RowType::VOID: {
+      return 0;
+    }
+    case RowType::BOOL: {
+      return sizeof(bool);
+    }
+    case RowType::INT: {
+      return sizeof(int);
+    }
+    case RowType::LONG: {
+      return sizeof(long);
+    }
+    case RowType::DOUBLE: {
+      return sizeof(DOUBLE_TYPE);
+    }
+      //  |size|string|
+    case RowType::STRING: {
+      // max support string column MAX_STR_LEN character
+      long str_size = f.max_unit_size < MAX_STR_LEN ? f.max_unit_size : MAX_STR_LEN;
+      return sizeof(char) * str_size + HEADER_SIZE;
+    }
+      //  |size|array|
+    case RowType::LIST: {
+      Field l;
+      l.type = f.list_type;
+      return getFieldSize(l) * f.max_unit_size + HEADER_SIZE;
+    }
+      // | size | key val key val|
+    case RowType::MAP: {
+      Field k, v;
+      k.type = f.map_key_type;
+      v.type = f.map_value_type;
+      return getFieldSize(k) * f.max_map_key_unit_size + getFieldSize(v) * v.max_map_value_unit_size + HEADER_SIZE;
+    }
+    }
+    assert(false);
   }
-  case RowType::BOOL: {
-    return sizeof(bool);
-  }
-  case RowType::INT: {
-    return sizeof(int);
-  }
-  case RowType::LONG: {
-    return sizeof(long);
-  }
-  case RowType::DOUBLE: {
-    return sizeof(DOUBLE_TYPE);
-  }
-    //  |size|string|
-  case RowType::STRING: {
-    // max support string column MAX_STR_LEN character
-    long str_size = f.max_unit_size < MAX_STR_LEN ? f.max_unit_size : MAX_STR_LEN;
-    return sizeof(char) * str_size + HEADER_SIZE;
-  }
-    //  |size|array|
-  case RowType::LIST: {
-    Field l;
-    l.type = f.list_type;
-    return getFieldSize(l) * f.max_unit_size + HEADER_SIZE;
-  }
-    // | size | key val key val|
-  case RowType::MAP: {
-    Field k, v;
-    k.type = f.map_key_type;
-    v.type = f.map_value_type;
-    return getFieldSize(k) * f.max_map_key_unit_size + getFieldSize(v) * v.max_map_value_unit_size + HEADER_SIZE;
-  }
-  }
-  assert(false);
-}
 
-inline void checkStringLength(const RowType::type type, const uint64_t& max_size) {
-  if (type == RowType::STRING) {
-    CHECK_LE(max_size, MAX_STR_LEN);
+  static void checkStringLength(const RowType::type type, const uint64_t& max_size) {
+    if (type == RowType::STRING) {
+      CHECK_LE(max_size, MAX_STR_LEN);
+    }
   }
-}
-/**
+  /**
  * helper function to init a primitive field
  * @param field
  * @param name
  * @param type
  * @param max_size
  */
-inline void initField(Field& field, const std::string& name, const RowType::type type, const uint64_t& max_size) {
-  field.name = name;
-  field.type = type;
-  field.max_unit_size = max_size;
-  // IF string should check max_size no more than MAX_STR_LEN
-  CHECK(type != RowType::LIST);
-  CHECK(type != RowType::MAP);
-  checkStringLength(type, max_size);
-}
+  static void initField(Field& field, const std::string& name, const RowType::type type, const uint64_t& max_size) {
+    field.name = name;
+    field.type = type;
+    field.max_unit_size = max_size;
+    // IF string should check max_size no more than MAX_STR_LEN
+    CHECK(type != RowType::LIST);
+    CHECK(type != RowType::MAP);
+    checkStringLength(type, max_size);
+  }
 
-/**
+  /**
  * helper function to init a list field
  * @param field
  * @param name
  * @param type
  * @param max_size
  */
-inline void initListField(Field& field, const std::string& name, const RowType::type list_type, const uint64_t& max_list_size, const uint64_t& max_element_size) {
-  field.name = name;
-  field.type = RowType::LIST;
-  field.list_type = list_type;
-  field.max_unit_size = max_list_size;
-  field.max_list_unit_size = max_element_size;
-  CHECK(list_type != RowType::LIST);
-  CHECK(list_type != RowType::MAP);
-  checkStringLength(list_type, max_element_size);
-}
+  static void initListField(Field& field, const std::string& name, const RowType::type list_type, const uint64_t& max_list_size, const uint64_t& max_element_size) {
+    field.name = name;
+    field.type = RowType::LIST;
+    field.list_type = list_type;
+    field.max_unit_size = max_list_size;
+    field.max_list_unit_size = max_element_size;
+    CHECK(list_type != RowType::LIST);
+    CHECK(list_type != RowType::MAP);
+    checkStringLength(list_type, max_element_size);
+  }
 
-/**
+  /**
  * helper function to init a map field
  * @param field
  * @param name
@@ -200,21 +196,22 @@ inline void initListField(Field& field, const std::string& name, const RowType::
  * @param max_key_size
  * @param max_value_size
  */
-inline void initMapField(Field& field, const std::string& name, const RowType::type key_type, const RowType::type value_type, const uint64_t& max_map_size, const uint64_t& max_key_size, const uint64_t& max_value_size) {
-  field.name = name;
-  field.type = RowType::MAP;
-  field.map_key_type = key_type;
-  field.map_value_type = value_type;
-  field.max_unit_size = max_map_size;
-  field.max_map_key_unit_size = max_key_size;
-  field.max_map_value_unit_size = max_value_size;
-  CHECK(key_type != RowType::LIST);
-  CHECK(key_type != RowType::MAP);
-  CHECK(value_type != RowType::LIST);
-  CHECK(value_type != RowType::MAP);
-  checkStringLength(key_type, max_key_size);
-  checkStringLength(value_type, max_value_size);
-}
+  static void initMapField(Field& field, const std::string& name, const RowType::type key_type, const RowType::type value_type, const uint64_t& max_map_size, const uint64_t& max_key_size, const uint64_t& max_value_size) {
+    field.name = name;
+    field.type = RowType::MAP;
+    field.map_key_type = key_type;
+    field.map_value_type = value_type;
+    field.max_unit_size = max_map_size;
+    field.max_map_key_unit_size = max_key_size;
+    field.max_map_value_unit_size = max_value_size;
+    CHECK(key_type != RowType::LIST);
+    CHECK(key_type != RowType::MAP);
+    CHECK(value_type != RowType::LIST);
+    CHECK(value_type != RowType::MAP);
+    checkStringLength(key_type, max_key_size);
+    checkStringLength(value_type, max_value_size);
+  }
+};
 
 class TableSchema : public RowSchema {
 private:
@@ -222,6 +219,8 @@ private:
   size_t _schema_sig;     //schema fields hash
   MPI_Datatype _row_type; //type of entire row
   bool _is_testing = false;
+  FieldHasher field_hasher;
+  SchemaHasher schema_hasher;
 
 public:
   std::shared_ptr<std::unordered_map<Field, uint64_t, FieldHasher>> _offsets;
@@ -253,21 +252,21 @@ public:
     _offsets = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
     _max_unit = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
     _field_types = std::make_shared<std::unordered_map<Field, MPI_Datatype, FieldHasher>>();
-    validSchema(schema);
+    SchemaUtils::validSchema(schema);
     _schema_sig = schema_hasher.operator()(schema);
     _size = sizeof(size_t); // store _schema_sig
     for (size_t i = 0; i < schema.fields.size(); i++) {
       auto f = schema.fields.at(i);
       _offsets->emplace(f, _size);
       _max_unit->emplace(f, f.max_unit_size);
-      _size += getFieldSize(f);
+      _size += SchemaUtils::getFieldSize(f);
 
       if (!_is_testing) {
         MPI_Datatype type;
         int blocklength;
         MPI_Aint displ;
-        blocklength = getFieldSize(f);
-        displ = _size - getFieldSize(f);
+        blocklength = SchemaUtils::getFieldSize(f);
+        displ = _size - SchemaUtils::getFieldSize(f);
         MPI_Type_hvector(1, blocklength, displ, MPI_CHAR, &type);
         MPI_Type_commit(&type);
         _field_types->insert({ f, type });

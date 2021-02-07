@@ -14,6 +14,15 @@
 
 namespace surfingdb {
 namespace table {
+
+bool PValue::operator<(const PValue& k) const {
+  return (hash<string>()(this->string_val)) < (hash<string>()(k.string_val))
+         || this->double_val < k.double_val
+         || this->long_val < k.long_val
+         || this->int_val < k.int_val
+         || this->bool_val == k.bool_val;
+}
+
 namespace test {
 
 TEST(TableTest, testRowBuffer) {
@@ -22,14 +31,14 @@ TEST(TableTest, testRowBuffer) {
 
   Field field1, field2, field3, field4, field5, field6, field7;
 
-  initField(field1, "a", RowType::INT, sizeof(int));
-  initField(field2, "b", RowType::LONG, sizeof(long));
-  initField(field3, "c", RowType::BOOL, sizeof(bool));
-  initField(field4, "d", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
-  initField(field5, "e", RowType::STRING, MAX_STR_LEN);
+  SchemaUtils::initField(field1, "a", RowType::INT, sizeof(int));
+  SchemaUtils::initField(field2, "b", RowType::LONG, sizeof(long));
+  SchemaUtils::initField(field3, "c", RowType::BOOL, sizeof(bool));
+  SchemaUtils::initField(field4, "d", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
+  SchemaUtils::initField(field5, "e", RowType::STRING, MAX_STR_LEN);
 
-  initListField(field6, "l", RowType::DOUBLE, 3, sizeof(DOUBLE_TYPE));
-  initMapField(field7, "m", RowType::STRING, RowType::LONG, 3, MAX_STR_LEN, sizeof(long));
+  SchemaUtils::initListField(field6, "l", RowType::DOUBLE, 3, sizeof(DOUBLE_TYPE));
+  SchemaUtils::initMapField(field7, "m", RowType::STRING, RowType::LONG, 3, MAX_STR_LEN, sizeof(long));
 
   r.fields.push_back(field1);
   r.fields.push_back(field2);
@@ -166,7 +175,7 @@ TEST(TableTest, TestGroupBy) {
   r->fields = std::vector<surfingdb::table::schema::Field>();
 
   Field field1;
-  initField(field1, "pin_id", RowType::STRING, 64);
+  SchemaUtils::initField(field1, "pin_id", RowType::STRING, 64);
   r->fields.push_back(field1);
   auto rr = std::make_shared<TableSchema>(*r.get());
   RowBuffer rowBuffer(rr);
@@ -182,7 +191,7 @@ TEST(TableTest, TestGroupBy) {
 
 TEST(TableTest, TestXGBOperator) {
   Field f;
-  initField(f,"test", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
+  SchemaUtils::initField(f,"test", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
   std::vector<Field> features;
   features.push_back(f);
   XGBParameters parameters;

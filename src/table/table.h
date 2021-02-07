@@ -71,6 +71,8 @@ private:
   ssize_t nr;
   int fd;
 
+  ValueHasher value_hasher;
+
 public:
   TempTable(const std::shared_ptr<TableSchema> sharedPtr) {
     this->schema_ptr = sharedPtr;
@@ -591,7 +593,7 @@ public:
       auto r = read(i);
       Value v;
       r->read(f, v);
-      size_t key = value_hasher.operator()(v);
+      size_t key =value_hasher.operator()(v);
       if (key_groups->find(key) == key_groups->end()) {
         std::vector<size_t> arr;
         key_groups->insert({ key, arr });
