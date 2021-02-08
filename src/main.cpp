@@ -151,12 +151,11 @@ int main(int argc, char** argv) {
   int itr = 0;
   while (itr++ < 20) {
     mtable t1(node, schema_ptr);
-    for (int i = 0; i < 40000; i++) {
+    for (int i = 0; i < 60000; i++) {
       v.p_val.int_val = i + node->rank;
       b.write(field1, v);
       t1.ingest(b);
     }
-    t1.group(field1);
     t1.shuffle(field1);
     t1.verify(field1);
   }

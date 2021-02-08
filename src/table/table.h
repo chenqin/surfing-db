@@ -138,7 +138,7 @@ public:
     row_count++;
 
     // expand table size if needed
-    if (offset >= MEM_PAGE_SIZE - row.size()) {
+    if (offset >= payload.capacity() - row.size()) {
       payload.resize(payload.size() + MEM_PAGE_SIZE);
     }
   }

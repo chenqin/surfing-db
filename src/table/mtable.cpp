@@ -54,9 +54,9 @@ void mtable::reserve_rma_memory(size_t rows) {
 
 void mtable::reserve_table(size_t rows) {
   CHECK_GT(schema_ptr->size(), 0);
-  if (this->payload.max_size() > rows * schema_ptr->size()) return;
+  if (this->payload.capacity() > rows * schema_ptr->size()) return;
   int page = (rows * schema_ptr->size()) / MEM_PAGE_SIZE + ((rows * schema_ptr->size()) % MEM_PAGE_SIZE != 0) ? 1 : 0;
-  payload.reserve(page * MEM_PAGE_SIZE);
+  payload.resize(page * MEM_PAGE_SIZE);
 }
 
 /**
@@ -75,7 +75,7 @@ std::unique_ptr<RowBuffer> mtable::read(int index) {
   * @param key
   * @return
   */
-size_t mtable::decidePlacement(size_t key) {
+size_t mtable::placement(size_t key) {
   int base = node_ptr->world % 2 == 0 ? node_ptr->world - 1 : node_ptr->world;
   return key % base;
 }
@@ -87,25 +87,26 @@ uint8_t* mtable::payload_ptr() {
 void mtable::ingest(RowBuffer& row) {
   CHECK_EQ(row.schema_sig(), schema_ptr->schema_sig()); //check schema signature
   CHECK_EQ(schema_ptr->size(), row.size());             //check row size
-  CHECK_LT(row.size() + offset, payload.max_size());    // check capacity of temp table
+  CHECK_LT(row.size() + offset, payload.capacity());    // check capacity of temp table
   memcpy(&payload[offset], row.payload_ptr(), row.size());
   offset += row.size();
   row_count++;
 
   // expand table size if needed
-  if (offset >= MEM_PAGE_SIZE - row.size()) {
-    payload.resize(payload.size() + MEM_PAGE_SIZE);
+  if (offset >= payload.capacity() - row.size()) {
+    LOG(INFO) << "figure out how to manage memory";
+    //payload.resize(payload.capacity() + MEM_PAGE_SIZE);
   }
 }
 
 void mtable::verify(const Field& field) {
-  LOG(INFO) << "verify " << row_count << " rows";
+  //LOG(INFO) << "verify " << row_count << " rows";
   for (size_t i = 0; i < row_count; i++) {
     auto r = read(i);
     Value v;
     r->read(field, v);
     size_t key = value_hasher.operator()(v);
-    CHECK_EQ(decidePlacement(key), node_ptr->rank);
+    CHECK_EQ(placement(key), node_ptr->rank);
   }
 }
 
@@ -187,24 +188,23 @@ void mtable::group(const Field& f) {
     }
   }
   node_ptr->forward();
-  LOG(INFO) << "group by costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
+  //LOG(INFO) << "group by costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
 }
 
 void mtable::shuffle(const Field& f) {
   CHECK(schema_ptr->exist(f));
+  group(f);
+  placement_sort(f); // experiment shows batching still make sense with 10% overhead
 
   auto start = MPI_Wtime();
-
-  inPlaceSort(f); // experiment shows batching still make sense with 10% overhead
-
   MPI_Aint recv_buffer_len = 0;
   size_t expected_rows[node_ptr->world], expected_start_index[node_ptr->world];
   memset(expected_rows, 0, node_ptr->world * sizeof(size_t));
   memset(expected_start_index, 0, node_ptr->world * sizeof(size_t));
 
   for (auto k : *key_dist) {
-    int placement = decidePlacement(k.first);
-    if (placement == node_ptr->rank) {
+    int place = placement(k.first);
+    if (place == node_ptr->rank) {
       for (auto p : k.second) {
         recv_buffer_len += p.second;
         expected_rows[p.first] += p.second;
@@ -261,7 +261,7 @@ uint8_t* mtable::range_ptr(int dest) {
 /**
    * sort rows based on destination process and update _start_index map
    */
-void mtable::inPlaceSort(const Field& f) {
+void mtable::placement_sort(const Field& f) {
   auto start = MPI_Wtime();
   placement_index->clear();
   key_groups->clear();
@@ -298,7 +298,7 @@ void mtable::inPlaceSort(const Field& f) {
     }
   }
   memcpy(&payload[0], sender.payload_ptr(), row_count * schema_ptr->size());
-  LOG(INFO) << "in place sort costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
+  //LOG(INFO) << "in place sort costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
 }
 } // namespace table
 } // namespace surfingdb

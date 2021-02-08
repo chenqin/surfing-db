@@ -23,6 +23,7 @@ private:
   size_t row_count = 0; // number of rows in table
   size_t offset = 0;    //current offset position
   size_t schedule_size = 0; // RMA memory size
+
   // defines the node row table bind to
   std::shared_ptr<Node> node_ptr;
   std::shared_ptr<TableSchema> schema_ptr;
@@ -35,11 +36,11 @@ private:
 public:
   mtable(const std::shared_ptr<Node>, const std::shared_ptr<TableSchema>);
   ~mtable();
-  void inPlaceSort(const Field& f);
+  void placement_sort(const Field& f);
   std::unique_ptr<RowBuffer> read(int index);
   uint8_t* range_ptr(int dest);
   uint8_t* payload_ptr();
-  size_t decidePlacement(size_t key);
+  size_t placement(size_t key);
   void shuffle(const Field& f);
   void group(const Field& f);
   void ingest(RowBuffer& row);
