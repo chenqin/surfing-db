@@ -87,16 +87,11 @@ uint8_t* mtable::payload_ptr() {
 void mtable::ingest(RowBuffer& row) {
   CHECK_EQ(row.schema_sig(), schema_ptr->schema_sig()); //check schema signature
   CHECK_EQ(schema_ptr->size(), row.size());             //check row size
-  CHECK_LT(row.size() + offset, payload.capacity());    // check capacity of temp table
+  CHECK_LE(row.size() + offset, payload.capacity());    // check capacity of temp table
   memcpy(&payload[offset], row.payload_ptr(), row.size());
   offset += row.size();
   row_count++;
-
-  // expand table size if needed
-  if (offset >= payload.capacity() - row.size()) {
-    LOG(INFO) << "figure out how to manage memory";
-    //payload.resize(payload.capacity() + MEM_PAGE_SIZE);
-  }
+  CHECK_LE(offset, payload.capacity());
 }
 
 void mtable::verify(const Field& field) {
@@ -279,6 +274,7 @@ void mtable::placement_sort(const Field& f) {
   }
 
   TempTable sender(node_ptr, schema_ptr);
+  sender.payload.reserve(row_count * schema_ptr->size());
   int index = 0;
   for (int i = 0; i < node_ptr->world; i++) {
     placement_index->insert({ i, index });

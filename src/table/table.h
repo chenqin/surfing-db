@@ -62,7 +62,6 @@ private:
   std::unique_ptr<std::map<size_t, std::vector<size_t>, std::less<size_t>>> key_groups;               // local key, offsets map
   std::unique_ptr<std::map<int, size_t>> placement_index;                                             // placement , start index of rows
 
-  std::vector<uint8_t> payload;
   uint8_t* rma_payload_ptr; //used to manage RMA shared memory
   size_t row_count = 0; // number of rows in table
   size_t offset = 0;    //current offset position
@@ -74,6 +73,7 @@ private:
   ValueHasher value_hasher;
 
 public:
+  std::vector<uint8_t> payload;
   TempTable(const std::shared_ptr<TableSchema> sharedPtr) {
     this->schema_ptr = sharedPtr;
     offset = 0;
