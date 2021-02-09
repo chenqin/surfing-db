@@ -226,6 +226,7 @@ void mtable::shuffle(const Field& f) {
     uint8_t* rangePtr = this->range_ptr(dest);
     int index = (int)target_disp[dest];
     int count = 0;
+    // use adjacent map start index to reason number of rows need to send
     if (dest != node_ptr->world - 1) {
       count = placement_index->at(dest + 1) - placement_index->at(dest);
     } else {
@@ -274,27 +275,21 @@ void mtable::placement_sort(const Field& f) {
     key_groups->at(key).emplace_back(i);
   }
 
-  TempTable sender(node_ptr, schema_ptr);
-  auto temp_ptr = std::make_unique<mchunk>();
-  sender.payload.reserve(row_count * schema_ptr->size());
+  mtable sender(node_ptr, schema_ptr, row_count * schema_ptr->size());
   int index = 0;
   for (int i = 0; i < node_ptr->world; i++) {
     placement_index->insert({ i, index });
     for (auto g : *key_groups) {
-      size_t placement = sender.decidePlacement(g.first);
+      size_t placement = sender.placement(g.first);
       if (placement == (size_t)i) {
         for (auto item : g.second) {
           auto row = this->read(item);
-          Value v;
-          row->read(f, v);
           sender.ingest(*row.get());
-          temp_ptr->append(*row.get());
           index++;
         }
       }
     }
   }
-  //chunk_ptr = std::move(temp_ptr);
   memcpy(&payload[0], sender.payload_ptr(), row_count * schema_ptr->size());
   //LOG(INFO) << "in place sort costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
 }
