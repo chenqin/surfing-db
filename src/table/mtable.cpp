@@ -39,7 +39,6 @@ void mtable::flush_rma_memory(size_t rows) {
   placement_index->clear();
   memcpy(payload_ptr(), schedule, schema_ptr->size() * rows);
   chunk_ptr->clear();
-
   for(int i = 0 ; i < rows ; i++) {
     RowBuffer r(schema_ptr, schedule + i*schema_ptr->size());
     chunk_ptr->append(r);
@@ -98,16 +97,17 @@ void mtable::ingest(RowBuffer& row) {
   memcpy(&payload[offset], row.payload_ptr(), row.size());
   offset += row.size();
   row_count++;
-  chunk_ptr->append(row);
+  //chunk_ptr->append(row);
   CHECK_LE(offset, payload.capacity());
 }
 
 void mtable::verify(const Field& field) {
   //LOG(INFO) << "verify " << row_count << " rows";
   for (size_t i = 0; i < row_count; i++) {
-    auto r = read(i);
+    auto r = chunk_ptr->read(schema_ptr, i);
     Value v;
     r->read(field, v);
+    LOG(INFO) << v.p_val.int_val;
     size_t key = value_hasher.operator()(v);
     CHECK_EQ(placement(key), node_ptr->rank);
   }
@@ -301,7 +301,7 @@ void mtable::placement_sort(const Field& f) {
       }
     }
   }
-  chunk_ptr = std::move(temp_ptr);
+  //chunk_ptr = std::move(temp_ptr);
   memcpy(&payload[0], sender.payload_ptr(), row_count * schema_ptr->size());
   //LOG(INFO) << "in place sort costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
 }

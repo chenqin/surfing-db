@@ -18,15 +18,11 @@ private:
   int page_size;
   int loaded_page;
   size_t offset;
-  std::vector<uint8_t> payload;
 public:
   mchunk() {
-    std::vector<uint8_t> temp(SSD_CHUNK_SIZ);
-    payload = temp;
-    page_size = 1;
+    page_size = 0;
     loaded_page = 0;
     offset = 0;
-    chunks.push_back(temp);
   }
   void clear() {
     for(auto p : chunks) {
@@ -62,15 +58,26 @@ public:
   }
 
   void append(RowBuffer& row) {
-    if (row.size() + offset > SSD_CHUNK_SIZ) {
+    if(page_size == 0) {
       std::vector<uint8_t> temp(SSD_CHUNK_SIZ);
+      page_size = 1;
+      loaded_page = 0;
+      offset = 0;
+      chunks.push_back(temp);
+    }
+    CHECK_GE(page_size, 1);
+    CHECK_LE(offset, SSD_CHUNK_SIZ);
+    CHECK_GE(offset, 0);
+    if (row.size() + offset > SSD_CHUNK_SIZ) {
+      std::vector<uint8_t> temp(SSD_CHUNK_SIZ, 0);
       page_size++;
       chunks.push_back(temp);
       loaded_page++;
       offset = 0;
-      payload = temp;
     }
-    memcpy(reinterpret_cast<void*>(&payload[offset]), row.payload_ptr(), row.size());
+    LOG(INFO) << "append to " << page_size-1 << " @ " << offset;
+    std::vector<uint8_t> ptr = chunks[page_size-1];
+    memcpy(reinterpret_cast<void*>(&ptr[offset]), row.payload_ptr(), row.size());
     offset += row.size();
   }
 };
