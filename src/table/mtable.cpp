@@ -25,6 +25,7 @@ mtable::mtable(const std::shared_ptr<Node> node_ptr, const std::shared_ptr<Table
   schedule_size = MEM_PAGE_SIZE;
   key_dist = std::make_unique<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>>();
   key_groups = std::make_unique<std::map<size_t, std::vector<size_t>, std::less<size_t>>>();
+  chunk_ptr = std::make_unique<mchunk>();
   placement_index = std::make_unique<std::map<int, size_t>>();
 
   offset = 0;
@@ -37,6 +38,12 @@ void mtable::flush_rma_memory(size_t rows) {
   key_groups->clear();
   placement_index->clear();
   memcpy(payload_ptr(), schedule, schema_ptr->size() * rows);
+  chunk_ptr->clear();
+
+  for(int i = 0 ; i < rows ; i++) {
+    RowBuffer r(schema_ptr, schedule + i*schema_ptr->size());
+    chunk_ptr->append(r);
+  }
   offset = rows * schema_ptr->size();
   row_count = rows;
 }
@@ -91,7 +98,7 @@ void mtable::ingest(RowBuffer& row) {
   memcpy(&payload[offset], row.payload_ptr(), row.size());
   offset += row.size();
   row_count++;
-  //chunk.append(row);
+  chunk_ptr->append(row);
   CHECK_LE(offset, payload.capacity());
 }
 
@@ -275,6 +282,7 @@ void mtable::placement_sort(const Field& f) {
   }
 
   TempTable sender(node_ptr, schema_ptr);
+  auto temp_ptr = std::make_unique<mchunk>();
   sender.payload.reserve(row_count * schema_ptr->size());
   int index = 0;
   for (int i = 0; i < node_ptr->world; i++) {
@@ -286,14 +294,14 @@ void mtable::placement_sort(const Field& f) {
           auto row = this->read(item);
           Value v;
           row->read(f, v);
-          // LOG(INFO) << v.p_val.int_val << " on " << placement;
-#pragma omp critical
           sender.ingest(*row.get());
+          temp_ptr->append(*row.get());
           index++;
         }
       }
     }
   }
+  chunk_ptr = std::move(temp_ptr);
   memcpy(&payload[0], sender.payload_ptr(), row_count * schema_ptr->size());
   //LOG(INFO) << "in place sort costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
 }

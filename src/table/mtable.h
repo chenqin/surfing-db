@@ -19,7 +19,6 @@ private:
 
   MPI_Win win;
   uint8_t* schedule;
-  mchunk chunk;
   std::vector<uint8_t> payload;
   size_t row_count = 0; // number of rows in table
   size_t offset = 0;    //current offset position
@@ -28,6 +27,7 @@ private:
   // defines the node row table bind to
   std::shared_ptr<Node> node_ptr;
   std::shared_ptr<TableSchema> schema_ptr;
+  std::unique_ptr<mchunk> chunk_ptr;
 
   //partition field
   std::unique_ptr<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>> key_dist; // key hash and per node counts
