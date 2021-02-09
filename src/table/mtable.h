@@ -7,6 +7,7 @@
 #pragma once
 
 #include "table.h"
+#include "mchunk.h"
 
 namespace surfingdb {
 namespace table {
@@ -18,7 +19,7 @@ private:
 
   MPI_Win win;
   uint8_t* schedule;
-
+  mchunk chunk;
   std::vector<uint8_t> payload;
   size_t row_count = 0; // number of rows in table
   size_t offset = 0;    //current offset position

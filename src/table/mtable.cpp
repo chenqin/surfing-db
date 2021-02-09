@@ -91,6 +91,7 @@ void mtable::ingest(RowBuffer& row) {
   memcpy(&payload[offset], row.payload_ptr(), row.size());
   offset += row.size();
   row_count++;
+  //chunk.append(row);
   CHECK_LE(offset, payload.capacity());
 }
 

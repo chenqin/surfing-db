@@ -156,6 +156,7 @@ int main(int argc, char** argv) {
       b.write(field1, v);
       t1.ingest(b);
     }
+    t1.group(field1);
     t1.shuffle(field1);
     t1.verify(field1);
   }

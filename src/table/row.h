@@ -151,7 +151,7 @@ public:
   }
 
   /**
-   * only used in Temptable point to piece of memory to read/write fields
+   * only used in Temptable point to piece of memory to read/append fields
    * @param schema
    * @param payload
    */
@@ -208,7 +208,7 @@ public:
     write(f, v, offset);
   }
   /**
-   * allow write to list and map elements
+   * allow append to list and map elements
    * @param f
    * @param v
    * @param offset

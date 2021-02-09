@@ -144,7 +144,7 @@ public:
   }
 
   /**
-   * write buffer to file in batch
+   * append buffer to file in batch
    */
   void flush(const std::string& path) {
     fd = open(path.c_str(), O_CREAT | O_RDWR | O_APPEND, 0644);
