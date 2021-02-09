@@ -14,15 +14,15 @@ mtable::~mtable() {
   payload.shrink_to_fit();
 }
 
-mtable::mtable(const std::shared_ptr<Node> node_ptr, const std::shared_ptr<TableSchema> schema_ptr) {
+mtable::mtable(const std::shared_ptr<Node> node_ptr, const std::shared_ptr<TableSchema> schema_ptr, size_t capacity) {
   this->schema_ptr = schema_ptr;
   this->node_ptr = node_ptr;
-  payload.resize(MEM_PAGE_SIZE);
+  payload.resize(capacity);
 
   size_t row_size = schema_ptr->size();
-  MPI_Alloc_mem(MEM_PAGE_SIZE, MPI_INFO_NULL, &schedule); // allocate memory in temptable directly
-  MPI_Win_create(schedule, MEM_PAGE_SIZE, row_size, MPI_INFO_NULL, MPI_COMM_WORLD, &win);
-  schedule_size = MEM_PAGE_SIZE;
+  MPI_Alloc_mem(capacity, MPI_INFO_NULL, &schedule); // allocate memory in temptable directly
+  MPI_Win_create(schedule, capacity, row_size, MPI_INFO_NULL, MPI_COMM_WORLD, &win);
+  schedule_size = capacity;
   key_dist = std::make_unique<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>>();
   key_groups = std::make_unique<std::map<size_t, std::vector<size_t>, std::less<size_t>>>();
   chunk_ptr = std::make_unique<mchunk>();
@@ -38,11 +38,6 @@ void mtable::flush_rma_memory(size_t rows) {
   key_groups->clear();
   placement_index->clear();
   memcpy(payload_ptr(), schedule, schema_ptr->size() * rows);
-  chunk_ptr->clear();
-  for(int i = 0 ; i < rows ; i++) {
-    RowBuffer r(schema_ptr, schedule + i*schema_ptr->size());
-    chunk_ptr->append(r);
-  }
   offset = rows * schema_ptr->size();
   row_count = rows;
 }
@@ -97,17 +92,15 @@ void mtable::ingest(RowBuffer& row) {
   memcpy(&payload[offset], row.payload_ptr(), row.size());
   offset += row.size();
   row_count++;
-  //chunk_ptr->append(row);
   CHECK_LE(offset, payload.capacity());
 }
 
 void mtable::verify(const Field& field) {
   //LOG(INFO) << "verify " << row_count << " rows";
   for (size_t i = 0; i < row_count; i++) {
-    auto r = chunk_ptr->read(schema_ptr, i);
+    auto r = this->read(i);
     Value v;
     r->read(field, v);
-    LOG(INFO) << v.p_val.int_val;
     size_t key = value_hasher.operator()(v);
     CHECK_EQ(placement(key), node_ptr->rank);
   }

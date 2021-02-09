@@ -149,8 +149,9 @@ int main(int argc, char** argv) {
   v.p_val.int_val = 1;
   b.write(field1, v);
   int itr = 0;
-  while (itr++ < 1) {
-    mtable t1(node, schema_ptr);
+  int rows = 100000;
+  while (itr++ < 100000) {
+    mtable t1(node, schema_ptr, rows * schema_ptr->size());
     for (int i = 0; i < 1; i++) {
       v.p_val.int_val = i + node->rank;
       b.write(field1, v);

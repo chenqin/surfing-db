@@ -35,7 +35,7 @@ private:
   std::unique_ptr<std::map<int, size_t>> placement_index;                                             // placement , start index of rows
 
 public:
-  mtable(const std::shared_ptr<Node>, const std::shared_ptr<TableSchema>);
+  mtable(const std::shared_ptr<Node>, const std::shared_ptr<TableSchema>, size_t capacity);
   ~mtable();
   void placement_sort(const Field& f);
   std::unique_ptr<RowBuffer> read(int index);

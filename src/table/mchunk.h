@@ -75,9 +75,9 @@ public:
       loaded_page++;
       offset = 0;
     }
-    LOG(INFO) << "append to " << page_size-1 << " @ " << offset;
-    std::vector<uint8_t> ptr = chunks[page_size-1];
-    memcpy(reinterpret_cast<void*>(&ptr[offset]), row.payload_ptr(), row.size());
+    //LOG(INFO) << "append to " << page_size-1 << " @ " << offset;
+    uint8_t* ptr = &chunks[page_size-1][0];
+    memcpy(reinterpret_cast<void*>(ptr + offset), row.payload_ptr(), row.size());
     offset += row.size();
   }
 };
