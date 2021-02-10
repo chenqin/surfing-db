@@ -43,7 +43,7 @@ inline size_t readSig(uint8_t* _payload) {
 class RowBuffer {
 private:
   Field _header;
-  std::shared_ptr<TableSchema> schemaptr;
+  std::shared_ptr<TableSchema> schema_ptr;
   size_t _schema_sig;
   uint8_t* _payload; // consider using vector std::vector<uint8_t>
   std::vector<char> _vpayload;
@@ -142,7 +142,7 @@ public:
     _header.type = RowType::LONG;
     _header.max_unit_size = SchemaUtils::getFieldSize(_header);
     CHECK_EQ(sizeof(uint64_t), SchemaUtils::getFieldSize(_header));
-    this->schemaptr = schemaptr;
+    this->schema_ptr = schemaptr;
     _schema_sig = schemaptr->schema_sig();
     CHECK_GT(schemaptr->size(), 0);
     _vpayload.resize(schemaptr->size());
@@ -151,7 +151,7 @@ public:
   }
 
   /**
-   * only used in Temptable point to piece of memory to read/append fields
+   * only used in Temptable point to piece of memory to readRow/append fields
    * @param schema
    * @param payload
    */
@@ -159,7 +159,7 @@ public:
     _header.type = RowType::LONG;
     _header.max_unit_size = SchemaUtils::getFieldSize(_header);
     CHECK_EQ(sizeof(uint64_t), SchemaUtils::getFieldSize(_header));
-    this->schemaptr = schemaptr;
+    this->schema_ptr = schemaptr;
     _schema_sig = schemaptr->schema_sig();
     CHECK_GT(schemaptr->size(), 0);
     CHECK_NE(payloadptr, _payload);
@@ -178,7 +178,7 @@ public:
   }
 
   size_t size() {
-    return this->schemaptr->size();
+    return this->schema_ptr->size();
   }
 
   uint8_t* payload_ptr() {
@@ -186,16 +186,16 @@ public:
   }
 
   /**
-  * copy read RowBuffer of given field
+  * copy readRow RowBuffer of given field
   * @param f
   * @param v
   */
   inline void read(const Field& f, Value& v) {
-    CHECK_GE(schemaptr->_offsets->size(), 0);
-    CHECK(schemaptr->_offsets->find(f) != schemaptr->_offsets->end());
-    uint64_t offset = schemaptr->_offsets->at(f);
+    CHECK_GE(schema_ptr->_offsets->size(), 0);
+    CHECK(schema_ptr->_offsets->find(f) != schema_ptr->_offsets->end());
+    uint64_t offset = schema_ptr->_offsets->at(f);
     size_t unit = read(f, v, offset);
-    CHECK_LE(unit, schemaptr->_max_unit->at(f));
+    CHECK_LE(unit, schema_ptr->_max_unit->at(f));
   }
   /**
    * copy value into row buffer
@@ -203,7 +203,7 @@ public:
    * @param v
    */
   void write(const Field& f, const Value& v) {
-    uint64_t offset = schemaptr->_offsets->at(f);
+    uint64_t offset = schema_ptr->_offsets->at(f);
     CHECK_GT(offset, 0);
     write(f, v, offset);
   }

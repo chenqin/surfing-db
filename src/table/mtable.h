@@ -7,7 +7,6 @@
 #pragma once
 
 #include "table.h"
-#include "mchunk.h"
 
 namespace surfingdb {
 namespace table {
@@ -36,6 +35,7 @@ private:
   void group(const Field& f);
   void placement_sort(const Field& f);
   void flush_rma_memory(size_t rows);
+  void copy_rma_memory(size_t rows); //deprecated
   void reserve_rma_memory(size_t rows);
   uint8_t* range_ptr(int dest);
   uint8_t* payload_ptr();
@@ -43,13 +43,13 @@ private:
 public:
   mtable(const std::shared_ptr<Node>, const std::shared_ptr<TableSchema>, size_t capacity);
   ~mtable();
-  std::unique_ptr<RowBuffer> read(int index);
-  void shuffle(const Field& f);
-  void ingest(RowBuffer& row);
+  std::unique_ptr<RowBuffer> readRow(int index);
+  void partitionBy(const Field&);
+  void appendRow(RowBuffer& row);
   void verify(const Field& field);
-  void reserve(size_t rows);
+  void reserveRow(size_t rows);
   void load(const string& path);
-  void flush(const string& path);
+  void flush(const string&, uint8_t*, size_t, size_t);
 };
 
 } // namespace table

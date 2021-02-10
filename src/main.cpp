@@ -150,14 +150,14 @@ int main(int argc, char** argv) {
   b.write(field1, v);
   int itr = 0;
   int rows = 1000000;
-  while (itr++ < 100000) {
+  while (itr++ < 1000000) {
     mtable t1(node, schema_ptr, rows * schema_ptr->size());
     for (int i = 0; i < 1; i++) {
       v.p_val.int_val = i + node->rank;
       b.write(field1, v);
-      t1.ingest(b);
+      t1.appendRow(b);
     }
-    t1.shuffle(field1);
+    t1.partitionBy(field1);
     t1.verify(field1);
   }
   // tout1 and tout2 shared with same key to each process, per key co_group is straight forward

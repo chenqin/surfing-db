@@ -17,7 +17,8 @@ namespace table {
 
 #define MAX_STR_LEN 128
 #define HEADER_SIZE sizeof(long)
-#define MEM_PAGE_SIZE 671088640 // 64MB
+#define MEM_PAGE_SIZE 1073741824 // 1GB
+#define FLUSH_SIZE 10737418240 // 10GB
 #define FILE_IO_VECTOR 8
 #define SSD_CHUNK_SIZ 65536 // read/write ssd per 64KB chunk
 #define DOUBLE_TYPE float //thrift lack float type

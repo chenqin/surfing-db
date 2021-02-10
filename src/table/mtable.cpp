@@ -10,10 +10,11 @@ namespace surfingdb {
 namespace table {
 
 mtable::~mtable() {
-  MPI_Win_free(&win);
-  MPI_Free_mem(schedule); // gc memory in temptable
   payload.clear();
   payload.shrink_to_fit();
+  key_dist->clear();
+  key_groups->clear();
+  placement_index->clear();
 }
 
 mtable::mtable(const std::shared_ptr<Node> node_ptr, const std::shared_ptr<TableSchema> schema_ptr, size_t capacity) {
@@ -21,11 +22,7 @@ mtable::mtable(const std::shared_ptr<Node> node_ptr, const std::shared_ptr<Table
   this->schema_ptr = schema_ptr;
   this->node_ptr = node_ptr;
   payload.resize(capacity);
-
-  size_t row_size = schema_ptr->size();
-  MPI_Alloc_mem(capacity, MPI_INFO_NULL, &schedule); // allocate memory in temptable directly
-  MPI_Win_create(schedule, capacity, row_size, MPI_INFO_NULL, MPI_COMM_WORLD, &win);
-  schedule_size = capacity;
+  schedule_size = -1;
   key_dist = std::make_unique<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>>();
   key_groups = std::make_unique<std::map<size_t, std::vector<size_t>, std::less<size_t>>>();
   placement_index = std::make_unique<std::map<int, size_t>>();
@@ -35,36 +32,54 @@ mtable::mtable(const std::shared_ptr<Node> node_ptr, const std::shared_ptr<Table
 }
 
 void mtable::flush_rma_memory(size_t rows) {
-  reserve(rows);
+  this->reserveRow(1); //release memory
+  key_dist->clear();
+  key_groups->clear();
+  placement_index->clear();
+  std::string filepath = "/tmp/" + std::to_string(node_ptr->rank);
+  this->flush(filepath, schedule, rows, rows * schema_ptr->size());
+  MPI_Free_mem(schedule);
+  MPI_Win_free(&win);
+  schedule_size = -1;
+  this->load(filepath);
+}
+
+void mtable::copy_rma_memory(size_t rows) {
+  reserveRow(rows);
   key_dist->clear();
   key_groups->clear();
   placement_index->clear();
   memcpy(payload_ptr(), schedule, schema_ptr->size() * rows);
+  MPI_Free_mem(schedule);
+  MPI_Win_free(&win);
+  schedule_size = -1;
   offset = rows * schema_ptr->size();
   row_count = rows;
 }
 
 void mtable::reserve_rma_memory(size_t rows) {
-  if (rows * schema_ptr->size() < schedule_size) return;
-  MPI_Win_free(&win);
-  MPI_Free_mem(schedule);                                        // gc memory in temptable
-  MPI_Alloc_mem(rows * schema_ptr->size(), MPI_INFO_NULL, &schedule); // allocate memory in temptable directly
-  MPI_Win_create(schedule, rows * schema_ptr->size(), schema_ptr->size(), MPI_INFO_NULL, MPI_COMM_WORLD, &win);
+  if (schedule_size != -1 && schedule_size < rows * schema_ptr->size()) {
+    MPI_Free_mem(schedule);
+    MPI_Win_free(&win);
+  }
   schedule_size = rows * schema_ptr->size();
+  MPI_Alloc_mem(schedule_size, MPI_INFO_NULL, &schedule); // allocate memory in temptable directly
+  MPI_Win_create(schedule, schedule_size, schema_ptr->size(), MPI_INFO_NULL, MPI_COMM_WORLD, &win);
 }
 
-void mtable::reserve(size_t rows) {
+void mtable::reserveRow(size_t rows) {
   CHECK_GT(schema_ptr->size(), 0);
+  CHECK_GE(rows, 0);
   if (this->payload.capacity() > rows * schema_ptr->size()) return;
   payload.resize(rows * schema_ptr->size());
 }
 
 /**
-   * directly read from temptable memory
+   * directly readRow from temptable memory
    * @param index
    * @return
    */
-std::unique_ptr<RowBuffer> mtable::read(int index) {
+std::unique_ptr<RowBuffer> mtable::readRow(int index) {
   CHECK_LT(index, row_count);
   CHECK_NOTNULL(schema_ptr);
   return std::make_unique<RowBuffer>(schema_ptr, &payload[schema_ptr->size() * index]);
@@ -84,7 +99,7 @@ uint8_t* mtable::payload_ptr() {
   return &this->payload[0];
 }
 
-void mtable::ingest(RowBuffer& row) {
+void mtable::appendRow(RowBuffer& row) {
   CHECK_EQ(row.schema_sig(), schema_ptr->schema_sig()); //check schema signature
   CHECK_EQ(schema_ptr->size(), row.size());             //check row size
   CHECK_LE(row.size() + offset, payload.capacity());    // check capacity of temp table
@@ -97,7 +112,7 @@ void mtable::ingest(RowBuffer& row) {
 void mtable::verify(const Field& field) {
   //LOG(INFO) << "verify " << row_count << " rows";
   for (size_t i = 0; i < row_count; i++) {
-    auto r = this->read(i);
+    auto r = this->readRow(i);
     Value v;
     r->read(field, v);
     size_t key = value_hasher.operator()(v);
@@ -112,7 +127,7 @@ void mtable::group(const Field& f) {
   key_dist->clear();   // reset key_dist
 
   for (size_t i = 0; i < row_count; i++) {
-    auto r = read(i);
+    auto r = readRow(i);
     Value v;
     r->read(f, v);
     size_t key = value_hasher.operator()(v);
@@ -186,13 +201,13 @@ void mtable::group(const Field& f) {
   //LOG(INFO) << "group by costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
 }
 
-void mtable::shuffle(const Field& f) {
+void mtable::partitionBy(const Field& f) {
   CHECK(schema_ptr->exist(f));
   group(f);
   placement_sort(f); // experiment shows batching still make sense with 10% overhead
 
   auto start = MPI_Wtime();
-  MPI_Aint recv_buffer_len = 0;
+  MPI_Aint recv_buffer_rows = 0;
   size_t expected_rows[node_ptr->world], expected_start_index[node_ptr->world];
   memset(expected_rows, 0, node_ptr->world * sizeof(size_t));
   memset(expected_start_index, 0, node_ptr->world * sizeof(size_t));
@@ -201,7 +216,7 @@ void mtable::shuffle(const Field& f) {
     int place = placement(k.first);
     if (place == node_ptr->rank) {
       for (auto p : k.second) {
-        recv_buffer_len += p.second;
+        recv_buffer_rows += p.second;
         expected_rows[p.first] += p.second;
       }
     }
@@ -217,7 +232,7 @@ void mtable::shuffle(const Field& f) {
     MPI_Scatter(expected_start_index, 1, MPI_UNSIGNED_LONG, &start_index, 1, MPI_UNSIGNED_LONG, i, MPI_COMM_WORLD);
     target_disp[i] = start_index;
   }
-  reserve_rma_memory(recv_buffer_len);
+  reserve_rma_memory(recv_buffer_rows);
 
   MPI_Win_fence(0, win);
 #pragma omp parallel for shared(schedule)
@@ -236,8 +251,14 @@ void mtable::shuffle(const Field& f) {
     MPI_Win_unlock(dest, win);
   }
   MPI_Win_fence(0, win);
-  flush_rma_memory(recv_buffer_len);
-  LOG(INFO) << "shuffle put costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
+
+  // if recv buffer too large, flush to disk and load
+  if (recv_buffer_rows > FLUSH_SIZE) {
+    flush_rma_memory(recv_buffer_rows);
+  } else {
+    copy_rma_memory(recv_buffer_rows);
+  }
+  LOG(INFO) << "partitionBy put costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
 }
 
 /**
@@ -263,7 +284,7 @@ void mtable::placement_sort(const Field& f) {
   key_groups->clear();
 
   for (size_t i = 0; i < row_count; i++) {
-    auto r = read(i);
+    auto r = readRow(i);
     Value v;
     r->read(f, v);
     size_t key = value_hasher.operator()(v);
@@ -282,8 +303,8 @@ void mtable::placement_sort(const Field& f) {
       size_t placement = sender.placement(g.first);
       if (placement == (size_t)i) {
         for (auto item : g.second) {
-          auto row = this->read(item);
-          sender.ingest(*row.get());
+          auto row = this->readRow(item);
+          sender.appendRow(*row.get());
           index++;
         }
       }
@@ -296,24 +317,25 @@ void mtable::placement_sort(const Field& f) {
 /**
    * append buffer to file in batch
    */
-void mtable::flush(const std::string& path) {
+void mtable::flush(const std::string& path, uint8_t* ptr, size_t rows, size_t len) {
+  //LOG(INFO) << "write to " << path;
   struct iovec iov[FILE_IO_VECTOR];
   ssize_t nr;
-  int fd = open(path.c_str(), O_CREAT | O_RDWR | O_APPEND, 0644);
+  int fd = open(path.c_str(), O_CREAT | O_RDWR, 0644);
   CHECK_NE(fd, -1);
 
   size_t sig = schema_ptr->schema_sig();
   CHECK_GE(::write(fd, &sig, sizeof(size_t)), 0);
-  CHECK_GE(::write(fd, reinterpret_cast<const void*>(&offset), sizeof(size_t)), 0);
-  CHECK_GE(::write(fd, reinterpret_cast<const void*>(&row_count), sizeof(size_t)), 0);
+  CHECK_GE(::write(fd, reinterpret_cast<const void*>(&len), sizeof(size_t)), 0);
+  CHECK_GE(::write(fd, reinterpret_cast<const void*>(&rows), sizeof(size_t)), 0);
 
   size_t index = 0;
   /* fill out three iovec structures */
-  while (index < offset) {
+  while (index < len) {
     int batch = 0;
-    for (int i = 0; i < FILE_IO_VECTOR && index < offset; i++) {
-      iov[i].iov_base = &payload[index];
-      size_t payload_size = index + SSD_CHUNK_SIZ < offset ? SSD_CHUNK_SIZ : offset - index;
+    for (int i = 0; i < FILE_IO_VECTOR && index < len; i++) {
+      iov[i].iov_base = ptr + index;
+      size_t payload_size = index + SSD_CHUNK_SIZ < len ? SSD_CHUNK_SIZ : len - index;
       iov[i].iov_len = payload_size;
       index += payload_size;
       batch++;
@@ -336,8 +358,15 @@ void mtable::load(const std::string& path) {
   CHECK_EQ(sig, schema_ptr->schema_sig());
   CHECK_GE(::read(fd, &offset, sizeof(size_t)), 0);
   CHECK_GE(::read(fd, &row_count, sizeof(size_t)), 0);
-  CHECK_EQ(offset / row_count, schema_ptr->size());
-  payload.resize(offset);
+  CHECK_GE(row_count, 0);
+
+  if (row_count == 0) {
+    payload.clear();
+    payload.shrink_to_fit();
+  } else {
+    CHECK_EQ(offset / row_count, schema_ptr->size());
+    this->reserveRow(row_count);
+  }
 
   size_t index = 0;
   /* fill out three iovec structures */
@@ -354,7 +383,7 @@ void mtable::load(const std::string& path) {
     nr = readv(fd, iov, batch);
     CHECK_NE(nr, -1);
   }
-  LOG(INFO) << "load from " << path;
+  //LOG(INFO) << "load from " << path;
   close(fd);
 }
 } // namespace table

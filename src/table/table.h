@@ -249,7 +249,7 @@ public:
   }
 
   /**
-   * directly read from temptable memory
+   * directly readRow from temptable memory
    * @param index
    * @return
    */
@@ -543,7 +543,7 @@ public:
     for (peer = 0; peer < node_ptr->world; peer++) {
       this->recv_per_rank(peer, out);
     }
-    LOG(INFO) << "shuffle costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
+    LOG(INFO) << "partitionBy costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
     node_ptr->forward();
   }
 };
