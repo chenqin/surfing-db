@@ -10,7 +10,7 @@
 #include "frequent_items_sketch.hpp"
 #include "table/Operator.h"
 #include "table/row.h"
-#include "table/table.h"
+#include "table/mtable.h"
 
 namespace surfingdb {
 namespace table {
@@ -162,8 +162,8 @@ TEST(TableTest, testRowBuffer) {
     t.ingest(s);
   }
 
-  t.flush("/tmp/test1.bin");
-  t.load("/tmp/test1.bin");
+  //t.flush("/tmp/test1.bin");
+  //t.load("/tmp/test1.bin");
   sptr = t.read(1);
   Value v;
   sptr->read(field7, v);

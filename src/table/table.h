@@ -13,7 +13,7 @@
 #include <omp.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/mman.h>
+
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/uio.h>
@@ -144,67 +144,6 @@ public:
   }
 
   /**
-   * append buffer to file in batch
-   */
-  void flush(const std::string& path) {
-    fd = open(path.c_str(), O_CREAT | O_RDWR | O_APPEND, 0644);
-    CHECK_NE(fd, -1);
-
-    size_t sig = schema_ptr->schema_sig();
-    CHECK_GE(::write(fd, &sig, sizeof(size_t)), 0);
-    CHECK_GE(::write(fd, reinterpret_cast<const void*>(&offset), sizeof(size_t)), 0);
-    CHECK_GE(::write(fd, reinterpret_cast<const void*>(&row_count), sizeof(size_t)), 0);
-
-    size_t index = 0;
-    /* fill out three iovec structures */
-    while (index < offset) {
-      int batch = 0;
-      for (int i = 0; i < FILE_IO_VECTOR && index < offset; i++) {
-        iov[i].iov_base = &payload[index];
-        size_t payload_size = index + SSD_CHUNK_SIZ < offset ? SSD_CHUNK_SIZ : offset - index;
-        iov[i].iov_len = payload_size;
-        index += payload_size;
-        batch++;
-      }
-      /* with a single call, entire batch */
-      nr = writev(fd, iov, batch);
-      CHECK_NE(nr, -1);
-    }
-    close(fd);
-  }
-
-  void load(const std::string& path) {
-    fd = open(path.c_str(), O_RDONLY);
-    CHECK_NE(fd, -1);
-
-    size_t sig = 0;
-    CHECK_GE(::read(fd, &sig, sizeof(size_t)), 0);
-    CHECK_EQ(sig, schema_ptr->schema_sig());
-    CHECK_GE(::read(fd, &offset, sizeof(size_t)), 0);
-    CHECK_GE(::read(fd, &row_count, sizeof(size_t)), 0);
-    CHECK_EQ(offset / row_count, schema_ptr->size());
-    payload.resize(offset);
-
-    size_t index = 0;
-    /* fill out three iovec structures */
-    while (index < offset) {
-      int batch = 0;
-      for (int i = 0; i < FILE_IO_VECTOR && index < offset; i++) {
-        iov[i].iov_base = &payload[index];
-        size_t payload_size = index + SSD_CHUNK_SIZ < offset ? SSD_CHUNK_SIZ : offset - index;
-        iov[i].iov_len = payload_size;
-        index += payload_size;
-        batch++;
-      }
-      /* with a single call, entire batch */
-      nr = readv(fd, iov, batch);
-      CHECK_NE(nr, -1);
-    }
-    LOG(INFO) << "load from " << path;
-    close(fd);
-  }
-
-  /**
    * find better hash function
    * @param key
    * @return
@@ -256,91 +195,6 @@ public:
 
     payload.swap(sender.payload);
     LOG(INFO) << "in place sort costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
-  }
-
-  void shuffle_put(const Field& f, TempTable& out) {
-    CHECK(schema_ptr->exist(f));
-    CHECK_EQ(schema_ptr->schema_sig(), out.schema_ptr->schema_sig());
-
-    auto start = MPI_Wtime();
-
-    in_place_sort(f); // experiment shows batching still make sense with 10% overhead
-
-    MPI_Aint recv_buffer_len = 0;
-    size_t expected_rows[node_ptr->world], expected_start_index[node_ptr->world];
-    memset(expected_rows, 0, node_ptr->world * sizeof(size_t));
-    memset(expected_start_index, 0, node_ptr->world * sizeof(size_t));
-
-    for (auto k : *key_dist) {
-      int placement = decidePlacement(k.first);
-      if (placement == node_ptr->rank) {
-        for (auto p : k.second) {
-          recv_buffer_len += p.second;
-          expected_rows[p.first] += p.second;
-        }
-      }
-    }
-
-    for (int i = 1; i < node_ptr->world; i++) {
-      expected_start_index[i] = expected_start_index[i - 1] + expected_rows[i - 1];
-    }
-    // LOG(INFO) << "start exchange index " << node_ptr->rank;
-    size_t target_disp[node_ptr->world]; // from each process, tell others start index of assigned memory
-    for (int i = 0; i < node_ptr->world; i++) {
-      size_t start_index;
-      MPI_Scatter(expected_start_index, 1, MPI_UNSIGNED_LONG, &start_index, 1, MPI_UNSIGNED_LONG, i, MPI_COMM_WORLD);
-      target_disp[i] = start_index;
-    }
-
-    MPI_Win win;
-    uint8_t* schedule;
-    size_t row_size = schema_ptr->size();
-    MPI_Alloc_mem(row_size * recv_buffer_len, MPI_INFO_NULL, &schedule); // allocate memory in temptable directly
-    MPI_Win_create(schedule, recv_buffer_len * row_size, row_size, MPI_INFO_NULL, MPI_COMM_WORLD, &win);
-
-    MPI_Win_fence(0, win);
-#pragma omp parallel for shared(schedule)
-    for (int dest = 0; dest < node_ptr->world; dest++) {
-      uint8_t* rangePtr = this->range_ptr(dest);
-      int index = (int)target_disp[dest];
-      int count = 0;
-      if(dest != node_ptr->world -1) {
-        count = placement_index->at(dest + 1) - placement_index->at(dest);
-      } else {
-        count = row_count - placement_index->at(dest);
-      }
-      MPI_Win_lock(MPI_LOCK_SHARED, dest, 0, win);
-      /*
-      RowBuffer sendr(schema_ptr, row_ptr);
-      Value sendv;
-      sendr.read(f, sendv);
-      //LOG(INFO) << "put " << sendv.p_val.int_val << " to " << dest << " @ " << node_ptr->rank;
-       */
-      MPI_Put(rangePtr, count, *(schema_ptr->getType()), dest, index, count, *(schema_ptr->getType()), win);
-      MPI_Win_unlock(dest, win);
-    }
-    MPI_Win_fence(0, win);
-    //MPI_Barrier(MPI_COMM_WORLD);
-    /*
-    for (int j = 0; j < recv_buffer_len; j++) {
-      uint8_t* ptr = reinterpret_cast<uint8_t*>(schedule + j * row_size);
-      RowBuffer recr(schema_ptr, ptr);
-      Value recv;
-      recr.read(f, recv);
-      LOG(INFO) << "recv " << recv.p_val.int_val << "@" << node_ptr->rank;
-    }
-     */
-    MPI_Win_free(&win);
-    if(row_size * recv_buffer_len > out.payload.max_size()) {
-      out.payload.resize(row_size * recv_buffer_len);
-    }
-    //TODO(chenqin): unit test copy memory based table constructor
-    memcpy(out.payload_ptr(), schedule, row_size * recv_buffer_len);
-    out.row_count = recv_buffer_len;
-    out.offset = row_size * recv_buffer_len;
-
-    MPI_Free_mem(schedule); // gc memory in temptable
-    LOG(INFO) << "shuffle put costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
   }
 
   void async_send_per_rank(int dest, MPI_Request& request) {
