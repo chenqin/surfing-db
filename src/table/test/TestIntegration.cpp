@@ -8,8 +8,6 @@
 #include <kll_sketch.hpp>
 #include <random>
 #include "frequent_items_sketch.hpp"
-#include "table/Operator.h"
-#include "table/row.h"
 #include "table/mtable.h"
 
 namespace surfingdb {

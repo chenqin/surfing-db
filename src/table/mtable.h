@@ -43,6 +43,8 @@ private:
 public:
   mtable(const std::shared_ptr<Node>, const std::shared_ptr<TableSchema>, size_t capacity);
   ~mtable();
+  size_t row_size();
+  std::shared_ptr<TableSchema> getSchema();
   std::unique_ptr<RowBuffer> readRow(int index);
   void partitionBy(const Field&);
   void appendRow(RowBuffer& row);

@@ -32,7 +32,9 @@ mtable::mtable(const std::shared_ptr<Node> node_ptr, const std::shared_ptr<Table
 }
 
 void mtable::flush_rma_memory(size_t rows) {
-  this->reserveRow(1); //release memory
+  payload.clear();
+  payload.shrink_to_fit();
+
   key_dist->clear();
   key_groups->clear();
   placement_index->clear();
@@ -385,6 +387,12 @@ void mtable::load(const std::string& path) {
   }
   //LOG(INFO) << "load from " << path;
   close(fd);
+}
+size_t mtable::row_size() {
+  return this->row_count;
+}
+std::shared_ptr<TableSchema> mtable::getSchema() {
+  return this->schema_ptr;
 }
 } // namespace table
 } // namespace surfingdb

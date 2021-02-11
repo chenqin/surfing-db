@@ -18,8 +18,7 @@
 #include <glog/logging.h>
 #include <iostream>
 #include <omp.h>
-#include "table/mtable.h"
-#include "table/table.h"
+#include "table/pardo.h"
 
 using namespace surfingdb::table::schema;
 using namespace surfingdb::table;
@@ -30,6 +29,10 @@ bool PValue::operator<(const PValue& k) const {
          || this->long_val < k.long_val
          || this->int_val < k.int_val
          || this->bool_val == k.bool_val;
+}
+
+void transform(const RowBuffer& in, RowBuffer& out) {
+  out = in;
 }
 
 /** run this program with
@@ -159,6 +162,8 @@ int main(int argc, char** argv) {
     }
     t1.partitionBy(field1);
     t1.verify(field1);
+    mtable t2(node, schema_ptr, 1);
+    pardo::of(t1, t2, transform);
   }
   // tout1 and tout2 shared with same key to each process, per key co_group is straight forward
   return 0;
