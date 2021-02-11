@@ -15,7 +15,7 @@ namespace table {
   class pardo {
   public:
     static void of(mtable& in, mtable &out, std::function<void(const RowBuffer&, RowBuffer&)> tranform) {
-      out.readRow(in.row_size());
+      out.reserveRow(in.row_size());
       for(int i = 0 ; i < in.row_size(); i++) {
         auto in_row = in.readRow(i);
         RowBuffer out_row(out.getSchema());

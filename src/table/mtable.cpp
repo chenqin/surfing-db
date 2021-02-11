@@ -239,18 +239,19 @@ void mtable::partitionBy(const Field& f) {
   MPI_Win_fence(0, win);
 #pragma omp parallel for shared(schedule)
   for (int dest = 0; dest < node_ptr->world; dest++) {
-    uint8_t* rangePtr = this->range_ptr(dest);
-    int index = (int)target_disp[dest];
+    int ring_dest = (dest+node_ptr->rank)%node_ptr->world;
+    uint8_t* rangePtr = this->range_ptr(ring_dest);
+    int index = (int)target_disp[ring_dest];
     int count = 0;
     // use adjacent map start index to reason number of rows need to send
-    if (dest != node_ptr->world - 1) {
-      count = placement_index->at(dest + 1) - placement_index->at(dest);
+    if (ring_dest != node_ptr->world - 1) {
+      count = placement_index->at(ring_dest + 1) - placement_index->at(ring_dest);
     } else {
-      count = row_count - placement_index->at(dest);
+      count = row_count - placement_index->at(ring_dest);
     }
-    MPI_Win_lock(MPI_LOCK_SHARED, dest, 0, win);
-    MPI_Put(rangePtr, count, *(schema_ptr->getType()), dest, index, count, *(schema_ptr->getType()), win);
-    MPI_Win_unlock(dest, win);
+    MPI_Win_lock(MPI_LOCK_SHARED, ring_dest, 0, win);
+    MPI_Put(rangePtr, count, *(schema_ptr->getType()), ring_dest, index, count, *(schema_ptr->getType()), win);
+    MPI_Win_unlock(ring_dest, win);
   }
   MPI_Win_fence(0, win);
 
