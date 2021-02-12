@@ -31,6 +31,7 @@ namespace table {
 #define SSD_CHUNK_SIZ 65536 // read/write ssd per 64KB chunk
 #define DOUBLE_TYPE float //thrift lack float type
 #define FLUSH_DIR "/tmp/"
+#define CONCURRENCY 4
 /**
  * build a continous memory buffer
  */
