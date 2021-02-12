@@ -20,8 +20,8 @@ private:
   uint8_t* schedule;
 
   std::vector<uint8_t> payload;
-  size_t row_count = 0; // number of rows in table
-  size_t offset = 0;    //current offset position
+  size_t row_count = 0;     // number of rows in table
+  size_t offset = 0;        //current offset position
   size_t schedule_size = 0; // RMA memory size
 
   // defines the node row table bind to
@@ -40,6 +40,7 @@ private:
   uint8_t* range_ptr(int dest);
   uint8_t* payload_ptr();
   size_t placement(size_t key);
+
 public:
   mtable(const std::shared_ptr<node>, const std::shared_ptr<TableSchema>, size_t capacity);
   ~mtable();

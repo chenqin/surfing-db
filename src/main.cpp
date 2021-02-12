@@ -18,7 +18,7 @@
 #include <glog/logging.h>
 #include <iostream>
 #include <omp.h>
-#include "table/pardo.h"
+#include "table/processors.h"
 
 #define FLUSH_DIR "/tmp/"
 
@@ -165,7 +165,7 @@ int main(int argc, char** argv) {
     t1.partitionBy(field1);
     t1.verify(field1);
     mtable t2(node, schema_ptr, 1);
-    pardo::of(t1, t2, transform);
+    processors::pardo(t1, t2, transform);
   }
   // tout1 and tout2 shared with same key to each process, per key co_group is straight forward
   return 0;

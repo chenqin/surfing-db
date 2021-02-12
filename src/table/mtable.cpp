@@ -103,10 +103,10 @@ uint8_t* mtable::payload_ptr() {
 
 void mtable::appendRow(RowBuffer& row) {
   CHECK_EQ(row.schema_sig(), schema_ptr->schema_sig()); //check schema signature
-  CHECK_EQ(schema_ptr->size(), row.size());             //check row size
-  CHECK_LE(row.size() + offset, payload.capacity());    // check capacity of temp table
-  memcpy(&payload[offset], row.payload_ptr(), row.size());
-  offset += row.size();
+  CHECK_EQ(schema_ptr->size(), row.row_size());             //check row size
+  CHECK_LE(row.row_size() + offset, payload.capacity());    // check capacity of temp table
+  memcpy(&payload[offset], row.payload_ptr(), row.row_size());
+  offset += row.row_size();
   row_count++;
   CHECK_LE(offset, payload.capacity());
 }
@@ -265,8 +265,8 @@ void mtable::partitionBy(const Field& f) {
 }
 
 /**
-   * after in place sort, return starting addr of rows should place on dest
-   * @param dest rank of process
+   * after in place sort, return starting addr pardo rows should place on dest
+   * @param dest rank pardo process
    * @return
    */
 uint8_t* mtable::range_ptr(int dest) {

@@ -311,7 +311,7 @@ TEST(TableTest, TestSketchQuantile) {
     auto pmf = u.get_PMF(split_points, num_split_points);
     std::cout << pmf[0] << ", " << pmf[1] << ", " << pmf[2] << ", " << pmf[3] << std::endl;
 
-    std::cout << "Frequency Histogram: estimated number of original values in the same bins" << std::endl;
+    std::cout << "Frequency Histogram: estimated number pardo original values in the same bins" << std::endl;
     const int num_bins = num_split_points + 1;
     int histogram[num_bins];
     for (int i = 0; i < num_bins; i++) {

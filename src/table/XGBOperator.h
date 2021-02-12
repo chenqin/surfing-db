@@ -69,7 +69,7 @@ public:
   /**
    * we use naive dense float array to build DMatrix for now
    * @param train float array point to training dataset without label row*column
-   * @param label labels of each training dataset row
+   * @param label labels pardo each training dataset row
    * @param row_count training dataset rows
    * @param column_count features number
    */

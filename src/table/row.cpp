@@ -6,7 +6,6 @@
 namespace surfingdb {
 namespace table {
 
-
 inline void sign(uint8_t* _payload, size_t _schema_sig) {
   CHECK_NOTNULL(_payload);
   memcpy(_payload, &_schema_sig, sizeof(size_t));
@@ -20,35 +19,38 @@ inline size_t readSig(uint8_t* _payload) {
 }
 
 RowBuffer::RowBuffer(std::shared_ptr<TableSchema> schemaptr) {
-_header.type = RowType::LONG;
-_header.max_unit_size = SchemaUtils::getFieldSize(_header);
-CHECK_EQ(sizeof(uint64_t), SchemaUtils::getFieldSize(_header));
-this->schema_ptr = schemaptr;
-_schema_sig = schemaptr->schema_sig();
-CHECK_GT(schemaptr->size(), 0);
-_vpayload.resize(schemaptr->size());
-_payload = (uint8_t*)&_vpayload[0];
-sign(_payload, _schema_sig);
+  _header.type = RowType::LONG;
+  _header.max_unit_size = SchemaUtils::getFieldSize(_header);
+  CHECK_EQ(sizeof(uint64_t), SchemaUtils::getFieldSize(_header));
+  this->schema_ptr = schemaptr;
+  _schema_sig = schemaptr->schema_sig();
+  CHECK_GT(schemaptr->size(), 0);
+  _vpayload.resize(schemaptr->size());
+  _payload = (uint8_t*)&_vpayload[0];
+  sign(_payload, _schema_sig);
 }
 
 RowBuffer::RowBuffer(std::shared_ptr<TableSchema> schemaptr, uint8_t* payloadptr) {
-_header.type = RowType::LONG;
-_header.max_unit_size = SchemaUtils::getFieldSize(_header);
-CHECK_EQ(sizeof(uint64_t), SchemaUtils::getFieldSize(_header));
-this->schema_ptr = schemaptr;
-_schema_sig = schemaptr->schema_sig();
-CHECK_GT(schemaptr->size(), 0);
-CHECK_NE(payloadptr, _payload);
-// CHECK_EQ(_schema_sig, readSig(payloadptr));
-_payload = payloadptr;
+  _header.type = RowType::LONG;
+  _header.max_unit_size = SchemaUtils::getFieldSize(_header);
+  CHECK_EQ(sizeof(uint64_t), SchemaUtils::getFieldSize(_header));
+  this->schema_ptr = schemaptr;
+  _schema_sig = schemaptr->schema_sig();
+  CHECK_GT(schemaptr->size(), 0);
+  CHECK_NE(payloadptr, _payload);
+  CHECK_EQ(_schema_sig, readSig(payloadptr));
+  _vpayload.clear();
+  _vpayload.shrink_to_fit();
+  _payload = payloadptr;
 }
 
 RowBuffer::~RowBuffer() {
   _payload = nullptr;
   _vpayload.clear();
+  _vpayload.shrink_to_fit();
 }
 
-size_t RowBuffer::size() {
+size_t RowBuffer::row_size() {
   return this->schema_ptr->size();
 }
 
@@ -315,5 +317,5 @@ size_t RowBuffer::_pread(const Field& f, void* dataptr, const uint64_t& offset) 
   }
   return 0;
 }
-}
+} // namespace table
 } // namespace surfingdb

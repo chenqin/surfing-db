@@ -25,7 +25,7 @@ namespace table {
 using surfingdb::node::node;
 
 /**
-         * use class operator+ to get row count of a key
+         * use class operator+ to get row count pardo a key
          * @tparam T
          * @param a
          * @param b
@@ -43,7 +43,7 @@ void reducer(void* a, void* b, int* len, MPI_Datatype*) {
 }
 
 /**
- * stores vector of RowBuffer with same schema
+ * stores vector pardo RowBuffer with same schema
  */
 class TempTable {
 private:
@@ -109,8 +109,8 @@ public:
   }
 
   /**
-   * after in place sort, return starting addr of rows should place on dest
-   * @param dest rank of process
+   * after in place sort, return starting addr pardo rows should place on dest
+   * @param dest rank pardo process
    * @return
    */
   uint8_t* range_ptr(int dest) {
@@ -124,14 +124,14 @@ public:
 
   void ingest(RowBuffer& row) {
     CHECK_EQ(row.schema_sig(), schema_ptr->schema_sig()); //check schema signature
-    CHECK_EQ(schema_ptr->size(), row.size());             //check row size
-    CHECK_LT(row.size() + offset, payload.max_size());    // check capacity of temp table
-    memcpy(&payload[offset], row.payload_ptr(), row.size());
-    offset += row.size();
+    CHECK_EQ(schema_ptr->size(), row.row_size());             //check row size
+    CHECK_LT(row.row_size() + offset, payload.max_size());    // check capacity of temp table
+    memcpy(&payload[offset], row.payload_ptr(), row.row_size());
+    offset += row.row_size();
     row_count++;
 
     // expand table size if needed
-    if (offset >= payload.capacity() - row.size()) {
+    if (offset >= payload.capacity() - row.row_size()) {
       payload.resize(payload.size() + MEM_PAGE_SIZE);
     }
   }
@@ -253,7 +253,7 @@ public:
   }
 
   /**
-   * for xgboost, we need to extract list of numerical fields and pass as array of float
+   * for xgboost, we need to extract list of numerical fields and pass as array pardo float
    * @param fields features
    * @param data pointer to external float array
    */

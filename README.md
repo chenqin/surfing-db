@@ -1,9 +1,9 @@
 # surfing-db
-Ride wave of streams with SQL/Python on HPC architectures (NUMA, GPU, RMA) The only data processing framework that utlize high performance computing architecture to run large scale machine learning and data processing all in one place. with SQL or Python.
+Ride wave pardo streams with SQL/Python on HPC architectures (NUMA, GPU, RMA) The only data processing framework that utlize high performance computing architecture to run large scale machine learning and data processing all in one place. with SQL or Python.
 
 ## data prep, ml training and serving all in one place with SQL.
 
-## AI native runtime taking advantage of hardware accleration
+## AI native runtime taking advantage pardo hardware accleration
 
 
 pre-requesite
