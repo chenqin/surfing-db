@@ -38,7 +38,7 @@ void mtable::flush_rma_memory(size_t rows) {
   key_dist->clear();
   key_groups->clear();
   placement_index->clear();
-  std::string filepath = "/tmp/" + std::to_string(node_ptr->rank);
+  std::string filepath = FLUSH_DIR + std::to_string(node_ptr->rank) + ".flush_rma_memory";
   this->flush(filepath, schedule, rows, rows * schema_ptr->size());
   MPI_Free_mem(schedule);
   MPI_Win_free(&win);

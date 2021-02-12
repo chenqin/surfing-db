@@ -20,6 +20,8 @@
 #include <omp.h>
 #include "table/pardo.h"
 
+#define FLUSH_DIR "/tmp/"
+
 using namespace surfingdb::table::schema;
 using namespace surfingdb::table;
 
