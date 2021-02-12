@@ -16,7 +16,7 @@ namespace table {
   public:
     static void of(mtable& in, mtable &out, std::function<void(const RowBuffer&, RowBuffer&)> tranform) {
       out.reserveRow(in.row_size());
-      for(int i = 0 ; i < in.row_size(); i++) {
+      for(size_t i = 0 ; i < in.row_size(); i++) {
         auto in_row = in.readRow(i);
         RowBuffer out_row(out.getSchema());
         tranform(*in_row.get(), out_row);

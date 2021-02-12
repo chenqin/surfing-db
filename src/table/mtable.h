@@ -10,7 +10,7 @@
 
 namespace surfingdb {
 namespace table {
-using surfingdb::node::Node;
+using surfingdb::node::node;
 
 class mtable {
 private:
@@ -25,7 +25,7 @@ private:
   size_t schedule_size = 0; // RMA memory size
 
   // defines the node row table bind to
-  std::shared_ptr<Node> node_ptr;
+  std::shared_ptr<node> node_ptr;
   std::shared_ptr<TableSchema> schema_ptr;
 
   //partition field
@@ -41,7 +41,7 @@ private:
   uint8_t* payload_ptr();
   size_t placement(size_t key);
 public:
-  mtable(const std::shared_ptr<Node>, const std::shared_ptr<TableSchema>, size_t capacity);
+  mtable(const std::shared_ptr<node>, const std::shared_ptr<TableSchema>, size_t capacity);
   ~mtable();
   size_t row_size();
   std::shared_ptr<TableSchema> getSchema();

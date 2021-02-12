@@ -3,9 +3,9 @@
 //
 
 #include <glog/logging.h>
-#include <xgboost/c_api.h>
 #include <omp.h>
-#include "Node.h"
+#include <xgboost/c_api.h>
+#include "node.h"
 #include "row.h"
 #ifndef SURFINGDB_XGBOPERATOR_H
 #define SURFINGDB_XGBOPERATOR_H

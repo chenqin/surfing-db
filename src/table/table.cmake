@@ -18,7 +18,7 @@ endif()
 
 add_library(${TABLE} STATIC
         ${SURFINGDB_SRC}/table/gen-cpp
-        ${SURFINGDB_SRC}/table/Node.cpp
+        ${SURFINGDB_SRC}/table/node.cpp
         ${SURFINGDB_SRC}/table/mtable.cpp)
 
 target_link_libraries(${TABLE}

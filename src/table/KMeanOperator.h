@@ -6,7 +6,6 @@
 #define SURFINGDB_KMEANOPERATOR_H
 
 #include "row.h"
-#include "Node.h"
 
 namespace surfingdb {
 namespace table {

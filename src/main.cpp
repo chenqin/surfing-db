@@ -46,7 +46,7 @@ int main(int argc, char** argv) {
   omp_set_num_threads(omp_get_max_threads());
   //google::InitGoogleLogging(argv[0]);
   // create node of cluster
-  const auto node = std::make_shared<surfingdb::table::Node>(&argc, &argv);
+  const auto node = std::make_shared<surfingdb::table::node>(&argc, &argv);
 
   RowSchema r;
   r.fields = std::vector<surfingdb::table::schema::Field>();

@@ -180,7 +180,7 @@ TEST(TableTest, TestGroupBy) {
   Value v;
   v.p_val.string_val = "hello";
   rowBuffer.write(field1, v);
-  auto n = std::make_shared<Node>(0, 1, "a");
+  auto n = std::make_shared<node>(0, 1, "a");
   TempTable table1(n, rr);
   table1.ingest(rowBuffer);
   EXPECT_TRUE(rr->exist(field1));

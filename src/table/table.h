@@ -14,22 +14,15 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/uio.h>
-#include <unistd.h>
 #include "KMeanOperator.h"
-#include "Node.h"
 #include "XGBOperator.h"
 #include "row.h"
-#include "table/gen-cpp/schema_constants.h"
-#include "table/gen-cpp/schema_types.h"
 
 #pragma once
 
 namespace surfingdb {
 namespace table {
-using surfingdb::node::Node;
+using surfingdb::node::node;
 
 /**
          * use class operator+ to get row count of a key
@@ -55,7 +48,7 @@ void reducer(void* a, void* b, int* len, MPI_Datatype*) {
 class TempTable {
 private:
   // defines the node row table bind to
-  std::shared_ptr<Node> node_ptr;
+  std::shared_ptr<node> node_ptr;
   std::shared_ptr<TableSchema> schema_ptr;
   //partition field
   std::unique_ptr<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>> key_dist; // key hash and per node counts
@@ -85,7 +78,7 @@ public:
     placement_index = std::make_unique<std::map<int, size_t>>();
     LOG(INFO) << "for testing only";
   }
-  TempTable(const std::shared_ptr<Node> node, const std::shared_ptr<TableSchema> sharedPtr) {
+  TempTable(const std::shared_ptr<node> node, const std::shared_ptr<TableSchema> sharedPtr) {
     this->schema_ptr = sharedPtr;
     payload.resize(MEM_PAGE_SIZE);
     rma_payload_ptr = &payload[0];

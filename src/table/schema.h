@@ -4,12 +4,17 @@
 
 #ifndef SURFINGDB_SCHEMA_H
 #define SURFINGDB_SCHEMA_H
+#include "table/gen-cpp/schema_constants.h"
 #include "table/gen-cpp/schema_types.h"
 
 #include <glog/logging.h>
 #include <iostream>
 #include <stdlib.h>
 #include <string>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/uio.h>
+#include <unistd.h>
 #include <unordered_map>
 
 namespace surfingdb {
@@ -217,10 +222,10 @@ public:
 
 class TableSchema : public RowSchema {
 private:
-  int _size;              // fixed size of each row
-  size_t _schema_sig;     //schema fields hash
+  int _size;          // fixed size of each row
+  size_t _schema_sig; //schema fields hash
+  bool _type_set;
   MPI_Datatype _row_type; //type of entire row
-  bool _is_testing = false;
   FieldHasher field_hasher;
   SchemaHasher schema_hasher;
 
@@ -238,6 +243,22 @@ public:
   }
 
   MPI_Datatype* getType() {
+    if (!_type_set) {
+      _type_set = true;
+      for (size_t i = 0; i < fields.size(); i++) {
+        auto f = fields.at(i);
+        MPI_Datatype type;
+        int blocklength;
+        MPI_Aint displ;
+        blocklength = SchemaUtils::getFieldSize(f);
+        displ = _size - SchemaUtils::getFieldSize(f);
+        MPI_Type_hvector(1, blocklength, displ, MPI_CHAR, &type);
+        MPI_Type_commit(&type);
+        _field_types->insert({ f, type });
+      }
+      MPI_Type_contiguous(_size, MPI_CHAR, &_row_type);
+      MPI_Type_commit(&_row_type);
+    }
     return &_row_type;
   }
 
@@ -250,6 +271,7 @@ public:
   }
 
   TableSchema(const RowSchema& schema) {
+    _type_set = false;
     this->fields = schema.fields;
     _offsets = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
     _max_unit = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
@@ -262,25 +284,10 @@ public:
       _offsets->emplace(f, _size);
       _max_unit->emplace(f, f.max_unit_size);
       _size += SchemaUtils::getFieldSize(f);
-
-      if (!_is_testing) {
-        MPI_Datatype type;
-        int blocklength;
-        MPI_Aint displ;
-        blocklength = SchemaUtils::getFieldSize(f);
-        displ = _size - SchemaUtils::getFieldSize(f);
-        MPI_Type_hvector(1, blocklength, displ, MPI_CHAR, &type);
-        MPI_Type_commit(&type);
-        _field_types->insert({ f, type });
-      }
-    }
-    if (!_is_testing) {
-      MPI_Type_contiguous(_size, MPI_CHAR, &_row_type);
-      MPI_Type_commit(&_row_type);
     }
   }
   ~TableSchema() {
-    if (!_is_testing) {
+    if(_type_set) {
       MPI_Type_free(&_row_type);
       for (auto s : *_field_types.get()) {
         MPI_Type_free(&s.second);

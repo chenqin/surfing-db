@@ -17,7 +17,7 @@ mtable::~mtable() {
   placement_index->clear();
 }
 
-mtable::mtable(const std::shared_ptr<Node> node_ptr, const std::shared_ptr<TableSchema> schema_ptr, size_t capacity) {
+mtable::mtable(const std::shared_ptr<node> node_ptr, const std::shared_ptr<TableSchema> schema_ptr, size_t capacity) {
   CHECK_GT(capacity, 0);
   this->schema_ptr = schema_ptr;
   this->node_ptr = node_ptr;

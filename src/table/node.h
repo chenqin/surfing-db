@@ -11,18 +11,17 @@
 namespace surfingdb {
 namespace node {
 
-class Node {
+class node {
 public:
-  Node(int* argc, char ***argv);
-  Node(int, int, std::string);
-  ~Node();
+  node(int* argc, char ***argv);
+  node(int, int, std::string);
+  ~node();
 
   long forward(); // move to next stage of compute
   void keep(std::unique_ptr<MPI_Request>);
   int world;
   int rank;
   long stage;
-  bool istesting = false;
   std::vector<std::unique_ptr<MPI_Request>> outstanding_requests;
   std::string processor;
 };

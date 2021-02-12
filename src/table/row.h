@@ -5,9 +5,6 @@
 #ifndef SURFINGDB_ROW_H
 #define SURFINGDB_ROW_H
 
-#include <iostream>
-
-#include <unordered_map>
 #include "schema.h"
 #pragma once
 
