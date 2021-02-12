@@ -261,7 +261,7 @@ void mtable::partitionBy(const Field& f) {
   } else {
     copy_rma_memory(recv_buffer_rows);
   }
-  LOG(INFO) << "partitionBy put costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
+  LOG(INFO) << "partitionBy costs " << MPI_Wtime() - start << " seconds on " << node_ptr->rank;
 }
 
 /**

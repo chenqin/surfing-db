@@ -16,6 +16,9 @@
 #include <sys/uio.h>
 #include <unistd.h>
 #include <unordered_map>
+#include <mpi.h>
+
+#pragma once
 
 namespace surfingdb {
 namespace table {
@@ -35,7 +38,6 @@ using namespace surfingdb::table::schema;
 using std::hash;
 using std::string;
 
-#pragma once
 struct FieldHasher {
   std::size_t operator()(const Field& k) const {
     using std::hash;
