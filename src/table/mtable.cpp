@@ -265,8 +265,8 @@ void mtable::partitionBy(const Field& f) {
 }
 
 /**
-   * after in place sort, return starting addr pardo rows should place on dest
-   * @param dest rank pardo process
+   * after in place sort, return starting addr map rows should place on dest
+   * @param dest rank map process
    * @return
    */
 uint8_t* mtable::range_ptr(int dest) {
@@ -394,6 +394,58 @@ size_t mtable::row_size() {
 }
 std::shared_ptr<TableSchema> mtable::getSchema() {
   return this->schema_ptr;
+}
+
+/**
+   * for xgboost, we need to extract list of numerical fields and pass as array map float
+   * @param fields features
+   * @param data pointer to external float array
+   */
+void mtable::readFields(std::vector<Field> fields, float* data) {
+  CHECK_NOTNULL(data);
+  CHECK_GT(fields.size(), 0);
+
+  for (const auto& f : fields) {
+    CHECK_EQ(f.type, RowType::DOUBLE);
+  }
+
+  size_t columns = fields.size();
+  memset(data, 0, sizeof(float) * columns * row_count);
+  for (size_t i = 0; i < row_count; i++) {
+    const auto row = readRow(i);
+    for (size_t j = 0; j < columns; j++) {
+      Value v;
+      row->read(fields[j], v);
+      data[i * columns + j] = (DOUBLE_TYPE)v.p_val.double_val;
+    }
+  }
+}
+
+void mtable::readField(const Field& field, float* data) {
+  CHECK_NOTNULL(data);
+  CHECK_EQ(field.type, RowType::DOUBLE);
+  memset(data, 0, sizeof(DOUBLE_TYPE) * row_count);
+  for (size_t i = 0; i < row_count; i++) {
+    const auto row = readRow(i);
+    Value v;
+    row->read(field, v);
+    data[i] = (DOUBLE_TYPE)v.p_val.double_val;
+  }
+}
+
+void mtable::writeField(const Field& field, const float* data) {
+  CHECK_NOTNULL(data);
+  CHECK_EQ(field.type, RowType::DOUBLE);
+  for (size_t i = 0; i < row_count; i++) {
+    const auto row = readRow(i);
+    Value v;
+    v.p_val.double_val = (DOUBLE_TYPE)data[i];
+    row->write(field, v);
+  }
+}
+
+std::shared_ptr<node> mtable::getNodePtr() {
+  return this->node_ptr;
 }
 } // namespace table
 } // namespace surfingdb

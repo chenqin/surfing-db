@@ -108,15 +108,14 @@ int main(int argc, char** argv) {
    * ingestion
    */
   TempTable tsed(node, schema_ptr);
-
+  mtable msed(node, schema_ptr, 3000* schema_ptr->size());
   /**
   * ingestion
   */
-  if (node->rank == 0) {
-    size_t i;
-    for (i = 0; i < 3000; i++) {
-      tsed.ingest(b);
-    }
+  size_t i;
+  for (i = 0; i < 3000; i++) {
+    tsed.ingest(b);
+    msed.appendRow(b);
   }
 
   node->forward(); // stage 1 broadcast data
@@ -129,8 +128,6 @@ int main(int argc, char** argv) {
   KMeanOperator op(1, fields, 100);
   tsed.process(op);
 
-  // stage 3, run xgb
-  tsed.ingest(b);
   LOG(INFO) << "xgb operator"
             << " process " << node->rank << " has " << tsed.count() << " rows";
   XGBParameters parameters;
@@ -141,14 +138,7 @@ int main(int argc, char** argv) {
   parameters.max_depth = 2;
   parameters.verbosity = true;
   parameters.eval_metric = "error";
-  XGBOperator xgbOperator(fields, field4, parameters, node->rank, node->world);
-  tsed.process(xgbOperator);
-
-  xgbOperator.parameters.isTraining = false; // now switch to prediction
-  tsed.process(xgbOperator);
-
-  tsed.group(field1);
-  tsed.clear(); //release resources
+  processors::xgb(msed, fields, field4, parameters);
 
   Value v;
   v.p_val.int_val = 1;
@@ -165,7 +155,7 @@ int main(int argc, char** argv) {
     t1.partitionBy(field1);
     t1.verify(field1);
     mtable t2(node, schema_ptr, 1);
-    processors::pardo(t1, t2, transform);
+    processors::map(t1, t2, transform);
   }
   // tout1 and tout2 shared with same key to each process, per key co_group is straight forward
   return 0;

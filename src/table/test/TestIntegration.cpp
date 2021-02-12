@@ -168,25 +168,6 @@ TEST(TableTest, testRowBuffer) {
   EXPECT_EQ(v.map_value.size(), 1);
 }
 
-TEST(TableTest, TestGroupBy) {
-  auto r = std::make_shared<RowSchema>();
-  r->fields = std::vector<surfingdb::table::schema::Field>();
-
-  Field field1;
-  SchemaUtils::initField(field1, "pin_id", RowType::STRING, 64);
-  r->fields.push_back(field1);
-  auto rr = std::make_shared<TableSchema>(*r.get());
-  RowBuffer rowBuffer(rr);
-  Value v;
-  v.p_val.string_val = "hello";
-  rowBuffer.write(field1, v);
-  auto n = std::make_shared<node>(0, 1, "a");
-  TempTable table1(n, rr);
-  table1.ingest(rowBuffer);
-  EXPECT_TRUE(rr->exist(field1));
-  table1.group(field1);
-}
-
 TEST(TableTest, TestXGBOperator) {
   Field f;
   SchemaUtils::initField(f,"test", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
@@ -200,7 +181,7 @@ TEST(TableTest, TestXGBOperator) {
   parameters.max_depth = 1;
   parameters.verbosity = true;
   parameters.eval_metric = "error";
-  XGBOperator op(features, f, parameters, 0, 1);
+  xgbop op(features, f, parameters, 0, 1);
   const float data1[] = { 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 };
   const float label1[] = { 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 };
   op.train(data1, label1, 50, 1);
@@ -311,7 +292,7 @@ TEST(TableTest, TestSketchQuantile) {
     auto pmf = u.get_PMF(split_points, num_split_points);
     std::cout << pmf[0] << ", " << pmf[1] << ", " << pmf[2] << ", " << pmf[3] << std::endl;
 
-    std::cout << "Frequency Histogram: estimated number pardo original values in the same bins" << std::endl;
+    std::cout << "Frequency Histogram: estimated number map original values in the same bins" << std::endl;
     const int num_bins = num_split_points + 1;
     int histogram[num_bins];
     for (int i = 0; i < num_bins; i++) {

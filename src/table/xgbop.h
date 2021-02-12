@@ -34,7 +34,7 @@ struct XGBParameters {
   bool isTraining = true;
 };
 
-class XGBOperator {
+class xgbop {
 public:
   std::vector<Field> fields;
   Field labelField;
@@ -44,13 +44,13 @@ public:
   std::unique_ptr<DMatrixHandle> dtrain, dtest;
   std::unique_ptr<BoosterHandle> booster;
 
-  XGBOperator(const std::vector<Field>& features, const Field& label, const XGBParameters& parameters1, int rank, int world) : fields(features), labelField(label), parameters(parameters1), rank(rank), world(world) {
+  xgbop(const std::vector<Field>& features, const Field& label, const XGBParameters& parameters1, int rank, int world) : fields(features), labelField(label), parameters(parameters1), rank(rank), world(world) {
     for (const auto& f : features) {
       CHECK_EQ(f.type, RowType::DOUBLE); //thrift don't support float
     }
     url =  "/tmp/test.bin";
   }
-  ~XGBOperator() {
+  ~xgbop() {
     if (booster) {
       safe_xgboost(XGBoosterFree(*booster.get()));
     }
@@ -69,7 +69,7 @@ public:
   /**
    * we use naive dense float array to build DMatrix for now
    * @param train float array point to training dataset without label row*column
-   * @param label labels pardo each training dataset row
+   * @param label labels map each training dataset row
    * @param row_count training dataset rows
    * @param column_count features number
    */

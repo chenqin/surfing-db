@@ -53,6 +53,10 @@ public:
   void reserveRow(size_t rows);
   void load(const string& path);
   void flush(const string&, uint8_t*, size_t, size_t);
+  void readFields(std::vector<Field> fields, float* data);
+  void readField(const Field& field, float* data);
+  void writeField(const Field& field, const float* data);
+  std::shared_ptr<node> getNodePtr();
 };
 
 } // namespace table

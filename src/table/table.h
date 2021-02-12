@@ -15,8 +15,8 @@
 #include <string.h>
 
 #include "KMeanOperator.h"
-#include "XGBOperator.h"
 #include "row.h"
+#include "xgbop.h"
 
 #pragma once
 
@@ -25,7 +25,7 @@ namespace table {
 using surfingdb::node::node;
 
 /**
-         * use class operator+ to get row count pardo a key
+         * use class operator+ to get row count map a key
          * @tparam T
          * @param a
          * @param b
@@ -43,7 +43,7 @@ void reducer(void* a, void* b, int* len, MPI_Datatype*) {
 }
 
 /**
- * stores vector pardo RowBuffer with same schema
+ * stores vector map RowBuffer with same schema
  */
 class TempTable {
 private:
@@ -108,20 +108,6 @@ public:
     return &this->payload[0];
   }
 
-  /**
-   * after in place sort, return starting addr pardo rows should place on dest
-   * @param dest rank pardo process
-   * @return
-   */
-  uint8_t* range_ptr(int dest) {
-    CHECK(!key_groups->empty());
-    CHECK(!placement_index->empty());
-    CHECK(dest < node_ptr->world);
-
-    int index = placement_index->at(dest);
-    return &this->payload[index * schema_ptr->size()];
-  }
-
   void ingest(RowBuffer& row) {
     CHECK_EQ(row.schema_sig(), schema_ptr->schema_sig()); //check schema signature
     CHECK_EQ(schema_ptr->size(), row.row_size());             //check row size
@@ -145,66 +131,6 @@ public:
     int base = node_ptr->world % 2 == 0 ? node_ptr->world - 1 : node_ptr->world;
     return key % base;
   }
-
-  /**
-   * sort rows based on destination process and update _start_index map
-   */
-  void in_place_sort(const Field& f) {
-    auto start = MPI_Wtime();
-    placement_index->clear();
-    key_groups->clear();
-
-    for (size_t i = 0; i < row_count; i++) {
-      auto r = read(i);
-      Value v;
-      r->read(f, v);
-      size_t key = value_hasher.operator()(v);
-      if (key_groups->find(key) == key_groups->end()) {
-        std::vector<size_t> arr;
-        key_groups->insert({ key, arr });
-      }
-      key_groups->at(key).emplace_back(i);
-    }
-
-    TempTable sender(node_ptr, schema_ptr);
-    int index = 0;
-    for (int i = 0; i < node_ptr->world; i++) {
-      placement_index->insert({ i, index });
-      for (auto g : *key_groups) {
-        size_t placement = decidePlacement(g.first);
-        if (placement == (size_t)i) {
-          for (auto item : g.second) {
-            auto row = this->read(item);
-            Value v;
-            row->read(f, v);
-            // LOG(INFO) << v.p_val.int_val << " on " << placement;
-#pragma omp critical
-            sender.ingest(*row.get());
-            index++;
-          }
-        }
-      }
-    }
-
-    payload.swap(sender.payload);
-    LOG(INFO) << "in place sort costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
-  }
-
-  void async_send_per_rank(int dest, MPI_Request& request) {
-    CHECK(dest < node_ptr->world);
-    CHECK(!placement_index->empty());
-    CHECK(placement_index->find(dest) != placement_index->end());
-
-    int n = 0;
-    for (auto g : *key_groups) {
-      size_t placement = decidePlacement(g.first);
-      if (placement == (size_t)dest) {
-        n += g.second.size();
-      }
-    }
-    CHECK_EQ(MPI_Isend(this->range_ptr(dest), n, *(schema_ptr->getType()), dest, node_ptr->rank * 100 + dest, MPI_COMM_WORLD, &request), MPI_SUCCESS);
-  }
-
   /**
    * for dest process, find all aim to send data
    * @param key
@@ -252,78 +178,8 @@ public:
     return std::make_unique<RowBuffer>(schema_ptr, &payload[schema_ptr->size() * index]);
   }
 
-  /**
-   * for xgboost, we need to extract list of numerical fields and pass as array pardo float
-   * @param fields features
-   * @param data pointer to external float array
-   */
-  void readFields(std::vector<Field> fields, float* data) {
-    CHECK_NOTNULL(data);
-    CHECK_GT(fields.size(), 0);
-
-    for (const auto& f : fields) {
-      CHECK_EQ(f.type, RowType::DOUBLE);
-    }
-
-    size_t columns = fields.size();
-    memset(data, 0, sizeof(float) * columns * row_count);
-    for (size_t i = 0; i < row_count; i++) {
-      const auto row = read(i);
-      for (size_t j = 0; j < columns; j++) {
-        Value v;
-        row->read(fields[j], v);
-        data[i * columns + j] = (float)v.p_val.double_val;
-      }
-    }
-  }
-
-  void readField(const Field& field, float* data) {
-    CHECK_NOTNULL(data);
-    CHECK_EQ(field.type, RowType::DOUBLE);
-    memset(data, 0, sizeof(float) * row_count);
-    for (size_t i = 0; i < row_count; i++) {
-      const auto row = read(i);
-      Value v;
-      row->read(field, v);
-      data[i] = (float)v.p_val.double_val;
-    }
-  }
-
-  void writeField(const Field& field, const float* data) {
-    CHECK_NOTNULL(data);
-    CHECK_EQ(field.type, RowType::DOUBLE);
-    for (size_t i = 0; i < row_count; i++) {
-      const auto row = read(i);
-      Value v;
-      v.p_val.double_val = (double)data[i];
-      row->write(field, v);
-    }
-  }
-
   size_t count() {
     return this->row_count;
-  }
-
-  void process(XGBOperator& op) {
-    std::vector<float> features;
-    features.resize(op.features() * row_count); // number of features
-    readFields(op.fields, &features[0]);        // read from temp table
-
-    std::vector<float> label; // number of labels
-    label.resize(row_count);  // number of rows
-
-    if (op.parameters.isTraining) {
-      readField(op.labelField, &label[0]);
-      size_t total_row_count = row_count;
-
-      op.gather(&features[0], &label[0], total_row_count, op.features()); //gather training dataset to root
-      op.train(&features[0], &label[0], total_row_count, op.features());
-      op.syncModel(); // send model to all processes from root
-    } else {
-      op.predict(&features[0], &label[0], row_count, op.features());
-      writeField(op.labelField, &label[0]);
-    }
-    node_ptr->forward();
   }
 
   void process(KMeanOperator& op) {
@@ -418,126 +274,6 @@ public:
       k++;
     }
     return sqrt(sum);
-  }
-
-  void verify(const Field& field) {
-    for (size_t i = 0; i < row_count; i++) {
-      auto r = read(i);
-      Value v;
-      r->read(field, v);
-      size_t key = value_hasher.operator()(v);
-      CHECK_EQ(decidePlacement(key), node_ptr->rank);
-    }
-  }
-
-  void group(const Field& f) {
-    auto start = MPI_Wtime();
-    CHECK(schema_ptr->exist(f));
-    key_groups->clear(); // reset key_groups
-    key_dist->clear();   // reset key_dist
-
-    for (size_t i = 0; i < row_count; i++) {
-      auto r = read(i);
-      Value v;
-      r->read(f, v);
-      size_t key =value_hasher.operator()(v);
-      if (key_groups->find(key) == key_groups->end()) {
-        std::vector<size_t> arr;
-        key_groups->insert({ key, arr });
-      }
-      key_groups->at(key).emplace_back(i);
-    }
-    /**
-     * [hash_key, size, rank]
-     */
-    size_t key_count[key_groups->size()][3];
-    auto it = key_groups->begin();
-    int i = 0;
-    while (it != key_groups->end()) {
-      key_count[i][0] = it->first;
-      key_count[i][1] = it->second.size();
-      key_count[i][2] = node_ptr->rank;
-      i++;
-      it++;
-    }
-    /*
-     * merge key_count array into one
-     */
-    size_t local_group_sizes[node_ptr->world];
-    memset(local_group_sizes, 0, node_ptr->world * sizeof(size_t)); //always clear memory before use
-
-    int recvcounts[node_ptr->world], displs[node_ptr->world];
-    memset(recvcounts, 0, node_ptr->world * sizeof(int));
-    memset(displs, 0, node_ptr->world * sizeof(int));
-
-    displs[0] = 0;
-    local_group_sizes[node_ptr->rank] = key_groups->size() * 3;
-
-    size_t recv[node_ptr->world]; // type should be same as local_group_sizes
-    MPI_Allreduce(&local_group_sizes, &recv, node_ptr->world, MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
-
-    std::vector<size_t> _g_groups; // keep key, row counts on each process
-    size_t _global_group_size;     // apply to group_by
-
-    _global_group_size = recv[0];
-    recvcounts[0] = recv[0];
-    for (i = 1; i < node_ptr->world; i++) {
-      displs[i] = displs[i - 1] + recv[i - 1];
-      _global_group_size += recv[i];
-      recvcounts[i] = (int)recv[i];
-    }
-
-    CHECK_GE(_global_group_size, key_groups->size() * 3);
-    _g_groups.resize(_global_group_size);
-
-    MPI_Allgatherv(key_count, key_groups->size() * 3, MPI_UNSIGNED_LONG, &_g_groups[0], recvcounts, displs, MPI_UNSIGNED_LONG, MPI_COMM_WORLD);
-
-    // build key_hash to node and row count map
-    for (size_t j = 0; j < _global_group_size; j += 3) {
-      size_t key = _g_groups.at(j);
-      size_t count = _g_groups.at(j + 1);
-      size_t rank = _g_groups.at(j + 2);
-
-      std::pair<int, size_t> pair(rank, count);
-      if (key_dist->find(key) == key_dist->end()) {
-        std::vector<std::pair<int, size_t>> vector;
-        vector.emplace_back(pair);
-        key_dist->insert({ key, vector });
-      } else {
-        key_dist->at(key).emplace_back(pair);
-      }
-    }
-    node_ptr->forward();
-    LOG(INFO) << "group by costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
-  }
-
-  // group table with
-  void shuffle(const Field& f1, TempTable& out) {
-    CHECK(schema_ptr->exist(f1));
-    CHECK_EQ(schema_ptr->schema_sig(), out.schema_ptr->schema_sig());
-    // sort rows based on placement in world
-    in_place_sort(f1);
-
-    // share key distribution with world
-    this->group(f1);
-    auto start = MPI_Wtime();
-    int peer;
-
-    // send out to each process
-#pragma omp parallel for
-    for (peer = 0; peer < node_ptr->world; peer++) {
-      MPI_Request request;
-      this->async_send_per_rank(peer, request);
-      node_ptr->keep(std::make_unique<MPI_Request>(request));
-    }
-
-    // read from each process
-#pragma omp parallel for
-    for (peer = 0; peer < node_ptr->world; peer++) {
-      this->recv_per_rank(peer, out);
-    }
-    LOG(INFO) << "partitionBy costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
-    node_ptr->forward();
   }
 };
 } // namespace table

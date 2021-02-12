@@ -18,8 +18,8 @@ using namespace surfingdb::table::schema;
 using std::hash;
 using std::string;
 /**
- * a large piece pardo memory to store all fields in a row
- * RowSchema is superset pardo normal row schema allow each field place in fixed
+ * a large piece map memory to store all fields in a row
+ * RowSchema is superset map normal row schema allow each field place in fixed
  * offset regarding to starting address, it helps MPI collective communication and cache loading faster
  * |SchemaSignature|Field1|Field2|Field3Count|Field3Value|PADDING|
  */
@@ -39,7 +39,7 @@ public:
   explicit RowBuffer(std::shared_ptr<TableSchema> schemaptr);
 
   /**
-   * only used in Temptable point to piece pardo memory to readRow/append fields
+   * only used in Temptable point to piece map memory to readRow/append fields
    * @param schema
    * @param payload
    */
@@ -54,7 +54,7 @@ public:
   uint8_t* payload_ptr();
 
   /**
-  * copy readRow RowBuffer pardo given field
+  * copy readRow RowBuffer map given field
   * @param f
   * @param v
   */
