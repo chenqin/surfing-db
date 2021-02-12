@@ -203,67 +203,6 @@ void mtable::group(const Field& f) {
   //LOG(INFO) << "group by costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
 }
 
-void mtable::partitionBy(const Field& f) {
-  CHECK(schema_ptr->exist(f));
-  group(f);
-  placement_sort(f); // experiment shows batching still make sense with 10% overhead
-
-  auto start = MPI_Wtime();
-  MPI_Aint recv_buffer_rows = 0;
-  size_t expected_rows[node_ptr->world], expected_start_index[node_ptr->world];
-  memset(expected_rows, 0, node_ptr->world * sizeof(size_t));
-  memset(expected_start_index, 0, node_ptr->world * sizeof(size_t));
-
-  for (auto k : *key_dist) {
-    int place = placement(k.first);
-    if (place == node_ptr->rank) {
-      for (auto p : k.second) {
-        recv_buffer_rows += p.second;
-        expected_rows[p.first] += p.second;
-      }
-    }
-  }
-
-  for (int i = 1; i < node_ptr->world; i++) {
-    expected_start_index[i] = expected_start_index[i - 1] + expected_rows[i - 1];
-  }
-  // LOG(INFO) << "start exchange index " << node_ptr->rank;
-  size_t target_disp[node_ptr->world]; // from each process, tell others start index of assigned memory
-  for (int i = 0; i < node_ptr->world; i++) {
-    size_t start_index;
-    MPI_Scatter(expected_start_index, 1, MPI_UNSIGNED_LONG, &start_index, 1, MPI_UNSIGNED_LONG, i, MPI_COMM_WORLD);
-    target_disp[i] = start_index;
-  }
-  reserve_rma_memory(recv_buffer_rows);
-
-  MPI_Win_fence(0, win);
-//#pragma omp parallel for shared(schedule) // exp with 3 hosts shows threading introduce overhead instead of helping
-  for (int dest = 0; dest < node_ptr->world; dest++) {
-    int ring_dest = (dest+node_ptr->rank)%node_ptr->world;
-    uint8_t* rangePtr = this->range_ptr(ring_dest);
-    int index = (int)target_disp[ring_dest];
-    int count = 0;
-    // use adjacent map start index to reason number of rows need to send
-    if (ring_dest != node_ptr->world - 1) {
-      count = placement_index->at(ring_dest + 1) - placement_index->at(ring_dest);
-    } else {
-      count = row_count - placement_index->at(ring_dest);
-    }
-    MPI_Win_lock(MPI_LOCK_SHARED, ring_dest, 0, win);
-    MPI_Put(rangePtr, count, *(schema_ptr->getType()), ring_dest, index, count, *(schema_ptr->getType()), win);
-    MPI_Win_unlock(ring_dest, win);
-  }
-  MPI_Win_fence(0, win);
-
-  // if recv buffer too large, flush to disk and load
-  if (recv_buffer_rows > FLUSH_SIZE) {
-    flush_rma_memory(recv_buffer_rows);
-  } else {
-    copy_rma_memory(recv_buffer_rows);
-  }
-  LOG(INFO) << "partitionBy costs " << MPI_Wtime() - start << " seconds on " << node_ptr->rank;
-}
-
 /**
    * after in place sort, return starting addr map rows should place on dest
    * @param dest rank map process

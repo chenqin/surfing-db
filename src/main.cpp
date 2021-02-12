@@ -152,7 +152,8 @@ int main(int argc, char** argv) {
       b.write(field1, v);
       t1.appendRow(b);
     }
-    t1.partitionBy(field1);
+    //t1.partitionBy(field1);
+    processors::partition(t1, field1);
     t1.verify(field1);
     mtable t2(node, schema_ptr, 1);
     processors::map(t1, t2, transform);
