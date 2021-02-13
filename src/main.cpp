@@ -143,12 +143,12 @@ int main(int argc, char** argv) {
   Value v;
   v.p_val.int_val = 1;
   b.write(field1, v);
-  int itr = 0;
-  int rows = 1000000;
-  //omp_set_num_threads(2);
+  int rows = 1200000;
+  size_t total = 0;
+  auto start = MPI_Wtime();
   // allow small batch runs on different omp thread, share nothing to avoid race condition
-#pragma omp parallel for num_threads(CONCURRENCY)
-  for (itr = 0; itr < 1000000; itr++) {
+#pragma omp parallel for num_threads(CONCURRENCY) schedule(dynamic) shared(total)
+  for (int itr = 0; itr < 1000000; itr++) {
     mtable t1(node, schema_ptr, rows * schema_ptr->size());
     for (int i = 0; i < 1; i++) {
       v.p_val.int_val = i + node->rank;
@@ -163,6 +163,11 @@ int main(int argc, char** argv) {
     mtable t2(node, schema_ptr, 1);
     processors::map(t1, t2, transform);
     t2.verify(field1);
+#pragma omp atomic
+    total += rows*node->world;
+    if(node->rank == 0) {
+      LOG(INFO) << "Throughput " << total / (MPI_Wtime() - start);
+    }
   }
 
   // tout1 and tout2 shared with same key to each process, per key co_group is straight forward

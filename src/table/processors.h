@@ -15,25 +15,26 @@ class processors {
 public:
   static void map(mtable& in, mtable& out, std::function<void(const RowBuffer&, RowBuffer&)> transform) {
     out.reserveRow(in.row_size());
+#pragma omp parallel for shared(out) schedule(dynamic, 100)
     for (size_t i = 0; i < in.row_size(); i++) {
       auto in_row = in.readRow(i);
       RowBuffer out_row(out.getSchema());
       transform(*in_row.get(), out_row);
       CHECK_EQ(out_row.schema_sig(), out.getSchema()->schema_sig());
+#pragma omp critical
       out.appendRow(out_row);
     }
   }
 
   static void partition(mtable& in, Field& f) {
+    // auto start = MPI_Wtime();
     auto schema_ptr = in.getSchema();
     auto node_ptr = in.getNodePtr();
     auto row_count = in.row_size();
-
     in.group(f);
 
     in.placement_sort(f); // experiment shows batching still make sense with 10% overhead
 
-    auto start = MPI_Wtime();
     MPI_Aint recv_buffer_rows = 0;
     size_t expected_rows[node_ptr->world], expected_start_index[node_ptr->world];
     memset(expected_rows, 0, node_ptr->world * sizeof(size_t));
@@ -52,6 +53,7 @@ public:
     for (int i = 1; i < node_ptr->world; i++) {
       expected_start_index[i] = expected_start_index[i - 1] + expected_rows[i - 1];
     }
+
     // LOG(INFO) << "start exchange index " << node_ptr->rank;
     size_t target_disp[node_ptr->world]; // from each process, tell others start index of assigned memory
     for (int i = 0; i < node_ptr->world; i++) {
@@ -87,10 +89,13 @@ public:
     } else {
       in.copy_rma_memory(recv_buffer_rows);
     }
-    LOG(INFO) << "partitionBy costs " << MPI_Wtime() - start << " seconds on " << node_ptr->rank << " @" << omp_get_thread_num();
+    if (node_ptr->rank == 0) {
+      // LOG(INFO) << "shuffle partition " << MPI_Wtime() - start;
+    }
   }
 
-  static void xgb(mtable& in, std::vector<Field> features, Field& label, const XGBParameters& parameters) {
+  static void
+    xgb(mtable& in, std::vector<Field> features, Field& label, const XGBParameters& parameters) {
     xgbop op(features, label, parameters, in.getNodePtr()->rank, in.getNodePtr()->world);
     std::vector<float> features_matrix;
     features_matrix.resize(op.features() * in.row_size()); // number of features
@@ -102,16 +107,18 @@ public:
     if (op.parameters.isTraining) {
       in.readField(op.labelField, &label_matrix[0]);
       size_t total_row_count = in.row_size();
-
-      op.gather(&features_matrix[0], &label_matrix[0], total_row_count, op.features()); //gather training dataset to root
-      op.train(&features_matrix[0], &label_matrix[0], total_row_count, op.features());
-      op.syncModel(); // send model to all processes from root
+#pragma omp critical
+      {
+        op.gather(&features_matrix[0], &label_matrix[0], total_row_count, op.features()); //gather training dataset to root
+        op.train(&features_matrix[0], &label_matrix[0], total_row_count, op.features());
+        op.syncModel(); // send model to all processes from root
+      }
     } else {
       op.predict(&features_matrix[0], &label_matrix[0], in.row_size(), op.features());
       in.writeField(op.labelField, &label_matrix[0]);
     }
   }
-};
+}; // namespace table
 } // namespace table
 } // namespace surfingdb
 #endif //SURFINGDB_PROCESSORS_H

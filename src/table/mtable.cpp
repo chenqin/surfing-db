@@ -102,9 +102,9 @@ uint8_t* mtable::payload_ptr() {
 }
 
 void mtable::appendRow(RowBuffer& row) {
-  CHECK_EQ(row.schema_sig(), schema_ptr->schema_sig()); //check schema signature
-  CHECK_EQ(schema_ptr->size(), row.row_size());             //check row size
-  CHECK_LE(row.row_size() + offset, payload.capacity());    // check capacity of temp table
+  CHECK_EQ(row.schema_sig(), schema_ptr->schema_sig());  //check schema signature
+  CHECK_EQ(schema_ptr->size(), row.row_size());          //check row size
+  CHECK_LE(row.row_size() + offset, payload.capacity()); // check capacity of temp table
   memcpy(&payload[offset], row.payload_ptr(), row.row_size());
   offset += row.row_size();
   row_count++;
@@ -199,7 +199,6 @@ void mtable::group(const Field& f) {
       key_dist->at(key).emplace_back(pair);
     }
   }
-  node_ptr->forward();
   //LOG(INFO) << "group by costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
 }
 
