@@ -143,7 +143,7 @@ int main(int argc, char** argv) {
   Value v;
   v.p_val.int_val = 1;
   b.write(field1, v);
-  int rows = 1200000;
+  int rows = 120000;
   size_t total = 0;
   auto start = MPI_Wtime();
   // allow small batch runs on different omp thread, share nothing to avoid race condition
@@ -156,7 +156,6 @@ int main(int argc, char** argv) {
       t1.appendRow(b);
     }
 
-#pragma omp critical
     processors::partition(t1, field1);
 
     t1.verify(field1);
