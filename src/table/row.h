@@ -5,7 +5,7 @@
 #ifndef SURFINGDB_ROW_H
 #define SURFINGDB_ROW_H
 
-#include "schema.h"
+#include "meta/schema.h"
 #pragma once
 
 namespace surfingdb {
@@ -14,7 +14,7 @@ namespace table {
 /**
  * build a continous memory buffer
  */
-using namespace surfingdb::table::schema;
+using namespace surfingdb::meta::schema;
 using std::hash;
 using std::string;
 /**
@@ -26,7 +26,7 @@ using std::string;
 class RowBuffer {
 private:
   Field _header;
-  std::shared_ptr<TableSchema> schema_ptr;
+  std::shared_ptr<meta::TableSchema> schema_ptr;
   size_t _schema_sig;
   uint8_t* _payload; // consider using vector std::vector<uint8_t>
   std::vector<char> _vpayload;
@@ -36,14 +36,14 @@ private:
   size_t _pread(const Field& f, void* dataptr, const uint64_t& offset);
 
 public:
-  explicit RowBuffer(std::shared_ptr<TableSchema> schemaptr);
+  explicit RowBuffer(std::shared_ptr<meta::TableSchema> schemaptr);
 
   /**
    * only used in Temptable point to piece map memory to readRow/append fields
    * @param schema
    * @param payload
    */
-  explicit RowBuffer(std::shared_ptr<TableSchema> schemaptr, uint8_t* payloadptr);
+  explicit RowBuffer(std::shared_ptr<meta::TableSchema> schemaptr, uint8_t* payloadptr);
 
   ~RowBuffer();
 

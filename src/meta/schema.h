@@ -4,8 +4,8 @@
 
 #ifndef SURFINGDB_SCHEMA_H
 #define SURFINGDB_SCHEMA_H
-#include "table/gen-cpp/schema_constants.h"
-#include "table/gen-cpp/schema_types.h"
+#include "meta/gen-cpp/schema_constants.h"
+#include "meta/gen-cpp/schema_types.h"
 
 #include <glog/logging.h>
 #include <iostream>
@@ -21,7 +21,7 @@
 #pragma once
 
 namespace surfingdb {
-namespace table {
+namespace meta {
 
 #define MAX_STR_LEN 128
 #define HEADER_SIZE sizeof(long)
@@ -35,7 +35,7 @@ namespace table {
 /**
  * build a continous memory buffer
  */
-using namespace surfingdb::table::schema;
+using namespace surfingdb::meta::schema;
 using std::hash;
 using std::string;
 

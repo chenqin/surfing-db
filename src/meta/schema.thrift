@@ -1,4 +1,4 @@
-namespace cpp surfingdb.table.schema //
+namespace cpp surfingdb.meta.schema //
 
 enum RowType {
     VOID,

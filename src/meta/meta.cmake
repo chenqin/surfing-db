@@ -3,8 +3,12 @@
 # it is responsible for single ingest spec or task split
 set(META surfmeta)
 
+# generate schema skeleton
+#execute_process(COMMAND thrift --gen cpp ${SURFINGDB_SRC}/meta/schema.thrift)
+
 # build nebula.ingest library
 add_library(${META} STATIC
+        ${SURFINGDB_SRC}/meta/gen-cpp
         ${SURFINGDB_SRC}/meta/node.cpp)
 
 target_link_libraries(${META}

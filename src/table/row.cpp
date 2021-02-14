@@ -18,10 +18,10 @@ inline size_t readSig(uint8_t* _payload) {
   return result;
 }
 
-RowBuffer::RowBuffer(std::shared_ptr<TableSchema> schemaptr) {
+RowBuffer::RowBuffer(std::shared_ptr<meta::TableSchema> schemaptr) {
   _header.type = RowType::LONG;
-  _header.max_unit_size = SchemaUtils::getFieldSize(_header);
-  CHECK_EQ(sizeof(uint64_t), SchemaUtils::getFieldSize(_header));
+  _header.max_unit_size = meta::SchemaUtils::getFieldSize(_header);
+  CHECK_EQ(sizeof(uint64_t), meta::SchemaUtils::getFieldSize(_header));
   this->schema_ptr = schemaptr;
   _schema_sig = schemaptr->schema_sig();
   CHECK_GT(schemaptr->size(), 0);
@@ -30,10 +30,10 @@ RowBuffer::RowBuffer(std::shared_ptr<TableSchema> schemaptr) {
   sign(_payload, _schema_sig);
 }
 
-RowBuffer::RowBuffer(std::shared_ptr<TableSchema> schemaptr, uint8_t* payloadptr) {
+RowBuffer::RowBuffer(std::shared_ptr<meta::TableSchema> schemaptr, uint8_t* payloadptr) {
   _header.type = RowType::LONG;
-  _header.max_unit_size = SchemaUtils::getFieldSize(_header);
-  CHECK_EQ(sizeof(uint64_t), SchemaUtils::getFieldSize(_header));
+  _header.max_unit_size = meta::SchemaUtils::getFieldSize(_header);
+  CHECK_EQ(sizeof(uint64_t), meta::SchemaUtils::getFieldSize(_header));
   this->schema_ptr = schemaptr;
   _schema_sig = schemaptr->schema_sig();
   CHECK_GT(schemaptr->size(), 0);
@@ -79,14 +79,14 @@ void RowBuffer::write(const Field& f, const Value& v) {
 
 void RowBuffer::write(const Field& f, const Value& v, const uint64_t& offset) {
   switch (f.type) {
-  case surfingdb::table::schema::RowType::VOID: {
+  case surfingdb::meta::schema::RowType::VOID: {
     assert(false);
   }
-  case surfingdb::table::schema::RowType::INT: {
+  case surfingdb::meta::schema::RowType::INT: {
     _pwrite(f, &v.p_val.int_val, offset);
     break;
   }
-  case surfingdb::table::schema::RowType::BOOL: {
+  case surfingdb::meta::schema::RowType::BOOL: {
     _pwrite(f, &v.p_val.bool_val, offset);
     break;
   }
@@ -153,14 +153,14 @@ void RowBuffer::write(const Field& f, const Value& v, const uint64_t& offset) {
 
 size_t RowBuffer::read(const Field& f, Value& v, const uint64_t& offset) {
   switch (f.type) {
-  case surfingdb::table::schema::RowType::VOID: {
+  case surfingdb::meta::schema::RowType::VOID: {
     return 0;
   }
-  case surfingdb::table::schema::RowType::INT: {
+  case surfingdb::meta::schema::RowType::INT: {
     _pread(f, &v.p_val.int_val, offset);
     return 1;
   }
-  case surfingdb::table::schema::RowType::BOOL: {
+  case surfingdb::meta::schema::RowType::BOOL: {
     _pread(f, &v.p_val.bool_val, offset);
     return 1;
   }
@@ -231,14 +231,14 @@ size_t RowBuffer::read(const Field& f, Value& v, const uint64_t& offset) {
 
 void RowBuffer::_pwrite(const Field& f, const void* data, const uint64_t& offset) {
   switch (f.type) {
-  case surfingdb::table::schema::RowType::VOID: {
+  case surfingdb::meta::schema::RowType::VOID: {
     break;
   }
-  case surfingdb::table::schema::RowType::INT: {
+  case surfingdb::meta::schema::RowType::INT: {
     memcpy((int*)(_payload + offset), data, sizeof(int));
     break;
   }
-  case surfingdb::table::schema::RowType::BOOL: {
+  case surfingdb::meta::schema::RowType::BOOL: {
     memcpy((bool*)(_payload + offset), data, sizeof(bool));
     break;
   }
@@ -274,15 +274,15 @@ void RowBuffer::_pwrite(const Field& f, const void* data, const uint64_t& offset
 
 size_t RowBuffer::_pread(const Field& f, void* dataptr, const uint64_t& offset) {
   switch (f.type) {
-  case surfingdb::table::schema::RowType::VOID: {
+  case surfingdb::meta::schema::RowType::VOID: {
     assert(false);
   }
-  case surfingdb::table::schema::RowType::INT: {
+  case surfingdb::meta::schema::RowType::INT: {
     int* int_ptr = (int*)(_payload + offset);
     memcpy(dataptr, int_ptr, sizeof(int));
     return sizeof(int);
   }
-  case surfingdb::table::schema::RowType::BOOL: {
+  case surfingdb::meta::schema::RowType::BOOL: {
     bool* bool_ptr = (bool*)(_payload + offset);
     memcpy(dataptr, bool_ptr, sizeof(bool));
     return sizeof(bool);

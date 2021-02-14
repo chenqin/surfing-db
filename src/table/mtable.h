@@ -11,6 +11,7 @@
 namespace surfingdb {
 namespace table {
 using surfingdb::meta::node;
+using namespace surfingdb::meta;
 
 class mtable {
 private:

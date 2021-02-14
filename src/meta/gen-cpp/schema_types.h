@@ -15,7 +15,7 @@
 #include <thrift/cxxfunctional.h>
 
 
-namespace surfingdb { namespace table { namespace schema {
+namespace surfingdb { namespace meta { namespace schema {
 
 struct RowType {
   enum type {
@@ -194,6 +194,17 @@ class PValue {
 
   _PValue__isset __isset;
 
+  // add this to support PValue sort
+  bool operator<(const PValue& k) const {
+    using std::hash;
+    using std::string;
+    return (hash<string>()(this->string_val)) < (hash<string>()(k.string_val))
+           || this->double_val < k.double_val
+           || this->long_val < k.long_val
+           || this->int_val < k.int_val
+           || this->bool_val == k.bool_val;
+  }
+
   void __set_bool_val(const bool val) {
     bool_val = val;
     __isset.bool_val = true;
@@ -274,8 +285,6 @@ class PValue {
     return !(*this == rhs);
   }
 
-  bool operator < (const PValue & ) const;
-
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
 
@@ -341,8 +350,6 @@ class Value {
   bool operator != (const Value &rhs) const {
     return !(*this == rhs);
   }
-
-  bool operator < (const Value & ) const;
 
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;

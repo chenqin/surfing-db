@@ -22,7 +22,7 @@
 
 namespace surfingdb {
 namespace table {
-using surfingdb::meta::node;
+using namespace surfingdb::meta;
 
 /**
          * use class operator+ to get row count map a key

@@ -3,9 +3,6 @@
 # it is responsible for single ingest spec or task split
 set(TABLE surftable)
 
-# generate schema skeleton
-execute_process(COMMAND thrift --gen cpp schema.thrift)
-
 #include_directories(${JEMALLOC_INCLUDE_DIRS})
 include_directories(${DATASKETCHES_INCLUDE_DIRS})
 
@@ -17,7 +14,6 @@ if(APPLE)
 endif()
 
 add_library(${TABLE} STATIC
-        ${SURFINGDB_SRC}/table/gen-cpp
         ${SURFINGDB_SRC}/table/row.cpp
         ${SURFINGDB_SRC}/table/mtable.cpp
         ${SURFINGDB_SRC}/table/processors.cpp)
@@ -44,6 +40,7 @@ target_link_libraries(TableTest
         PRIVATE Threads::Threads
         PRIVATE OpenMP::OpenMP_CXX
         PRIVATE MPI::MPI_CXX
+        PRIVATE ${META}
         PRIVATE ${TABLE}
         PRIVATE ${JSON_LIBRARY}
         PRIVATE ${GTEST_LIBRARY}

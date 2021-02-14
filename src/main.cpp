@@ -27,14 +27,6 @@ using namespace surfingdb::table::schema;
 using surfingdb::meta::node;
 using namespace surfingdb::table;
 
-bool PValue::operator<(const PValue& k) const {
-  return (hash<string>()(this->string_val)) < (hash<string>()(k.string_val))
-         || this->double_val < k.double_val
-         || this->long_val < k.long_val
-         || this->int_val < k.int_val
-         || this->bool_val == k.bool_val;
-}
-
 void transform(const RowBuffer& in, RowBuffer& out) {
   out = in;
 }
