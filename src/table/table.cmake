@@ -20,11 +20,11 @@ add_library(${TABLE} STATIC
         ${SURFINGDB_SRC}/table/gen-cpp
         ${SURFINGDB_SRC}/table/node.cpp
         ${SURFINGDB_SRC}/table/row.cpp
-        ${SURFINGDB_SRC}/table/mtable.cpp)
+        ${SURFINGDB_SRC}/table/mtable.cpp
+        ${SURFINGDB_SRC}/table/processors.cpp)
 
 target_link_libraries(${TABLE}
         PUBLIC ${THRIFT_LIBRARY}
-        #PUBLIC ${JEMALLOC_LIBRARIES}
         PUBLIC Threads::Threads
         PUBLIC OpenMP::OpenMP_CXX
         PUBLIC ${MPI_CXX_INCLUDE_PATH}

@@ -133,6 +133,7 @@ int main(int argc, char** argv) {
   XGBParameters parameters;
   parameters.tree_method = "exact";
   parameters.objective = "reg:linear";
+  parameters.model_path = "/tmp/xgb.bin";
   parameters.min_child_weight = 1;
   parameters.gamma = 0.1;
   parameters.max_depth = 2;

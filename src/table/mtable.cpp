@@ -5,6 +5,8 @@
 #include <sys/uio.h>
 #include <unistd.h>
 #include "table.h"
+#include "arrow/io/file.h"
+#include "parquet/stream_writer.h"
 
 namespace surfingdb {
 namespace table {

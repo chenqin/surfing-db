@@ -26,6 +26,7 @@ struct XGBParameters {
   std::string tree_method;
   std::string objective;
   std::string eval_metric;
+  std::string model_path;
   DOUBLE_TYPE min_child_weight;
   DOUBLE_TYPE gamma;
   uint8_t max_depth;
@@ -48,7 +49,7 @@ public:
     for (const auto& f : features) {
       CHECK_EQ(f.type, RowType::DOUBLE); //thrift don't support float
     }
-    url =  "/tmp/test.bin";
+    url =  parameters1.model_path;
   }
   ~xgbop() {
     if (booster) {
