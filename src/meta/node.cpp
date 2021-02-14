@@ -6,7 +6,7 @@
 #include <glog/logging.h>
 
 namespace surfingdb {
-namespace node {
+namespace meta {
 
 node::node(int* argc, char ***argv) {
   // Initialize the MPI environment

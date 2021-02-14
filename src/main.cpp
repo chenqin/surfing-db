@@ -18,11 +18,13 @@
 #include <glog/logging.h>
 #include <iostream>
 #include <omp.h>
+#include "meta/node.h"
 #include "table/processors.h"
 
 #define FLUSH_DIR "/tmp/"
 
 using namespace surfingdb::table::schema;
+using surfingdb::meta::node;
 using namespace surfingdb::table;
 
 bool PValue::operator<(const PValue& k) const {
@@ -46,7 +48,7 @@ int main(int argc, char** argv) {
   omp_set_num_threads(omp_get_max_threads());
   //google::InitGoogleLogging(argv[0]);
   // create node of cluster
-  const auto node = std::make_shared<surfingdb::table::node>(&argc, &argv);
+  const auto node = std::make_shared<surfingdb::meta::node>(&argc, &argv);
 
   RowSchema r;
   r.fields = std::vector<surfingdb::table::schema::Field>();

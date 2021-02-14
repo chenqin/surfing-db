@@ -220,6 +220,9 @@ include_directories(include ${GMOCK_INCLUDE_DIRS})
 include(src/parser/parser.cmake)
 
 # build table representation
+include(src/meta/meta.cmake)
+
+# build table representation
 include(src/table/table.cmake)
 
 # build test binary
@@ -228,6 +231,7 @@ add_executable(MainTest src/main.cpp)
 target_link_libraries(MainTest
         PRIVATE MPI::MPI_CXX
         PRIVATE OpenMP::OpenMP_CXX
+        PRIVATE ${META}
         PRIVATE ${TABLE})
 
 # install it into local bin folder

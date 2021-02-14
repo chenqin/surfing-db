@@ -9,7 +9,7 @@
 #ifndef SURFINGDB_NODE_H
 #define SURFINGDB_NODE_H
 namespace surfingdb {
-namespace node {
+namespace meta {
 
 class node {
 public:
@@ -25,6 +25,6 @@ public:
   std::vector<std::unique_ptr<MPI_Request>> outstanding_requests;
   std::string processor;
 };
-} // namespace node
+} // namespace meta
 } // namespace surfingdb
 #endif //SURFINGDB_NODE_H

@@ -5,7 +5,7 @@
 #include <glog/logging.h>
 #include <omp.h>
 #include <xgboost/c_api.h>
-#include "node.h"
+#include "meta/node.h"
 #include "row.h"
 #ifndef SURFINGDB_XGBOPERATOR_H
 #define SURFINGDB_XGBOPERATOR_H
