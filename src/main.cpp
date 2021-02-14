@@ -134,7 +134,7 @@ int main(int argc, char** argv) {
   parameters.verbosity = true;
   parameters.eval_metric = "error";
   processors::xgb(msed, fields, field4, parameters);
-
+  
   Value v;
   v.p_val.int_val = 1;
   b.write(field1, v);
@@ -142,25 +142,33 @@ int main(int argc, char** argv) {
   size_t total = 0;
   auto start = MPI_Wtime();
   // allow small batch runs on different omp thread, share nothing to avoid race condition
-#pragma omp parallel for num_threads(CONCURRENCY) schedule(dynamic) shared(total)
-  for (int itr = 0; itr < 1000000; itr++) {
-    mtable t1(node, schema_ptr, rows * schema_ptr->size());
-    for (int i = 0; i < 1; i++) {
-      v.p_val.int_val = i + node->rank;
-      b.write(field1, v);
-      t1.appendRow(b);
-    }
+  while(true) {
+#pragma omp parallel num_threads(CONCURRENCY) shared(total)
+    {
+      /*
+       * micro batch generation
+       */
+      mtable t1(node, schema_ptr, rows * schema_ptr->size());
+      for (int i = 0; i < 1; i++) {
+        v.p_val.int_val = i + node->rank;
+        b.write(field1, v);
+        t1.appendRow(b);
+      }
 
-    processors::partition(t1, field1);
+      /**
+       * micro batch processing
+       */
+      processors::partition(t1, field1);
+      t1.verify(field1);
+      mtable t2(node, schema_ptr, 1);
+      processors::map(t1, t2, transform);
+      t2.verify(field1);
 
-    t1.verify(field1);
-    mtable t2(node, schema_ptr, 1);
-    processors::map(t1, t2, transform);
-    t2.verify(field1);
 #pragma omp atomic
-    total += rows*node->world;
-    if(node->rank == 0) {
-      LOG(INFO) << "Throughput " << total / (MPI_Wtime() - start);
+      total += rows*node->world;
+      if(node->rank == 0) {
+        LOG(INFO) << "Throughput " << total / (MPI_Wtime() - start) << " on thread " << omp_get_thread_num();
+      }
     }
   }
 

@@ -14,7 +14,9 @@ add_library(${META} STATIC
 target_link_libraries(${META}
         PUBLIC ${GLOG_LIBRARY}
         PUBLIC ${GFLAGS_LIBRARY}
-        PUBLIC ${JSON_LIBRARY})
+        PUBLIC ${JSON_LIBRARY}
+        PUBLIC ${ARROW_LIBRARY}
+        PUBLIC ${PARQUET_LIBRARY})
 
 # discover all gtests in this module
 include(GoogleTest)
