@@ -80,7 +80,7 @@ void processors::partition(mtable& in, Field& f) {
   in.reserve_rma_memory(recv_buffer_rows);
   MPI_Win_fence(0, in.win);
   const MPI_Datatype type = *(schema_ptr->schemaMPIType());
-  #pragma omp parallel for // exp with 3 hosts shows threading introduce overhead instead of helping
+  //#pragma omp parallel for num_threads(3) // exp with 3 hosts shows threading introduce overhead instead of helping
   for (int dest = 0; dest < node_ptr->world; dest++) {
     int ring_dest = (dest + node_ptr->rank) % node_ptr->world;
     uint8_t* rangePtr = in.range_ptr(ring_dest);

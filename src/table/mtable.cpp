@@ -127,7 +127,7 @@ void mtable::verify(const Field& field) {
 void mtable::group(const Field& f) {
   const int world = node_ptr->world;
   const int rank = node_ptr->rank;
-  //auto start = MPI_Wtime();
+  auto start = MPI_Wtime();
   CHECK(schema_ptr->containField(f));
   key_groups->clear(); // reset key_groups
   key_dist->clear();   // reset key_dist
@@ -170,7 +170,29 @@ void mtable::group(const Field& f) {
   local_group_sizes[rank] = key_groups->size() * 3;
 
   size_t recv[world]; // type should be same as local_group_sizes
+  memcpy(recv, local_group_sizes, world*sizeof(size_t));
+                      /**
+   * use tag to support multiple threads calling allreduce caused confusion
+   */
+   /*
   MPI_Barrier(MPI_COMM_WORLD);
+  if (node_ptr->rank == 0) {
+    for (int i = 1; i < node_ptr->world; i++) {
+      size_t local_rev[world];
+      MPI_Recv(&local_rev, world, MPI_UNSIGNED_LONG, i, omp_get_thread_num(), MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      for (int i = 0; i < world; i++) {
+        recv[i] = local_rev[i] > recv[i] ? local_rev[i] : recv[i];
+      }
+    }
+    //broadcast with tag
+    for (int i = 1; i < node_ptr->world; i++) {
+      MPI_Send(&recv, world, MPI_UNSIGNED_LONG, i, omp_get_thread_num(), MPI_COMM_WORLD);
+    }
+  } else {
+    MPI_Send(&local_group_sizes, world, MPI_UNSIGNED_LONG, 0, omp_get_thread_num(), MPI_COMM_WORLD);
+    MPI_Recv(&recv, world, MPI_UNSIGNED_LONG, 0, omp_get_thread_num(), MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+  }
+    */
   MPI_Allreduce(&local_group_sizes, &recv, world, MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
 
   std::vector<size_t> _g_groups; // keep key, row counts on each process
@@ -204,7 +226,7 @@ void mtable::group(const Field& f) {
       key_dist->at(key).emplace_back(pair);
     }
   }
-  //LOG(INFO) << "group by costs " << MPI_Wtime() - start << " on " << rank;
+  LOG(INFO) << "group by costs " << MPI_Wtime() - start << " on " << rank;
 }
 
 /**
@@ -439,8 +461,28 @@ std::shared_ptr<mtable> mtable::compactTable() {
   size_t global_units[max_units.size()];
   memcpy(global_units, &max_units[0], sizeof(size_t) * max_units.size());
   const int max_size = max_units.size();
-  MPI_Barrier(MPI_COMM_WORLD);
-  MPI_Allreduce(&max_units[0], &global_units, max_size, MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
+  /**
+   * use tag to support multiple threads calling allreduce caused confusion
+   */
+  if (node_ptr->rank == 0) {
+    for (int i = 1; i < node_ptr->world; i++) {
+      size_t local_units[max_units.size()];
+      MPI_Recv(&local_units, max_size, MPI_UNSIGNED_LONG, i, omp_get_thread_num(), MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      for (int i = 0; i < max_size; i++) {
+        global_units[i] = local_units[i] > global_units[i] ? local_units[i] : global_units[i];
+      }
+    }
+    //broadcast with tag
+    for (int i = 1; i < node_ptr->world; i++) {
+      MPI_Send(&global_units, max_size, MPI_UNSIGNED_LONG, i, omp_get_thread_num(), MPI_COMM_WORLD);
+    }
+  } else {
+    MPI_Send(&max_units[0], max_size, MPI_UNSIGNED_LONG, 0, omp_get_thread_num(), MPI_COMM_WORLD);
+    MPI_Recv(&global_units, max_size, MPI_UNSIGNED_LONG, 0, omp_get_thread_num(), MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+  }
+
+  //MPI_Allreduce(&max_units[0], &global_units, max_size, MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
+
   int index = 0;
   for (auto& field : compact_schema_ptr->fields) {
     if (field.list_type != RowType::VOID) {
@@ -472,7 +514,7 @@ std::shared_ptr<mtable> mtable::compactTable() {
     compact_table_ptr->appendRow(rcompact);
   }
   CHECK_LE(compact_schema_ptr->rowSize(), schema_ptr->rowSize());
-  LOG(INFO) << compact_schema_ptr->rowSize() << "v.s" << schema_ptr->rowSize();
+  //LOG(INFO) << compact_schema_ptr->rowSize() << "v.s" << schema_ptr->rowSize();
 
   payload.clear();
   payload.shrink_to_fit();

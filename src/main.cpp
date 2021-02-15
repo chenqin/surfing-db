@@ -108,8 +108,8 @@ int main(int argc, char** argv) {
   */
   size_t i;
   for (i = 0; i < 3000; i++) {
-    tsed.ingest(b);
-    msed.appendRow(b);
+    //tsed.ingest(b);
+    //msed.appendRow(b);
   }
 
   node->forward(); // stage 1 broadcast data
@@ -120,7 +120,7 @@ int main(int argc, char** argv) {
   fields.resize(1);
 
   KMeanOperator op(1, fields, 100);
-  tsed.process(op);
+  //tsed.process(op);
 
   LOG(INFO) << "xgb operator"
             << " process " << node->rank << " has " << tsed.count() << " rows";
@@ -133,47 +133,42 @@ int main(int argc, char** argv) {
   parameters.max_depth = 2;
   parameters.verbosity = true;
   parameters.eval_metric = "error";
-  processors::xgb(msed, fields, field4, parameters);
+  //processors::xgb(msed, fields, field4, parameters);
 
   Value v;
   v.p_val.int_val = 1;
   b.write(field1, v);
-  int rows = 120000;
+  int rows = 12000;
   size_t total = 0;
   auto start = MPI_Wtime();
   // allow small batch runs on different omp thread, share nothing to avoid race condition
   while (true) {
-    /*
+#pragma omp parallel num_threads(3)
+    {
+      /*
        * micro batch generation
        */
-    auto t1 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
-    for (int i = 0; i < 1; i++) {
-      Value v;
-      v.p_val.int_val = i + node->rank;
-      b.write(field1, v);
-      t1->appendRow(b);
-    }
-
-    auto start2 = MPI_Wtime();
-    auto t11 = t1->compactTable();
-    LOG(INFO) << "compact cost " << MPI_Wtime() - start2;
-    t11->group(field1);
-    t11->placement_sort(field1);
-
-    auto start1 = MPI_Wtime();
-    processors::partition(*t11.get(), field1);
-    LOG(INFO) << "partition cost " << MPI_Wtime() - start1;
-    t11->verify(field1);
-    mtable t2(node, t11->getSchema(), 1);
-    processors::map(*t11.get(), t2, transform);
-    t2.verify(field1);
-
-    total += rows * node->world;
-    if (node->rank == 0) {
-      LOG(INFO) << "Throughput " << total / (MPI_Wtime() - start) << " on thread " << omp_get_thread_num();
+      //should inference compact schema from source (e.g deserialzied kafka events)
+      auto t1 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
+      for (int i = 0; i < rows; i++) {
+        Value v;
+        v.p_val.int_val = i + node->rank;
+        b.write(field1, v);
+        t1->appendRow(b);
+      }
+      auto t2 = t1->compactTable();
+#pragma omp critical
+      {
+        t2->group(field1);
+        t2->placement_sort(field1);
+        processors::partition(*t2.get(), field1);
+        t2->verify(field1);
+      }
+#pragma omp atomic
+      total += rows * node->world;
+      if (node->rank == 0) {
+        LOG(INFO) << "Throughput " << total / (MPI_Wtime() - start) << " on thread " << omp_get_thread_num();
+      }
     }
   }
-
-  // tout1 and tout2 shared with same key to each process, per key co_group is straight forward
-  return 0;
 }
