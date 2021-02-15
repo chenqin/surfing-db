@@ -162,7 +162,7 @@ int main(int argc, char** argv) {
        */
         processors::partition(*t11.get(), field1);
         t11->verify(field1);
-        mtable t2(node, schema_ptr, 1);
+        mtable t2(node, t11->getSchema(), 1);
         processors::map(*t11.get(), t2, transform);
         t2.verify(field1);
       }

@@ -483,7 +483,8 @@ std::shared_ptr<mtable> mtable::compactTable() {
     }
     compact_table_ptr->appendRow(rcompact);
   }
-  LOG(INFO) << compact_schema_ptr->rowSize() << "v.s" << schema_ptr->rowSize();
+  CHECK_LE(compact_schema_ptr->rowSize(), schema_ptr->rowSize());
+  //LOG(INFO) << compact_schema_ptr->rowSize() << "v.s" << schema_ptr->rowSize();
 
   payload.clear();
   payload.shrink_to_fit();
