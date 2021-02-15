@@ -64,8 +64,10 @@ size_t SchemaUtils::getFieldSize(const Field& f) {
   case RowType::MAP: {
     Field k, v;
     k.type = f.map_key_type;
+    k.max_unit_size = f.max_map_key_unit_size;
     v.type = f.map_value_type;
-    return getFieldSize(k) * f.max_map_key_unit_size + getFieldSize(v) * v.max_map_value_unit_size + HEADER_SIZE;
+    v.max_unit_size = v.max_map_value_unit_size;
+    return getFieldSize(k) * f.max_unit_size + getFieldSize(v) * v.max_unit_size + HEADER_SIZE;
   }
   }
   assert(false);

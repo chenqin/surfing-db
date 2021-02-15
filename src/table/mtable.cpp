@@ -255,7 +255,7 @@ void mtable::placement_sort(const Field& f) {
     key_groups->at(key).emplace_back(i);
   }
 
-
+/*
   auto reduce_schema_ptr = std::make_shared<TableSchema>();
   for(auto field : schema_ptr->fields) {
     if(max_unit_size.find(field) != max_unit_size.end()) {
@@ -273,7 +273,7 @@ void mtable::placement_sort(const Field& f) {
   SchemaUtils::validSchema(*reduce_schema_ptr.get());
 
   LOG(INFO) << "row size reduce to " << reduce_schema_ptr->rowSize() << " from "<< schema_ptr->rowSize();
-
+*/
   mtable sender(node_ptr, schema_ptr, row_count * schema_ptr->rowSize());
   int index = 0;
   for (int i = 0; i < node_ptr->world; i++) {
