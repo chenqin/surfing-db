@@ -113,16 +113,6 @@ void mtable::appendRow(RowBuffer& row) {
   CHECK_LE(offset, payload.capacity());
 }
 
-void mtable::appendCompactRow(RowBuffer& row, const std::shared_ptr<TableSchema> shrink_ptr) {
-  CHECK_EQ(row.schema_sig(), schema_ptr->signature()); //check schema signature
-  CHECK_EQ(schema_ptr->rowSize(), row.row_size());     //check row size
-  CHECK_LE(shrink_ptr->rowSize(), row.row_size());
-  memcpy(&payload[offset], row.payload_ptr(), shrink_ptr->rowPrimitiveSize());
-  offset += shrink_ptr->rowPrimitiveSize();
-  size_t collective_offset = shrink_ptr->rowPrimitiveSize();
-
-}
-
 void mtable::verify(const Field& field) {
   //LOG(INFO) << "verify " << row_count << " rows";
   for (size_t i = 0; i < row_count; i++) {
@@ -420,7 +410,7 @@ std::shared_ptr<node> mtable::getNodePtr() {
 /**
  * find compact schema
  */
-void mtable::compactTable() {
+std::shared_ptr<mtable> mtable::compactTable() {
   std::vector<size_t> max_units;
   /**
    * find list and map type max_unit per mtable rows
@@ -462,6 +452,7 @@ void mtable::compactTable() {
     }
   }
   size_t global_units[max_units.size()];
+  memcpy(global_units, &max_units[0], sizeof(size_t)*max_units.size());
   MPI_Allreduce(&max_units[0], &global_units, max_units.size(), MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
   auto compact_schema_ptr = std::make_shared<TableSchema>(*schema_ptr.get());
   int index = 0;
@@ -476,10 +467,31 @@ void mtable::compactTable() {
       field.max_map_value_unit_size = global_units[index++];
     }
   }
-  mtable compact = mtable(node_ptr, compact_schema_ptr, compact_schema_ptr->rowSize() * row_size());
-  for(size_t i = 0 ; i < row_size(); i++) {
-    //compact.appendCompactRow(*this->readRow(i).get(), compact_schema_ptr);
+  compact_schema_ptr->updateRowSize();
+  auto compact_table_ptr = std::make_shared<mtable>(node_ptr, compact_schema_ptr, compact_schema_ptr->rowSize()*row_count);
+  for(size_t index = 0 ; index < row_size(); index++) {
+    auto r = readRow(index);
+    auto rcompact = RowBuffer(compact_schema_ptr);
+    for(auto f : schema_ptr->fields) {
+      Value v;
+      r->read(f, v);
+      for(auto f1 : compact_schema_ptr->fields) {
+        if(f1.operator==(f)) {
+          rcompact.write(f1, v);
+        }
+      }
+    }
+    compact_table_ptr->appendRow(rcompact);
   }
+  LOG(INFO) << compact_schema_ptr->rowSize() << "v.s" << schema_ptr->rowSize();
+
+  payload.clear();
+  payload.shrink_to_fit();
+  key_dist->clear();
+  key_groups->clear();
+  placement_index->clear();
+
+  return compact_table_ptr;
 }
 } // namespace table
 } // namespace surfingdb

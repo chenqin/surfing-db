@@ -187,7 +187,7 @@ public:
     _field_types = std::make_shared<std::unordered_map<Field, MPI_Datatype, FieldHasher>>();
     _size = sizeof(size_t); // store _schema_sig
     for (size_t i = 0; i < fields.size(); i++) {
-      LOG(INFO) << fields.at(i).name;
+      //LOG(INFO) << fields.at(i).name;
       auto f = fields.at(i);
       _offsets->emplace(f, _size);
       _max_unit->emplace(f, f.max_unit_size);

@@ -157,7 +157,12 @@ TEST(TableTest, testRowBuffer) {
   Value v;
   sptr->read(field7, v);
   EXPECT_EQ(v.map_value.size(), 1);
-  t.compactTable();
+  std::shared_ptr<mtable> ptr = t.compactTable();
+  EXPECT_EQ(ptr->row_size(), 10002);
+  sptr = t.readRow(1);
+  Value vm;
+  sptr->read(field7, vm);
+  EXPECT_EQ(vm.map_value.size(), 1);
 }
 
 TEST(TableTest, TestXGBOperator) {

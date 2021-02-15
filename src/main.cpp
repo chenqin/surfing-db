@@ -154,15 +154,18 @@ int main(int argc, char** argv) {
         b.write(field1, v);
         t1.appendRow(b);
       }
-
-      /**
+#pragma omp critical(partition)
+      {
+        auto t11 = t1.compactTable();
+        /**
        * micro batch processing
        */
-      processors::partition(t1, field1);
-      t1.verify(field1);
-      mtable t2(node, schema_ptr, 1);
-      processors::map(t1, t2, transform);
-      t2.verify(field1);
+        processors::partition(*t11.get(), field1);
+        t11->verify(field1);
+        mtable t2(node, schema_ptr, 1);
+        processors::map(*t11.get(), t2, transform);
+        t2.verify(field1);
+      }
 
 #pragma omp atomic
       total += rows*node->world;
