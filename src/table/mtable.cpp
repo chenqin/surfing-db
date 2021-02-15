@@ -125,7 +125,9 @@ void mtable::verify(const Field& field) {
 }
 
 void mtable::group(const Field& f) {
-  auto start = MPI_Wtime();
+  const int world = node_ptr->world;
+  const int rank = node_ptr->rank;
+  //auto start = MPI_Wtime();
   CHECK(schema_ptr->containField(f));
   key_groups->clear(); // reset key_groups
   key_dist->clear();   // reset key_dist
@@ -150,32 +152,33 @@ void mtable::group(const Field& f) {
   while (it != key_groups->end()) {
     key_count[i][0] = it->first;
     key_count[i][1] = it->second.size();
-    key_count[i][2] = node_ptr->rank;
+    key_count[i][2] = rank;
     i++;
     it++;
   }
   /*
    * merge key_count array into one
    */
-  size_t local_group_sizes[node_ptr->world];
-  memset(local_group_sizes, 0, node_ptr->world * sizeof(size_t)); //always clear memory before use
+  size_t local_group_sizes[world];
+  memset(local_group_sizes, 0, world * sizeof(size_t)); //always clear memory before use
 
-  int recvcounts[node_ptr->world], displs[node_ptr->world];
-  memset(recvcounts, 0, node_ptr->world * sizeof(int));
-  memset(displs, 0, node_ptr->world * sizeof(int));
+  int recvcounts[world], displs[world];
+  memset(recvcounts, 0, world * sizeof(int));
+  memset(displs, 0, world * sizeof(int));
 
   displs[0] = 0;
-  local_group_sizes[node_ptr->rank] = key_groups->size() * 3;
+  local_group_sizes[rank] = key_groups->size() * 3;
 
-  size_t recv[node_ptr->world]; // type should be same as local_group_sizes
-  MPI_Allreduce(&local_group_sizes, &recv, node_ptr->world, MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
+  size_t recv[world]; // type should be same as local_group_sizes
+  MPI_Barrier(MPI_COMM_WORLD);
+  MPI_Allreduce(&local_group_sizes, &recv, world, MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
 
   std::vector<size_t> _g_groups; // keep key, row counts on each process
   size_t _global_group_size;     // apply to group_by
 
   _global_group_size = recv[0];
   recvcounts[0] = recv[0];
-  for (i = 1; i < node_ptr->world; i++) {
+  for (i = 1; i < world; i++) {
     displs[i] = displs[i - 1] + recv[i - 1];
     _global_group_size += recv[i];
     recvcounts[i] = (int)recv[i];
@@ -201,7 +204,7 @@ void mtable::group(const Field& f) {
       key_dist->at(key).emplace_back(pair);
     }
   }
-  //LOG(INFO) << "group by costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
+  //LOG(INFO) << "group by costs " << MPI_Wtime() - start << " on " << rank;
 }
 
 /**
@@ -238,25 +241,6 @@ void mtable::placement_sort(const Field& f) {
     key_groups->at(key).emplace_back(i);
   }
 
-  /*
-  auto reduce_schema_ptr = std::make_shared<TableSchema>();
-  for(auto field : schema_ptr->fields) {
-    if(max_unit_size.find(field) != max_unit_size.end()) {
-      if(field.type == RowType::LIST) {
-        field.max_list_unit_size = max_unit_size.at(field);
-      }
-      if(field.type == RowType::MAP) {
-        field.max_map_key_unit_size = max_unit_size.at(field);
-        field.max_map_value_unit_size = max_unit_size.at(field);
-      }
-    }
-    reduce_schema_ptr->fields.emplace_back(field);
-  }
-  reduce_schema_ptr->updateRowSize();
-  SchemaUtils::validSchema(*reduce_schema_ptr.get());
-
-  LOG(INFO) << "row size reduce to " << reduce_schema_ptr->rowSize() << " from "<< schema_ptr->rowSize();
-*/
   mtable sender(node_ptr, schema_ptr, row_count * schema_ptr->rowSize());
   int index = 0;
   for (int i = 0; i < node_ptr->world; i++) {
@@ -412,6 +396,7 @@ std::shared_ptr<node> mtable::getNodePtr() {
  */
 std::shared_ptr<mtable> mtable::compactTable() {
   std::vector<size_t> max_units;
+  auto compact_schema_ptr = std::make_shared<TableSchema>(*schema_ptr.get());
   /**
    * find list and map type max_unit per mtable rows
    */
@@ -439,22 +424,23 @@ std::shared_ptr<mtable> mtable::compactTable() {
       if (field.list_type != RowType::VOID) {
         std::vector<size_t> list_lens = r->readLen(field, offset);
         max_units.at(index) = max_units.at(index) < list_lens.at(0) ? list_lens.at(0) : max_units.at(index);
-        max_units.at(index+1) = max_units.at(index) < list_lens.at(1) ? list_lens.at(1) : max_units.at(index);
-        index+=2;
+        max_units.at(index + 1) = max_units.at(index) < list_lens.at(1) ? list_lens.at(1) : max_units.at(index);
+        index += 2;
       }
       if (field.map_value_type != RowType::VOID) {
         std::vector<size_t> map_lens = r->readLen(field, offset);
         max_units.at(index) = max_units.at(index) < map_lens.at(0) ? map_lens.at(0) : max_units.at(index);
-        max_units.at(index+1) = max_units.at(index) < map_lens.at(1) ? map_lens.at(1) : max_units.at(index);
-        max_units.at(index+2) = max_units.at(index) < map_lens.at(2) ? map_lens.at(2) : max_units.at(index);
-        index+=3;
+        max_units.at(index + 1) = max_units.at(index) < map_lens.at(1) ? map_lens.at(1) : max_units.at(index);
+        max_units.at(index + 2) = max_units.at(index) < map_lens.at(2) ? map_lens.at(2) : max_units.at(index);
+        index += 3;
       }
     }
   }
   size_t global_units[max_units.size()];
-  memcpy(global_units, &max_units[0], sizeof(size_t)*max_units.size());
-  MPI_Allreduce(&max_units[0], &global_units, max_units.size(), MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
-  auto compact_schema_ptr = std::make_shared<TableSchema>(*schema_ptr.get());
+  memcpy(global_units, &max_units[0], sizeof(size_t) * max_units.size());
+  const int max_size = max_units.size();
+  MPI_Barrier(MPI_COMM_WORLD);
+  MPI_Allreduce(&max_units[0], &global_units, max_size, MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
   int index = 0;
   for (auto& field : compact_schema_ptr->fields) {
     if (field.list_type != RowType::VOID) {
@@ -468,15 +454,17 @@ std::shared_ptr<mtable> mtable::compactTable() {
     }
   }
   compact_schema_ptr->updateRowSize();
-  auto compact_table_ptr = std::make_shared<mtable>(node_ptr, compact_schema_ptr, compact_schema_ptr->rowSize()*row_count);
-  for(size_t index = 0 ; index < row_size(); index++) {
+  auto compact_table_ptr = std::make_shared<mtable>(node_ptr, compact_schema_ptr, compact_schema_ptr->rowSize() * row_count);
+  for (size_t index = 0; index < row_size(); index++) {
     auto r = readRow(index);
     auto rcompact = RowBuffer(compact_schema_ptr);
-    for(auto f : schema_ptr->fields) {
+    memcpy(compact_table_ptr->payload_ptr(), r->payload_ptr(), compact_schema_ptr->rowPrimitiveSize());
+    for (auto f : schema_ptr->fields) {
+      if (f.type != RowType::LIST && f.type != RowType::MAP) continue;
       Value v;
       r->read(f, v);
-      for(auto f1 : compact_schema_ptr->fields) {
-        if(f1.operator==(f)) {
+      for (auto f1 : compact_schema_ptr->fields) {
+        if (f1.operator==(f)) {
           rcompact.write(f1, v);
         }
       }
@@ -484,7 +472,7 @@ std::shared_ptr<mtable> mtable::compactTable() {
     compact_table_ptr->appendRow(rcompact);
   }
   CHECK_LE(compact_schema_ptr->rowSize(), schema_ptr->rowSize());
-  //LOG(INFO) << compact_schema_ptr->rowSize() << "v.s" << schema_ptr->rowSize();
+  LOG(INFO) << compact_schema_ptr->rowSize() << "v.s" << schema_ptr->rowSize();
 
   payload.clear();
   payload.shrink_to_fit();

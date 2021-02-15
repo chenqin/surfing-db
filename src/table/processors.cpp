@@ -50,11 +50,6 @@ void processors::partition(mtable& in, Field& f) {
   auto node_ptr = in.getNodePtr();
   auto row_count = in.row_size();
   MPI_Aint recv_buffer_rows = 0;
-  in.group(f);
-
-  //in.find_max_unit_size(); // find max_unit_size for list and map fields
-
-  in.placement_sort(f); // experiment shows batching still make sense with 10% overhead
 
   size_t expected_rows[node_ptr->world], expected_start_index[node_ptr->world];
   memset(expected_rows, 0, node_ptr->world * sizeof(size_t));
@@ -83,9 +78,9 @@ void processors::partition(mtable& in, Field& f) {
   }
 
   in.reserve_rma_memory(recv_buffer_rows);
-
   MPI_Win_fence(0, in.win);
-  //#pragma omp parallel for shared(schedule) // exp with 3 hosts shows threading introduce overhead instead of helping
+  const MPI_Datatype type = *(schema_ptr->schemaMPIType());
+  #pragma omp parallel for // exp with 3 hosts shows threading introduce overhead instead of helping
   for (int dest = 0; dest < node_ptr->world; dest++) {
     int ring_dest = (dest + node_ptr->rank) % node_ptr->world;
     uint8_t* rangePtr = in.range_ptr(ring_dest);
@@ -98,7 +93,7 @@ void processors::partition(mtable& in, Field& f) {
       count = row_count - in.placement_index->at(ring_dest);
     }
     MPI_Win_lock(MPI_LOCK_SHARED, ring_dest, 0, in.win);
-    MPI_Put(rangePtr, count, *(schema_ptr->schemaMPIType()), ring_dest, index, count, *(schema_ptr->schemaMPIType()), in.win);
+    MPI_Put(rangePtr, count, type, ring_dest, index, count, type, in.win);
     MPI_Win_unlock(ring_dest, in.win);
   }
   MPI_Win_fence(0, in.win);

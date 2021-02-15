@@ -53,8 +53,8 @@ int main(int argc, char** argv) {
   SchemaUtils::initField(field4, "d", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
   SchemaUtils::initField(field5, "e", RowType::STRING, MAX_STR_LEN);
 
-  SchemaUtils::initListField(field6, "l", RowType::DOUBLE, 40, sizeof(DOUBLE_TYPE));
-  SchemaUtils::initMapField(field7, "m", RowType::STRING, RowType::LONG, 30, MAX_STR_LEN, sizeof(long));
+  SchemaUtils::initListField(field6, "l", RowType::DOUBLE, 240, sizeof(DOUBLE_TYPE));
+  SchemaUtils::initMapField(field7, "m", RowType::STRING, RowType::LONG, 100, MAX_STR_LEN, sizeof(long));
 
   r.fields.push_back(field1);
   r.fields.push_back(field2);
@@ -142,36 +142,35 @@ int main(int argc, char** argv) {
   size_t total = 0;
   auto start = MPI_Wtime();
   // allow small batch runs on different omp thread, share nothing to avoid race condition
-  while(true) {
-#pragma omp parallel num_threads(CONCURRENCY) shared(total)
-    {
-      /*
+  while (true) {
+    /*
        * micro batch generation
        */
-      mtable t1(node, schema_ptr, rows * schema_ptr->rowSize());
-      for (int i = 0; i < 1; i++) {
-        v.p_val.int_val = i + node->rank;
-        b.write(field1, v);
-        t1.appendRow(b);
-      }
-#pragma omp critical(partition)
-      {
-        auto t11 = t1.compactTable();
-        /**
-       * micro batch processing
-       */
-        processors::partition(*t11.get(), field1);
-        t11->verify(field1);
-        mtable t2(node, t11->getSchema(), 1);
-        processors::map(*t11.get(), t2, transform);
-        t2.verify(field1);
-      }
+    auto t1 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
+    for (int i = 0; i < 1; i++) {
+      Value v;
+      v.p_val.int_val = i + node->rank;
+      b.write(field1, v);
+      t1->appendRow(b);
+    }
 
-#pragma omp atomic
-      total += rows*node->world;
-      if(node->rank == 0) {
-        LOG(INFO) << "Throughput " << total / (MPI_Wtime() - start) << " on thread " << omp_get_thread_num();
-      }
+    auto start2 = MPI_Wtime();
+    auto t11 = t1->compactTable();
+    LOG(INFO) << "compact cost " << MPI_Wtime() - start2;
+    t11->group(field1);
+    t11->placement_sort(field1);
+
+    auto start1 = MPI_Wtime();
+    processors::partition(*t11.get(), field1);
+    LOG(INFO) << "partition cost " << MPI_Wtime() - start1;
+    t11->verify(field1);
+    mtable t2(node, t11->getSchema(), 1);
+    processors::map(*t11.get(), t2, transform);
+    t2.verify(field1);
+
+    total += rows * node->world;
+    if (node->rank == 0) {
+      LOG(INFO) << "Throughput " << total / (MPI_Wtime() - start) << " on thread " << omp_get_thread_num();
     }
   }
 
