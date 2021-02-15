@@ -380,6 +380,7 @@ std::vector<size_t> RowBuffer::readLen(const Field& f, size_t offset) {
     l.type = RowType::LONG;
     size_t len;
     _pread(l, &len, _offset);
+    _offset += sizeof(int64_t);
     lens.push_back(len);
 
     Field keyField, valueField;

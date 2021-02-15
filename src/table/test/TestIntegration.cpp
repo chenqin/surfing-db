@@ -114,13 +114,13 @@ TEST(TableTest, testRowBuffer) {
   EXPECT_EQ(v77.map_value.size(), 1);
 
   //test point to temp table
-  TempTable t(tpr);
-  t.ingest(s);
+  mtable t(nullptr, tpr, MEM_PAGE_SIZE);
+  t.appendRow(s);
   s = RowBuffer(tpr, t.payload_ptr());
   s.read(field1, v11);
   EXPECT_EQ(v11.p_val.int_val, 3);
 
-  auto sptr = t.read(0);
+  auto sptr = t.readRow(0);
   sptr->read(field1, v11);
   sptr->read(field2, v22);
   sptr->read(field3, v33);
@@ -133,8 +133,8 @@ TEST(TableTest, testRowBuffer) {
   EXPECT_EQ(v66.list_value.size(), 1);
   EXPECT_EQ(v77.map_value.size(), 1);
 
-  t.ingest(s);
-  sptr = t.read(1);
+  t.appendRow(s);
+  sptr = t.readRow(1);
   sptr->read(field1, v77);
   sptr->read(field2, v22);
   sptr->read(field3, v33);
@@ -148,15 +148,16 @@ TEST(TableTest, testRowBuffer) {
   EXPECT_EQ(v33.map_value.size(), 1);
 
   for(int i = 0 ; i < 10000; i++) {
-    t.ingest(s);
+    t.appendRow(s);
   }
 
   //t.flush("/tmp/test1.bin");
   //t.load("/tmp/test1.bin");
-  sptr = t.read(1);
+  sptr = t.readRow(1);
   Value v;
   sptr->read(field7, v);
   EXPECT_EQ(v.map_value.size(), 1);
+  t.find_max_unit_size();
 }
 
 TEST(TableTest, TestXGBOperator) {

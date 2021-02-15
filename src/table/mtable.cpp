@@ -469,9 +469,6 @@ void mtable::find_max_unit_size() {
   }
   size_t global_units[max_units.size()];
   MPI_Allreduce(&max_units[0], &global_units, max_units.size(), MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
-  for(size_t i = 0 ; i < max_units.size(); i++) {
-    LOG(INFO) << global_units[i];
-  }
 }
 } // namespace table
 } // namespace surfingdb
