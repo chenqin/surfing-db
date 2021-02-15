@@ -157,7 +157,7 @@ TEST(TableTest, testRowBuffer) {
   Value v;
   sptr->read(field7, v);
   EXPECT_EQ(v.map_value.size(), 1);
-  t.find_max_unit_size();
+  t.compactTable();
 }
 
 TEST(TableTest, TestXGBOperator) {

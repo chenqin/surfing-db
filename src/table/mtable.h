@@ -38,7 +38,7 @@ public:
   mtable(const std::shared_ptr<node>, const std::shared_ptr<TableSchema>, size_t capacity);
   ~mtable();
   void group(const Field& f);
-  void find_max_unit_size();
+  void compactTable();
   void placement_sort(const Field& f);
   void flush_rma_memory(size_t rows);
   void copy_rma_memory(size_t rows); //deprecated

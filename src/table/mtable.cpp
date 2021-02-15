@@ -120,14 +120,7 @@ void mtable::appendCompactRow(RowBuffer& row, const std::shared_ptr<TableSchema>
   memcpy(&payload[offset], row.payload_ptr(), shrink_ptr->rowPrimitiveSize());
   offset += shrink_ptr->rowPrimitiveSize();
   size_t collective_offset = shrink_ptr->rowPrimitiveSize();
-  //TODO(chenqin): copy each collective fields to payload
-  for (auto f : shrink_ptr->fields) {
-    if (f.type == RowType::LIST || f.type == RowType::MAP) {
-      memcpy(&payload[offset], row.payload_ptr() + collective_offset, SchemaUtils::getFieldSize(f));
-      collective_offset += SchemaUtils::getFieldSize(f);
-      offset += SchemaUtils::getFieldSize(f);
-    }
-  }
+
 }
 
 void mtable::verify(const Field& field) {
@@ -425,14 +418,15 @@ std::shared_ptr<node> mtable::getNodePtr() {
   return this->node_ptr;
 }
 /**
- * buggy
+ * find compact schema
  */
-void mtable::find_max_unit_size() {
+void mtable::compactTable() {
   std::vector<size_t> max_units;
   /**
    * find list and map type max_unit per mtable rows
    */
   for (auto field : schema_ptr->fields) {
+
     if (field.list_type != RowType::VOID) {
       max_units.push_back(0); //max unit
       max_units.push_back(0); // max list unit
@@ -469,6 +463,23 @@ void mtable::find_max_unit_size() {
   }
   size_t global_units[max_units.size()];
   MPI_Allreduce(&max_units[0], &global_units, max_units.size(), MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
+  auto compact_schema_ptr = std::make_shared<TableSchema>(*schema_ptr.get());
+  int index = 0;
+  for (auto& field : compact_schema_ptr->fields) {
+    if (field.list_type != RowType::VOID) {
+      field.max_unit_size = global_units[index++];
+      field.max_list_unit_size = global_units[index++];
+    }
+    if (field.map_value_type != RowType::VOID) {
+      field.max_unit_size = global_units[index++];
+      field.max_map_key_unit_size = global_units[index++];
+      field.max_map_value_unit_size = global_units[index++];
+    }
+  }
+  mtable compact = mtable(node_ptr, compact_schema_ptr, compact_schema_ptr->rowSize() * row_size());
+  for(size_t i = 0 ; i < row_size(); i++) {
+    //compact.appendCompactRow(*this->readRow(i).get(), compact_schema_ptr);
+  }
 }
 } // namespace table
 } // namespace surfingdb
