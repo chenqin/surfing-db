@@ -109,8 +109,8 @@ public:
   }
 
   void ingest(RowBuffer& row) {
-    CHECK_EQ(row.schema_sig(), schema_ptr->schema_sig()); //check schema signature
-    CHECK_EQ(schema_ptr->size(), row.row_size());             //check row size
+    CHECK_EQ(row.schema_sig(), schema_ptr->signature()); //check schema signature
+    CHECK_EQ(schema_ptr->rowSize(), row.row_size());             //check row size
     CHECK_LT(row.row_size() + offset, payload.max_size());    // check capacity of temp table
     memcpy(&payload[offset], row.payload_ptr(), row.row_size());
     offset += row.row_size();
@@ -138,7 +138,7 @@ public:
    * @param request
    */
   void recv_per_rank(int source, TempTable& out) {
-    CHECK(out.schema_ptr->schema_sig() == this->schema_ptr->schema_sig());
+    CHECK(out.schema_ptr->signature() == this->schema_ptr->signature());
     size_t rows = 0;
     MPI_Status status;
     MPI_Request request;
@@ -154,10 +154,10 @@ public:
       }
     }
     TempTable tempTable(node_ptr, schema_ptr);
-    tempTable.payload.resize(schema_ptr->size() * rows);
+    tempTable.payload.resize(schema_ptr->rowSize() * rows);
     tempTable.row_count += rows;
 
-    CHECK_EQ(MPI_Irecv(tempTable.payload_ptr(), rows, *(schema_ptr->getType()), source, source * 100 + node_ptr->rank, MPI_COMM_WORLD, &request), MPI_SUCCESS);
+    CHECK_EQ(MPI_Irecv(tempTable.payload_ptr(), rows, *(schema_ptr->schemaMPIType()), source, source * 100 + node_ptr->rank, MPI_COMM_WORLD, &request), MPI_SUCCESS);
     MPI_Wait(&request, &status);
     for (size_t s = 0; s < tempTable.count(); s++) {
       Value v;
@@ -175,7 +175,7 @@ public:
   inline std::unique_ptr<RowBuffer> read(int index) {
     CHECK_LT(index, row_count);
     CHECK_NOTNULL(schema_ptr);
-    return std::make_unique<RowBuffer>(schema_ptr, &payload[schema_ptr->size() * index]);
+    return std::make_unique<RowBuffer>(schema_ptr, &payload[schema_ptr->rowSize() * index]);
   }
 
   size_t count() {

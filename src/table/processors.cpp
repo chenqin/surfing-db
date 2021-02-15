@@ -15,7 +15,7 @@ void processors::map(mtable& in, mtable& out, std::function<void(const RowBuffer
     auto in_row = in.readRow(i);
     RowBuffer out_row(out.getSchema());
     transform(*in_row.get(), out_row);
-    CHECK_EQ(out_row.schema_sig(), out.getSchema()->schema_sig());
+    CHECK_EQ(out_row.schema_sig(), out.getSchema()->signature());
 #pragma omp critical(append)
     out.appendRow(out_row);
   }
@@ -99,7 +99,7 @@ void processors::partition(mtable& in, Field& f) {
         count = row_count - in.placement_index->at(ring_dest);
       }
       MPI_Win_lock(MPI_LOCK_SHARED, ring_dest, 0, in.win);
-      MPI_Put(rangePtr, count, *(schema_ptr->getType()), ring_dest, index, count, *(schema_ptr->getType()), in.win);
+      MPI_Put(rangePtr, count, *(schema_ptr->schemaMPIType()), ring_dest, index, count, *(schema_ptr->schemaMPIType()), in.win);
       MPI_Win_unlock(ring_dest, in.win);
     }
     MPI_Win_fence(0, in.win);

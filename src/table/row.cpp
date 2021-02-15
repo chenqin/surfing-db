@@ -23,9 +23,9 @@ RowBuffer::RowBuffer(std::shared_ptr<meta::TableSchema> schemaptr) {
   _header.max_unit_size = meta::SchemaUtils::getFieldSize(_header);
   CHECK_EQ(sizeof(uint64_t), meta::SchemaUtils::getFieldSize(_header));
   this->schema_ptr = schemaptr;
-  _schema_sig = schemaptr->schema_sig();
-  CHECK_GT(schemaptr->size(), 0);
-  _vpayload.resize(schemaptr->size());
+  _schema_sig = schemaptr->signature();
+  CHECK_GT(schemaptr->rowSize(), 0);
+  _vpayload.resize(schemaptr->rowSize());
   _payload = (uint8_t*)&_vpayload[0];
   sign(_payload, _schema_sig);
 }
@@ -35,8 +35,8 @@ RowBuffer::RowBuffer(std::shared_ptr<meta::TableSchema> schemaptr, uint8_t* payl
   _header.max_unit_size = meta::SchemaUtils::getFieldSize(_header);
   CHECK_EQ(sizeof(uint64_t), meta::SchemaUtils::getFieldSize(_header));
   this->schema_ptr = schemaptr;
-  _schema_sig = schemaptr->schema_sig();
-  CHECK_GT(schemaptr->size(), 0);
+  _schema_sig = schemaptr->signature();
+  CHECK_GT(schemaptr->rowSize(), 0);
   CHECK_NE(payloadptr, _payload);
   CHECK_EQ(_schema_sig, readSig(payloadptr));
   _vpayload.clear();
@@ -51,7 +51,7 @@ RowBuffer::~RowBuffer() {
 }
 
 size_t RowBuffer::row_size() {
-  return this->schema_ptr->size();
+  return this->schema_ptr->rowSize();
 }
 
 uint8_t* RowBuffer::payload_ptr() {

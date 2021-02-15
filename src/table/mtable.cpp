@@ -41,7 +41,7 @@ void mtable::flush_rma_memory(size_t rows) {
   key_groups->clear();
   placement_index->clear();
   std::string filepath = FLUSH_DIR + std::to_string(node_ptr->rank) + "-" + std::to_string(omp_get_thread_num())+ ".flush_rma_memory";
-  this->flush(filepath, schedule, rows, rows * schema_ptr->size());
+  this->flush(filepath, schedule, rows, rows * schema_ptr->rowSize());
   MPI_Free_mem(schedule);
   MPI_Win_free(&win);
   schedule_size = -1;
@@ -53,29 +53,29 @@ void mtable::copy_rma_memory(size_t rows) {
   key_dist->clear();
   key_groups->clear();
   placement_index->clear();
-  memcpy(payload_ptr(), schedule, schema_ptr->size() * rows);
+  memcpy(payload_ptr(), schedule, schema_ptr->rowSize() * rows);
   MPI_Free_mem(schedule);
   MPI_Win_free(&win);
   schedule_size = -1;
-  offset = rows * schema_ptr->size();
+  offset = rows * schema_ptr->rowSize();
   row_count = rows;
 }
 
 void mtable::reserve_rma_memory(size_t rows) {
-  if (schedule_size != -1 && schedule_size < rows * schema_ptr->size()) {
+  if (schedule_size != -1 && schedule_size < rows * schema_ptr->rowSize()) {
     MPI_Free_mem(schedule);
     MPI_Win_free(&win);
   }
-  schedule_size = rows * schema_ptr->size();
+  schedule_size = rows * schema_ptr->rowSize();
   MPI_Alloc_mem(schedule_size, MPI_INFO_NULL, &schedule); // allocate memory in temptable directly
-  MPI_Win_create(schedule, schedule_size, schema_ptr->size(), MPI_INFO_NULL, MPI_COMM_WORLD, &win);
+  MPI_Win_create(schedule, schedule_size, schema_ptr->rowSize(), MPI_INFO_NULL, MPI_COMM_WORLD, &win);
 }
 
 void mtable::reserveRow(size_t rows) {
-  CHECK_GT(schema_ptr->size(), 0);
+  CHECK_GT(schema_ptr->rowSize(), 0);
   CHECK_GE(rows, 0);
-  if (this->payload.capacity() > rows * schema_ptr->size()) return;
-  payload.resize(rows * schema_ptr->size());
+  if (this->payload.capacity() > rows * schema_ptr->rowSize()) return;
+  payload.resize(rows * schema_ptr->rowSize());
 }
 
 /**
@@ -86,7 +86,7 @@ void mtable::reserveRow(size_t rows) {
 std::unique_ptr<RowBuffer> mtable::readRow(int index) {
   CHECK_LT(index, row_count);
   CHECK_NOTNULL(schema_ptr);
-  return std::make_unique<RowBuffer>(schema_ptr, &payload[schema_ptr->size() * index]);
+  return std::make_unique<RowBuffer>(schema_ptr, &payload[schema_ptr->rowSize() * index]);
 }
 
 /**
@@ -104,8 +104,8 @@ uint8_t* mtable::payload_ptr() {
 }
 
 void mtable::appendRow(RowBuffer& row) {
-  CHECK_EQ(row.schema_sig(), schema_ptr->schema_sig());  //check schema signature
-  CHECK_EQ(schema_ptr->size(), row.row_size());          //check row size
+  CHECK_EQ(row.schema_sig(), schema_ptr->signature());  //check schema signature
+  CHECK_EQ(schema_ptr->rowSize(), row.row_size());          //check row size
   CHECK_LE(row.row_size() + offset, payload.capacity()); // check capacity of temp table
   memcpy(&payload[offset], row.payload_ptr(), row.row_size());
   offset += row.row_size();
@@ -126,7 +126,7 @@ void mtable::verify(const Field& field) {
 
 void mtable::group(const Field& f) {
   auto start = MPI_Wtime();
-  CHECK(schema_ptr->exist(f));
+  CHECK(schema_ptr->containField(f));
   key_groups->clear(); // reset key_groups
   key_dist->clear();   // reset key_dist
 
@@ -215,7 +215,7 @@ uint8_t* mtable::range_ptr(int dest) {
   CHECK(dest < node_ptr->world);
 
   int index = placement_index->at(dest);
-  return &this->payload[index * schema_ptr->size()];
+  return &this->payload[index * schema_ptr->rowSize()];
 }
 
 /**
@@ -238,7 +238,7 @@ void mtable::placement_sort(const Field& f) {
     key_groups->at(key).emplace_back(i);
   }
 
-  mtable sender(node_ptr, schema_ptr, row_count * schema_ptr->size());
+  mtable sender(node_ptr, schema_ptr, row_count * schema_ptr->rowSize());
   int index = 0;
   for (int i = 0; i < node_ptr->world; i++) {
     placement_index->insert({ i, index });
@@ -253,7 +253,7 @@ void mtable::placement_sort(const Field& f) {
       }
     }
   }
-  memcpy(&payload[0], sender.payload_ptr(), row_count * schema_ptr->size());
+  memcpy(&payload[0], sender.payload_ptr(), row_count * schema_ptr->rowSize());
   //LOG(INFO) << "in place sort costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
 }
 
@@ -267,7 +267,7 @@ void mtable::flush(const std::string& path, uint8_t* ptr, size_t rows, size_t le
   int fd = open(path.c_str(), O_CREAT | O_RDWR, 0644);
   CHECK_NE(fd, -1);
 
-  size_t sig = schema_ptr->schema_sig();
+  size_t sig = schema_ptr->signature();
   CHECK_GE(::write(fd, &sig, sizeof(size_t)), 0);
   CHECK_GE(::write(fd, reinterpret_cast<const void*>(&len), sizeof(size_t)), 0);
   CHECK_GE(::write(fd, reinterpret_cast<const void*>(&rows), sizeof(size_t)), 0);
@@ -298,7 +298,7 @@ void mtable::load(const std::string& path) {
 
   size_t sig = 0;
   CHECK_GE(::read(fd, &sig, sizeof(size_t)), 0);
-  CHECK_EQ(sig, schema_ptr->schema_sig());
+  CHECK_EQ(sig, schema_ptr->signature());
   CHECK_GE(::read(fd, &offset, sizeof(size_t)), 0);
   CHECK_GE(::read(fd, &row_count, sizeof(size_t)), 0);
   CHECK_GE(row_count, 0);
@@ -307,7 +307,7 @@ void mtable::load(const std::string& path) {
     payload.clear();
     payload.shrink_to_fit();
   } else {
-    CHECK_EQ(offset / row_count, schema_ptr->size());
+    CHECK_EQ(offset / row_count, schema_ptr->rowSize());
     this->reserveRow(row_count);
   }
 

@@ -19,7 +19,7 @@ struct Field {
     5: optional i64 max_list_unit_size // max size of each element in list
     6: optional RowType map_key_type = RowType.VOID //map key type
     7: optional RowType map_value_type = RowType.VOID //map value type
-    8: optional i64 max_map_key_unit_size //max size of each element in map key
+    8: optional i64 max_map_key_unit_size //max rowSize of each element in map key
     9: optional i64 max_map_value_unit_size //max row_size map each element in map value
 }
 

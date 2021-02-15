@@ -19,10 +19,12 @@ add_library(${TABLE} STATIC
         ${SURFINGDB_SRC}/table/processors.cpp)
 
 target_link_libraries(${TABLE}
-        PUBLIC ${THRIFT_LIBRARY}
         PUBLIC Threads::Threads
+        PUBLIC MPI::MPI_CXX
         PUBLIC OpenMP::OpenMP_CXX
-        PUBLIC ${MPI_CXX_INCLUDE_PATH}
+        PUBLIC ${OPENSSL_LIBRARY}
+        PUBLIC ${CRYPTO_LIBRARY}
+        PUBLIC ${THRIFT_LIBRARY}
         PUBLIC ${GLOG_LIBRARY}
         PUBLIC ${GFLAGS_LIBRARY}
         PUBLIC ${JSON_LIBRARY}
@@ -35,11 +37,6 @@ add_executable(TableTest
         ${SURFINGDB_SRC}/table/test/TestIntegration.cpp)
 
 target_link_libraries(TableTest
-        PRIVATE ${THRIFT_LIBRARY}
-        #PRIVATE ${JEMALLOC_LIBRARIES}
-        PRIVATE Threads::Threads
-        PRIVATE OpenMP::OpenMP_CXX
-        PRIVATE MPI::MPI_CXX
         PRIVATE ${META}
         PRIVATE ${TABLE}
         PRIVATE ${JSON_LIBRARY}

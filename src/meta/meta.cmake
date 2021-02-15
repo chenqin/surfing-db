@@ -9,14 +9,14 @@ set(META surfmeta)
 # build nebula.ingest library
 add_library(${META} STATIC
         ${SURFINGDB_SRC}/meta/gen-cpp
-        ${SURFINGDB_SRC}/meta/node.cpp)
+        ${SURFINGDB_SRC}/meta/node.cpp
+        ${SURFINGDB_SRC}/meta/schema.cpp)
 
 target_link_libraries(${META}
         PUBLIC ${GLOG_LIBRARY}
         PUBLIC ${GFLAGS_LIBRARY}
         PUBLIC ${JSON_LIBRARY}
-        PUBLIC ${ARROW_LIBRARY}
-        PUBLIC ${PARQUET_LIBRARY})
+        PUBLIC ${ARROW_LIBRARY})
 
 # discover all gtests in this module
 include(GoogleTest)

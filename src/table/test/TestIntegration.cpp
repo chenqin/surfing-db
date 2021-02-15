@@ -97,9 +97,9 @@ TEST(TableTest, testRowBuffer) {
   EXPECT_EQ(v77.map_value.size(), 1);
 
   // test copy to memory and point to memory by ptr
-  uint8_t buf[tpr->size()];
-  memset(buf, 0, tpr->size());
-  memcpy(buf, b.payload_ptr(), tpr->size());
+  uint8_t buf[tpr->rowSize()];
+  memset(buf, 0, tpr->rowSize());
+  memcpy(buf, b.payload_ptr(), tpr->rowSize());
 
   s = RowBuffer(tpr, &buf[0]);
   s.read(field1, v11);

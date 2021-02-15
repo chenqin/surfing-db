@@ -203,7 +203,9 @@ include(ext/Gflatbuffers_Ext.cmake)
 # include rapid JSON
 include(ext/Json_Ext.cmake)
 
-#include(ext/Arrow_Ext.cmake)
+include(ext/OPENSSL_Ext.cmake)
+
+include(ext/Arrow_Ext.cmake)
 
 include(ext/Sketches_Ext.cmake)
 
@@ -229,8 +231,6 @@ include(src/table/table.cmake)
 add_executable(MainTest src/main.cpp)
 
 target_link_libraries(MainTest
-        PRIVATE MPI::MPI_CXX
-        PRIVATE OpenMP::OpenMP_CXX
         PRIVATE ${META}
         PRIVATE ${TABLE})
 

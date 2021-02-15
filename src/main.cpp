@@ -102,7 +102,7 @@ int main(int argc, char** argv) {
    * ingestion
    */
   TempTable tsed(node, schema_ptr);
-  mtable msed(node, schema_ptr, 3000 * schema_ptr->size());
+  mtable msed(node, schema_ptr, 3000 * schema_ptr->rowSize());
   /**
   * ingestion
   */
@@ -134,7 +134,7 @@ int main(int argc, char** argv) {
   parameters.verbosity = true;
   parameters.eval_metric = "error";
   processors::xgb(msed, fields, field4, parameters);
-  
+
   Value v;
   v.p_val.int_val = 1;
   b.write(field1, v);
@@ -148,7 +148,7 @@ int main(int argc, char** argv) {
       /*
        * micro batch generation
        */
-      mtable t1(node, schema_ptr, rows * schema_ptr->size());
+      mtable t1(node, schema_ptr, rows * schema_ptr->rowSize());
       for (int i = 0; i < 1; i++) {
         v.p_val.int_val = i + node->rank;
         b.write(field1, v);
