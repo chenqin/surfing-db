@@ -113,6 +113,23 @@ void mtable::appendRow(RowBuffer& row) {
   CHECK_LE(offset, payload.capacity());
 }
 
+void mtable::appendCompactRow(RowBuffer& row, const std::shared_ptr<TableSchema> shrink_ptr) {
+  CHECK_EQ(row.schema_sig(), schema_ptr->signature());  //check schema signature
+  CHECK_EQ(schema_ptr->rowSize(), row.row_size());          //check row size
+  CHECK_LE(shrink_ptr->rowSize(), row.row_size());
+  memcpy(&payload[offset], row.payload_ptr(), shrink_ptr->rowPrimitiveSize());
+  offset += shrink_ptr->rowPrimitiveSize();
+  size_t collective_offset = shrink_ptr->rowPrimitiveSize();
+  //TODO(chenqin): copy each collective fields to payload
+  for(auto f : shrink_ptr->fields) {
+    if(f.type == RowType::LIST || f.type == RowType::MAP) {
+      memcpy(&payload[offset], row.payload_ptr() + collective_offset, SchemaUtils::getFieldSize(f));
+      collective_offset+= SchemaUtils::getFieldSize(f);
+      offset += SchemaUtils::getFieldSize(f);
+    }
+  }
+}
+
 void mtable::verify(const Field& field) {
   //LOG(INFO) << "verify " << row_count << " rows";
   for (size_t i = 0; i < row_count; i++) {
@@ -253,6 +270,8 @@ void mtable::placement_sort(const Field& f) {
     reduce_schema_ptr->fields.emplace_back(field);
   }
   reduce_schema_ptr->updateRowSize();
+  SchemaUtils::validSchema(*reduce_schema_ptr.get());
+
   LOG(INFO) << "row size reduce to " << reduce_schema_ptr->rowSize() << " from "<< schema_ptr->rowSize();
 
   mtable sender(node_ptr, schema_ptr, row_count * schema_ptr->rowSize());

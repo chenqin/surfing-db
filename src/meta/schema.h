@@ -152,7 +152,8 @@ public:
 
 class TableSchema : public RowSchema {
 private:
-  int _size;          // fixed size of each row
+  size_t _primitive_size; // fixed size of primitive fields
+  size_t _size;          // fixed size of each row
   size_t _schema_sig; //schema fields hash
   bool _type_set;
   MPI_Datatype _row_type; //type of entire row
@@ -164,9 +165,15 @@ public:
   std::shared_ptr<std::unordered_map<Field, uint64_t, FieldHasher>> _max_unit;
   std::shared_ptr<std::unordered_map<Field, MPI_Datatype, FieldHasher>> _field_types;
 
-  int rowSize() {
+  size_t rowSize() {
     CHECK_GT(_size, 0);
     return _size;
+  }
+
+  size_t rowPrimitiveSize() {
+    CHECK_GT(_primitive_size, 0);
+    CHECK_LE(_primitive_size, _size);
+    return _primitive_size;
   }
 
   size_t signature() {
@@ -180,6 +187,7 @@ public:
     _field_types = std::make_shared<std::unordered_map<Field, MPI_Datatype, FieldHasher>>();
     _size = sizeof(size_t); // store _schema_sig
     for (size_t i = 0; i < fields.size(); i++) {
+      LOG(INFO) << fields.at(i).name;
       auto f = fields.at(i);
       _offsets->emplace(f, _size);
       _max_unit->emplace(f, f.max_unit_size);

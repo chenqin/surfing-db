@@ -10,6 +10,8 @@ namespace meta {
 void SchemaUtils::validSchema(const RowSchema& rowSchema) {
   CHECK_GT(rowSchema.fields.size(), 0);
   std::set<std::string> name_set;
+  // force memory layout put primitive types before collective types
+  bool enterCollectiveFields = false;
   for (auto& field : rowSchema.fields) {
     CHECK(name_set.find(field.name) == name_set.end());
 
@@ -18,10 +20,12 @@ void SchemaUtils::validSchema(const RowSchema& rowSchema) {
     if (field.type == RowType::LIST || field.type == RowType::MAP) {
       CHECK(field.list_type != RowType::LIST);
       CHECK(field.list_type != RowType::MAP);
+      enterCollectiveFields = true;
     } else {
       CHECK(field.list_type == RowType::VOID);
       CHECK(field.map_key_type == RowType::VOID);
       CHECK(field.map_value_type == RowType::VOID);
+      CHECK(!enterCollectiveFields);
     }
   }
 }
@@ -106,15 +110,29 @@ void SchemaUtils::initMapField(Field& field, const std::string& name, const RowT
 
 TableSchema::TableSchema(const RowSchema& schema) {
   _type_set = false;
-  this->fields = schema.fields;
   _offsets = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
   _max_unit = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
   _field_types = std::make_shared<std::unordered_map<Field, MPI_Datatype, FieldHasher>>();
   SchemaUtils::validSchema(schema);
   _schema_sig = schema_hasher.operator()(schema);
   _size = sizeof(size_t); // store _schema_sig
+
+  // primitive types
   for (size_t i = 0; i < schema.fields.size(); i++) {
     auto f = schema.fields.at(i);
+    if (f.type == RowType::LIST || f.type == RowType::MAP) continue;
+    this->fields.push_back(f);
+    _offsets->emplace(f, _size);
+    _max_unit->emplace(f, f.max_unit_size);
+    _size += SchemaUtils::getFieldSize(f);
+  }
+  _primitive_size = _size;
+
+  // collective types
+  for (size_t i = 0; i < schema.fields.size(); i++) {
+    auto f = schema.fields.at(i);
+    if (f.type != RowType::LIST && f.type != RowType::MAP) continue;
+    this->fields.push_back(f);
     _offsets->emplace(f, _size);
     _max_unit->emplace(f, f.max_unit_size);
     _size += SchemaUtils::getFieldSize(f);
