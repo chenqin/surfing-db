@@ -4,9 +4,9 @@
 #include "mtable.h"
 #include <sys/uio.h>
 #include <unistd.h>
-#include "table.h"
 #include "arrow/io/file.h"
 #include "parquet/stream_writer.h"
+#include "table.h"
 
 namespace surfingdb {
 namespace table {
@@ -40,7 +40,7 @@ void mtable::flush_rma_memory(size_t rows) {
   key_dist->clear();
   key_groups->clear();
   placement_index->clear();
-  std::string filepath = FLUSH_DIR + std::to_string(node_ptr->rank) + "-" + std::to_string(omp_get_thread_num())+ ".flush_rma_memory";
+  std::string filepath = FLUSH_DIR + std::to_string(node_ptr->rank) + "-" + std::to_string(omp_get_thread_num()) + ".flush_rma_memory";
   this->flush(filepath, schedule, rows, rows * schema_ptr->rowSize());
   MPI_Free_mem(schedule);
   MPI_Win_free(&win);
@@ -104,8 +104,8 @@ uint8_t* mtable::payload_ptr() {
 }
 
 void mtable::appendRow(RowBuffer& row) {
-  CHECK_EQ(row.schema_sig(), schema_ptr->signature());  //check schema signature
-  CHECK_EQ(schema_ptr->rowSize(), row.row_size());          //check row size
+  CHECK_EQ(row.schema_sig(), schema_ptr->signature());   //check schema signature
+  CHECK_EQ(schema_ptr->rowSize(), row.row_size());       //check row size
   CHECK_LE(row.row_size() + offset, payload.capacity()); // check capacity of temp table
   memcpy(&payload[offset], row.payload_ptr(), row.row_size());
   offset += row.row_size();
@@ -114,17 +114,17 @@ void mtable::appendRow(RowBuffer& row) {
 }
 
 void mtable::appendCompactRow(RowBuffer& row, const std::shared_ptr<TableSchema> shrink_ptr) {
-  CHECK_EQ(row.schema_sig(), schema_ptr->signature());  //check schema signature
-  CHECK_EQ(schema_ptr->rowSize(), row.row_size());          //check row size
+  CHECK_EQ(row.schema_sig(), schema_ptr->signature()); //check schema signature
+  CHECK_EQ(schema_ptr->rowSize(), row.row_size());     //check row size
   CHECK_LE(shrink_ptr->rowSize(), row.row_size());
   memcpy(&payload[offset], row.payload_ptr(), shrink_ptr->rowPrimitiveSize());
   offset += shrink_ptr->rowPrimitiveSize();
   size_t collective_offset = shrink_ptr->rowPrimitiveSize();
   //TODO(chenqin): copy each collective fields to payload
-  for(auto f : shrink_ptr->fields) {
-    if(f.type == RowType::LIST || f.type == RowType::MAP) {
+  for (auto f : shrink_ptr->fields) {
+    if (f.type == RowType::LIST || f.type == RowType::MAP) {
       memcpy(&payload[offset], row.payload_ptr() + collective_offset, SchemaUtils::getFieldSize(f));
-      collective_offset+= SchemaUtils::getFieldSize(f);
+      collective_offset += SchemaUtils::getFieldSize(f);
       offset += SchemaUtils::getFieldSize(f);
     }
   }
@@ -255,7 +255,7 @@ void mtable::placement_sort(const Field& f) {
     key_groups->at(key).emplace_back(i);
   }
 
-/*
+  /*
   auto reduce_schema_ptr = std::make_shared<TableSchema>();
   for(auto field : schema_ptr->fields) {
     if(max_unit_size.find(field) != max_unit_size.end()) {
@@ -424,32 +424,53 @@ void mtable::writeField(const Field& field, const float* data) {
 std::shared_ptr<node> mtable::getNodePtr() {
   return this->node_ptr;
 }
-
+/**
+ * buggy
+ */
 void mtable::find_max_unit_size() {
-  max_unit_size.clear();
+  std::vector<size_t> max_units;
   /**
    * find list and map type max_unit per mtable rows
    */
-  for(auto field : schema_ptr->fields) {
-    if(field.list_type != RowType::VOID) {
-      max_unit_size.insert({field, 0});
+  for (auto field : schema_ptr->fields) {
+    if (field.list_type != RowType::VOID) {
+      max_units.push_back(0); //max unit
+      max_units.push_back(0); // max list unit
     }
-    if(field.map_value_type != RowType::VOID) {
-      max_unit_size.insert({field, 0});
+    if (field.map_value_type != RowType::VOID) {
+      max_units.push_back(0); // max unit
+      max_units.push_back(0); // max key unit
+      max_units.push_back(0); // max value unit
     }
   }
-  for(size_t i = 0 ; i < row_count; i++) {
+
+  for (size_t i = 0; i < row_count; i++) {
+    size_t index = 0;
     auto r = this->readRow(i);
-    for(auto& f : max_unit_size) {
-      Value v;
-      size_t max_unit = r->readLen(f.first);
-      f.second = max_unit > f.second ?  max_unit : f.second;
+    for (auto field : schema_ptr->fields) {
+      CHECK_GE(schema_ptr->_offsets->size(), 0);
+      CHECK(schema_ptr->_offsets->find(field) != schema_ptr->_offsets->end());
+      uint64_t offset = schema_ptr->_offsets->at(field);
+
+      if (field.list_type != RowType::VOID) {
+        std::vector<size_t> list_lens = r->readLen(field, offset);
+        max_units.at(index) = max_units.at(index) < list_lens.at(0) ? list_lens.at(0) : max_units.at(index);
+        max_units.at(index+1) = max_units.at(index) < list_lens.at(1) ? list_lens.at(1) : max_units.at(index);
+        index+=2;
+      }
+      if (field.map_value_type != RowType::VOID) {
+        std::vector<size_t> map_lens = r->readLen(field, offset);
+        max_units.at(index) = max_units.at(index) < map_lens.at(0) ? map_lens.at(0) : max_units.at(index);
+        max_units.at(index+1) = max_units.at(index) < map_lens.at(1) ? map_lens.at(1) : max_units.at(index);
+        max_units.at(index+2) = max_units.at(index) < map_lens.at(2) ? map_lens.at(2) : max_units.at(index);
+        index+=3;
+      }
     }
   }
-  for(auto& f : max_unit_size) {
-    size_t max_unit = 0;
-    MPI_Allreduce(&f.second, &max_unit, 1, MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
-    f.second = max_unit;
+  size_t global_units[max_units.size()];
+  MPI_Allreduce(&max_units[0], &global_units, max_units.size(), MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
+  for(size_t i = 0 ; i < max_units.size(); i++) {
+    LOG(INFO) << global_units[i];
   }
 }
 } // namespace table

@@ -318,27 +318,27 @@ size_t RowBuffer::_pread(const Field& f, void* dataptr, const uint64_t& offset) 
   }
   return 0;
 }
-size_t RowBuffer::readLen(const Field& f) {
-  CHECK_GE(schema_ptr->_offsets->size(), 0);
-  CHECK(schema_ptr->_offsets->find(f) != schema_ptr->_offsets->end());
-  uint64_t offset = schema_ptr->_offsets->at(f);
+std::vector<size_t> RowBuffer::readLen(const Field& f, size_t offset) {
+  std::vector<size_t> lens;
   switch (f.type) {
   case surfingdb::meta::schema::RowType::VOID: {
-    return 0;
+    return lens;
   }
   case surfingdb::meta::schema::RowType::INT: {
-
-    return 1;
+    lens.push_back(1);
+    return lens;
   }
   case surfingdb::meta::schema::RowType::BOOL: {
-
-    return 1;
+    lens.push_back(1);
+    return lens;
   }
   case RowType::LONG: {
-    return 1;
+    lens.push_back(1);
+    return lens;
   }
   case RowType::DOUBLE: {
-    return 1;
+    lens.push_back(1);
+    return lens;
   }
   case RowType::STRING: {
     size_t _offset = offset;
@@ -346,7 +346,8 @@ size_t RowBuffer::readLen(const Field& f) {
     l.type = RowType::LONG;
     size_t len;
     _pread(l, &len, _offset);
-    return len;
+    lens.push_back(len);
+    return lens;
   }
   case RowType::LIST: {
     size_t _offset = offset;
@@ -354,7 +355,24 @@ size_t RowBuffer::readLen(const Field& f) {
     l.type = RowType::LONG;
     size_t len;
     _pread(l, &len, _offset);
-    return len;
+    _offset += sizeof(int64_t);
+    lens.push_back(len);
+
+    Field listField;
+    listField.type = f.list_type;
+    listField.max_unit_size = f.max_list_unit_size;
+    size_t list_len = 0;
+
+    for (size_t i = 0; i < len; i++) {
+      Value listVal;
+      std::vector<size_t> l1 = readLen(listField, _offset);
+      if(list_len < l1.at(0) ) {
+        list_len = l1.at(0);
+      }
+      _offset += listField.max_unit_size;
+    }
+    lens.push_back(list_len);
+    return lens;
   }
   case RowType::MAP: {
     size_t _offset = offset;
@@ -362,10 +380,35 @@ size_t RowBuffer::readLen(const Field& f) {
     l.type = RowType::LONG;
     size_t len;
     _pread(l, &len, _offset);
-    return len;
+    lens.push_back(len);
+
+    Field keyField, valueField;
+    keyField.type = f.map_key_type;
+    valueField.type = f.map_value_type;
+    keyField.max_unit_size = f.max_map_key_unit_size;
+    valueField.max_unit_size = f.max_map_value_unit_size;
+    size_t key_len = 0;
+    size_t value_len = 0;
+    for (size_t i = 0; i < len; i++) {
+      Value keyVal, valueVal;
+      read(keyField, keyVal, offset);
+      std::vector<size_t> m1= readLen(keyField, _offset);
+      if(key_len < m1.at(0) ) {
+        key_len = m1.at(0);
+      }
+      _offset += keyField.max_unit_size;
+
+      std::vector<size_t> m2 = readLen(valueField, _offset);
+      if(value_len < m2.at(0) ) {
+        value_len = m2.at(0);
+      }
+      _offset += valueField.max_unit_size;
+    }
+    lens.push_back(key_len);
+    lens.push_back(value_len);
+    return lens;
   }
   }
-  return -1;
 }
 } // namespace table
 } // namespace surfingdb

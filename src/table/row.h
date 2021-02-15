@@ -59,7 +59,7 @@ public:
   * @param v
   */
   size_t read(const Field& f, Value& v);
-  size_t readLen(const Field&f);
+  std::vector<size_t> readLen(const Field&f, size_t offset);
   /**
    * copy value into row buffer
    * @param f
