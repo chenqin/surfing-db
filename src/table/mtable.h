@@ -33,10 +33,12 @@ public:
   std::unique_ptr<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>> key_dist; // key hash and per node counts
   std::unique_ptr<std::map<size_t, std::vector<size_t>, std::less<size_t>>> key_groups;               // local key, offsets map
   std::unique_ptr<std::map<int, size_t>> placement_index;                                             // placement , start index of rows
+  std::unordered_map<Field, size_t, FieldHasher> max_unit_size;
 
   mtable(const std::shared_ptr<node>, const std::shared_ptr<TableSchema>, size_t capacity);
   ~mtable();
   void group(const Field& f);
+  void find_max_unit_size();
   void placement_sort(const Field& f);
   void flush_rma_memory(size_t rows);
   void copy_rma_memory(size_t rows); //deprecated

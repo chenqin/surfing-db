@@ -63,12 +63,13 @@ size_t RowBuffer::schema_sig() {
   return this->_schema_sig;
 }
 
-void RowBuffer::read(const Field& f, Value& v) {
+size_t RowBuffer::read(const Field& f, Value& v) {
   CHECK_GE(schema_ptr->_offsets->size(), 0);
   CHECK(schema_ptr->_offsets->find(f) != schema_ptr->_offsets->end());
   uint64_t offset = schema_ptr->_offsets->at(f);
   size_t unit = read(f, v, offset);
   CHECK_LE(unit, schema_ptr->_max_unit->at(f));
+  return unit;
 }
 
 void RowBuffer::write(const Field& f, const Value& v) {
@@ -316,6 +317,55 @@ size_t RowBuffer::_pread(const Field& f, void* dataptr, const uint64_t& offset) 
   }
   }
   return 0;
+}
+size_t RowBuffer::readLen(const Field& f) {
+  CHECK_GE(schema_ptr->_offsets->size(), 0);
+  CHECK(schema_ptr->_offsets->find(f) != schema_ptr->_offsets->end());
+  uint64_t offset = schema_ptr->_offsets->at(f);
+  switch (f.type) {
+  case surfingdb::meta::schema::RowType::VOID: {
+    return 0;
+  }
+  case surfingdb::meta::schema::RowType::INT: {
+
+    return 1;
+  }
+  case surfingdb::meta::schema::RowType::BOOL: {
+
+    return 1;
+  }
+  case RowType::LONG: {
+    return 1;
+  }
+  case RowType::DOUBLE: {
+    return 1;
+  }
+  case RowType::STRING: {
+    size_t _offset = offset;
+    Field l;
+    l.type = RowType::LONG;
+    size_t len;
+    _pread(l, &len, _offset);
+    return len;
+  }
+  case RowType::LIST: {
+    size_t _offset = offset;
+    Field l;
+    l.type = RowType::LONG;
+    size_t len;
+    _pread(l, &len, _offset);
+    return len;
+  }
+  case RowType::MAP: {
+    size_t _offset = offset;
+    Field l;
+    l.type = RowType::LONG;
+    size_t len;
+    _pread(l, &len, _offset);
+    return len;
+  }
+  }
+  return -1;
 }
 } // namespace table
 } // namespace surfingdb

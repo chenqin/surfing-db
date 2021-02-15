@@ -168,15 +168,35 @@ public:
     CHECK_GT(_size, 0);
     return _size;
   }
+
   size_t signature() {
     CHECK_NE(_schema_sig, 0);
     return _schema_sig;
+  }
+
+  void updateRowSize() {
+    _offsets = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
+    _max_unit = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
+    _field_types = std::make_shared<std::unordered_map<Field, MPI_Datatype, FieldHasher>>();
+    _size = sizeof(size_t); // store _schema_sig
+    for (size_t i = 0; i < fields.size(); i++) {
+      auto f = fields.at(i);
+      _offsets->emplace(f, _size);
+      _max_unit->emplace(f, f.max_unit_size);
+      _size += SchemaUtils::getFieldSize(f);
+    }
   }
 
   MPI_Datatype* schemaMPIType();
 
   bool containField(Field field);
 
+  TableSchema() {
+    _size = 0;
+    _schema_sig = 0;
+    _type_set = false;
+
+  }
   TableSchema(const RowSchema& schema);
 
   ~TableSchema();

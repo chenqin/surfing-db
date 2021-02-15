@@ -53,8 +53,8 @@ int main(int argc, char** argv) {
   SchemaUtils::initField(field4, "d", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
   SchemaUtils::initField(field5, "e", RowType::STRING, MAX_STR_LEN);
 
-  SchemaUtils::initListField(field6, "l", RowType::DOUBLE, 2, sizeof(DOUBLE_TYPE));
-  SchemaUtils::initMapField(field7, "m", RowType::STRING, RowType::LONG, 3, MAX_STR_LEN, sizeof(long));
+  SchemaUtils::initListField(field6, "l", RowType::DOUBLE, 40, sizeof(DOUBLE_TYPE));
+  SchemaUtils::initMapField(field7, "m", RowType::STRING, RowType::LONG, 30, MAX_STR_LEN, sizeof(long));
 
   r.fields.push_back(field1);
   r.fields.push_back(field2);

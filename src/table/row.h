@@ -58,7 +58,8 @@ public:
   * @param f
   * @param v
   */
-  void read(const Field& f, Value& v);
+  size_t read(const Field& f, Value& v);
+  size_t readLen(const Field&f);
   /**
    * copy value into row buffer
    * @param f

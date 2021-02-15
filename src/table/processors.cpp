@@ -55,6 +55,8 @@ void processors::partition(mtable& in, Field& f) {
   {
     in.group(f);
 
+    in.find_max_unit_size(); // find max_unit_size for list and map fields
+
     in.placement_sort(f); // experiment shows batching still make sense with 10% overhead
 
     size_t expected_rows[node_ptr->world], expected_start_index[node_ptr->world];

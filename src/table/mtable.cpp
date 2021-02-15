@@ -222,7 +222,7 @@ uint8_t* mtable::range_ptr(int dest) {
    * sort rows based on destination process and update _start_index map
    */
 void mtable::placement_sort(const Field& f) {
-  auto start = MPI_Wtime();
+  //auto start = MPI_Wtime();
   placement_index->clear();
   key_groups->clear();
 
@@ -238,6 +238,23 @@ void mtable::placement_sort(const Field& f) {
     key_groups->at(key).emplace_back(i);
   }
 
+
+  auto reduce_schema_ptr = std::make_shared<TableSchema>();
+  for(auto field : schema_ptr->fields) {
+    if(max_unit_size.find(field) != max_unit_size.end()) {
+      if(field.type == RowType::LIST) {
+        field.max_list_unit_size = max_unit_size.at(field);
+      }
+      if(field.type == RowType::MAP) {
+        field.max_map_key_unit_size = max_unit_size.at(field);
+        field.max_map_value_unit_size = max_unit_size.at(field);
+      }
+    }
+    reduce_schema_ptr->fields.emplace_back(field);
+  }
+  reduce_schema_ptr->updateRowSize();
+  LOG(INFO) << "row size reduce to " << reduce_schema_ptr->rowSize() << " from "<< schema_ptr->rowSize();
+
   mtable sender(node_ptr, schema_ptr, row_count * schema_ptr->rowSize());
   int index = 0;
   for (int i = 0; i < node_ptr->world; i++) {
@@ -247,6 +264,7 @@ void mtable::placement_sort(const Field& f) {
       if (placement == (size_t)i) {
         for (auto item : g.second) {
           auto row = this->readRow(item);
+          //TODO(chenqin): shrink list/map columns
           sender.appendRow(*row.get());
           index++;
         }
@@ -386,6 +404,34 @@ void mtable::writeField(const Field& field, const float* data) {
 
 std::shared_ptr<node> mtable::getNodePtr() {
   return this->node_ptr;
+}
+
+void mtable::find_max_unit_size() {
+  max_unit_size.clear();
+  /**
+   * find list and map type max_unit per mtable rows
+   */
+  for(auto field : schema_ptr->fields) {
+    if(field.list_type != RowType::VOID) {
+      max_unit_size.insert({field, 0});
+    }
+    if(field.map_value_type != RowType::VOID) {
+      max_unit_size.insert({field, 0});
+    }
+  }
+  for(size_t i = 0 ; i < row_count; i++) {
+    auto r = this->readRow(i);
+    for(auto& f : max_unit_size) {
+      Value v;
+      size_t max_unit = r->readLen(f.first);
+      f.second = max_unit > f.second ?  max_unit : f.second;
+    }
+  }
+  for(auto& f : max_unit_size) {
+    size_t max_unit = 0;
+    MPI_Allreduce(&f.second, &max_unit, 1, MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
+    f.second = max_unit;
+  }
 }
 } // namespace table
 } // namespace surfingdb
