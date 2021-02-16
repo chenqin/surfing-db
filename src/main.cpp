@@ -36,8 +36,7 @@ void transform(const RowBuffer& in, RowBuffer& out) {
  * @return
  */
 int main(int argc, char** argv) {
-  LOG(INFO) << "total omp threads # " << omp_get_max_threads();
-  omp_set_num_threads(omp_get_max_threads());
+  google::InstallFailureSignalHandler();
   //google::InitGoogleLogging(argv[0]);
   // create node of cluster
   const auto node = std::make_shared<surfingdb::meta::node>(&argc, &argv);
@@ -138,12 +137,13 @@ int main(int argc, char** argv) {
   Value v;
   v.p_val.int_val = 1;
   b.write(field1, v);
-  int rows = 12000;
+  int rows = 120000;
   size_t total = 0;
   auto start = MPI_Wtime();
   // allow small batch runs on different omp thread, share nothing to avoid race condition
   while (true) {
-#pragma omp parallel num_threads(CONCURRENCY)
+#pragma omp parallel num_threads(CONCURRENCY) reduction(+ \
+                                                        : total)
     {
       /*
        * micro batch generation
@@ -154,7 +154,7 @@ int main(int argc, char** argv) {
         Value v;
         v.p_val.int_val = i + node->rank;
         // shard to reduce number of keys per batch
-        if(v.p_val.int_val%CONCURRENCY == omp_get_thread_num()) {
+        if (v.p_val.int_val % CONCURRENCY == omp_get_thread_num()) {
           b.write(field1, v);
           t1->appendRow(b);
         }
@@ -167,7 +167,6 @@ int main(int argc, char** argv) {
         processors::partition(*t2.get(), field1);
       }
       t2->verify(field1);
-#pragma omp atomic
       total += rows * node->world;
       if (node->rank == 0) {
         LOG(INFO) << "Throughput " << total / (MPI_Wtime() - start) << " on thread " << omp_get_thread_num();
