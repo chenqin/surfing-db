@@ -71,36 +71,38 @@ void processors::partition(mtable& in, Field& f) {
   for (int i = 1; i < node_ptr->world; i++) {
     expected_start_index[i] = expected_start_index[i - 1] + expected_rows[i - 1];
   }
-//#pragma omp critical
-  {
+
   // LOG(INFO) << "start exchange index " << node_ptr->rank;
+  MPI_Request requests[node_ptr->world];
   size_t target_disp[node_ptr->world]; // from each process, tell others start index of assigned memory
   for (int i = 0; i < node_ptr->world; i++) {
-    size_t start_index;
-    MPI_Scatter(expected_start_index, 1, MPI_UNSIGNED_LONG, &start_index, 1, MPI_UNSIGNED_LONG, i, MPI_COMM_WORLD);
-    target_disp[i] = start_index;
+    MPI_Request request;
+    MPI_Iscatter(expected_start_index, 1, MPI_UNSIGNED_LONG, &target_disp[i], 1, MPI_UNSIGNED_LONG, i, MPI_COMM_WORLD, &request);
+    requests[i] = request;
   }
-    in.reserve_rma_memory(recv_buffer_rows);
-    MPI_Win_fence(0, in.win);
-    const MPI_Datatype type = *(schema_ptr->schemaMPIType());
-#pragma omp parallel for num_threads(CONCURRENCY)
-    for (int dest = 0; dest < node_ptr->world; dest++) {
-      int ring_dest = (dest + node_ptr->rank) % node_ptr->world;
-      uint8_t* rangePtr = in.range_ptr(ring_dest);
-      int index = (int)target_disp[ring_dest];
-      int count = 0;
-      // use adjacent map start index to reason number of rows need to send
-      if (ring_dest != node_ptr->world - 1) {
-        count = in.placement_index->at(ring_dest + 1) - in.placement_index->at(ring_dest);
-      } else {
-        count = row_count - in.placement_index->at(ring_dest);
-      }
-      MPI_Win_lock(MPI_LOCK_SHARED, ring_dest, 0, in.win);
-      MPI_Put(rangePtr, count, type, ring_dest, index, count, type, in.win);
-      MPI_Win_unlock(ring_dest, in.win);
+  in.reserve_rma_memory(recv_buffer_rows);
+
+  MPI_Win_fence(0, in.win);
+  const MPI_Datatype type = *(schema_ptr->schemaMPIType());
+
+  for (int dest = 0; dest < node_ptr->world; dest++) {
+    int ring_dest = (dest + node_ptr->rank) % node_ptr->world;
+    uint8_t* rangePtr = in.range_ptr(ring_dest);
+    // lazy evaluate scatter result
+    MPI_Wait(&requests[ring_dest], MPI_STATUS_IGNORE);
+    int index = (int)target_disp[ring_dest];
+    int count = 0;
+    // use adjacent map start index to reason number of rows need to send
+    if (ring_dest != node_ptr->world - 1) {
+      count = in.placement_index->at(ring_dest + 1) - in.placement_index->at(ring_dest);
+    } else {
+      count = row_count - in.placement_index->at(ring_dest);
     }
-    MPI_Win_fence(0, in.win);
+    MPI_Win_lock(MPI_LOCK_SHARED, ring_dest, 0, in.win);
+    MPI_Put(rangePtr, count, type, ring_dest, index, count, type, in.win);
+    MPI_Win_unlock(ring_dest, in.win);
   }
+  MPI_Win_fence(0, in.win);
   // if recv buffer too large, flush to disk and load
   if (recv_buffer_rows > FLUSH_SIZE) {
     in.flush_rma_memory(recv_buffer_rows);
