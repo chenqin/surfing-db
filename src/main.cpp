@@ -143,7 +143,7 @@ int main(int argc, char** argv) {
   auto start = MPI_Wtime();
   // allow small batch runs on different omp thread, share nothing to avoid race condition
   while (true) {
-#pragma omp parallel num_threads(8)
+#pragma omp parallel num_threads(CONCURRENCY)
     {
       /*
        * micro batch generation
@@ -153,8 +153,11 @@ int main(int argc, char** argv) {
       for (int i = 0; i < rows; i++) {
         Value v;
         v.p_val.int_val = i + node->rank;
-        b.write(field1, v);
-        t1->appendRow(b);
+        // shard to reduce number of keys per batch
+        if(v.p_val.int_val%CONCURRENCY == omp_get_thread_num()) {
+          b.write(field1, v);
+          t1->appendRow(b);
+        }
       }
       auto t2 = t1->compactTable();
 #pragma omp critical

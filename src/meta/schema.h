@@ -44,8 +44,12 @@ struct FieldHasher {
     using std::hash;
     using std::size_t;
     using std::string;
-
-    return (hash<string>()(k.name));
+    std::size_t result = (hash<string>()(k.name));
+    result^= (hash<int>()(k.type)) << 1;
+    result ^= (hash<int>()(k.list_type)) << 2;
+    result ^= (hash<int>()(k.map_key_type)) << 3;
+    result ^= (hash<int>()(k.map_value_type)) << 4;
+    return result;
   }
 };
 
