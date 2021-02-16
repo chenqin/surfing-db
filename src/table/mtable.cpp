@@ -413,10 +413,8 @@ void mtable::writeField(const Field& field, const float* data) {
 std::shared_ptr<node> mtable::getNodePtr() {
   return this->node_ptr;
 }
-/**
- * find compact schema
- */
-std::shared_ptr<mtable> mtable::compactTable() {
+
+std::shared_ptr<TableSchema> mtable::getCompactSchema() {
   std::vector<size_t> max_units;
   auto compact_schema_ptr = std::make_shared<TableSchema>(*schema_ptr.get());
   /**
@@ -496,6 +494,14 @@ std::shared_ptr<mtable> mtable::compactTable() {
     }
   }
   compact_schema_ptr->updateRowSize();
+  return compact_schema_ptr;
+}
+/**
+ * find compact schema
+ */
+std::shared_ptr<mtable> mtable::compactTable() {
+  auto compact_schema_ptr = getCompactSchema();
+
   auto compact_table_ptr = std::make_shared<mtable>(node_ptr, compact_schema_ptr, compact_schema_ptr->rowSize() * row_count);
   for (size_t index = 0; index < row_size(); index++) {
     auto r = readRow(index);

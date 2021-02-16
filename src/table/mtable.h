@@ -38,6 +38,7 @@ public:
   mtable(const std::shared_ptr<node>, const std::shared_ptr<TableSchema>, size_t capacity);
   ~mtable();
   void group(const Field& f);
+  std::shared_ptr<TableSchema> getCompactSchema();
   std::shared_ptr<mtable> compactTable();
   void placement_sort(const Field& f);
   void flush_rma_memory(size_t rows);
@@ -50,7 +51,6 @@ public:
   std::shared_ptr<TableSchema> getSchema();
   std::unique_ptr<RowBuffer> readRow(int index);
   void appendRow(RowBuffer& row);
-  void appendCompactRow(RowBuffer& row, const std::shared_ptr<TableSchema> shrink_ptr);
   void verify(const Field& field);
   void reserveRow(size_t rows);
   void load(const string& path);
