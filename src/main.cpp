@@ -143,7 +143,7 @@ int main(int argc, char** argv) {
   auto start = MPI_Wtime();
   // allow small batch runs on different omp thread, share nothing to avoid race condition
   while (true) {
-#pragma omp parallel num_threads(3)
+#pragma omp parallel num_threads(8)
     {
       /*
        * micro batch generation
@@ -162,8 +162,8 @@ int main(int argc, char** argv) {
         t2->group(field1);
         t2->placement_sort(field1);
         processors::partition(*t2.get(), field1);
-        t2->verify(field1);
       }
+      t2->verify(field1);
 #pragma omp atomic
       total += rows * node->world;
       if (node->rank == 0) {

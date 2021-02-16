@@ -36,14 +36,14 @@ private:
   size_t _pread(const Field& f, void* dataptr, const uint64_t& offset);
 
 public:
-  explicit RowBuffer(std::shared_ptr<meta::TableSchema> schemaptr);
+  RowBuffer(std::shared_ptr<meta::TableSchema> schemaptr);
 
   /**
    * only used in Temptable point to piece map memory to readRow/append fields
    * @param schema
    * @param payload
    */
-  explicit RowBuffer(std::shared_ptr<meta::TableSchema> schemaptr, uint8_t* payloadptr);
+  RowBuffer(std::shared_ptr<meta::TableSchema> schemaptr, uint8_t* payloadptr);
 
   ~RowBuffer();
 
