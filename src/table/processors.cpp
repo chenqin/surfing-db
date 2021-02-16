@@ -46,6 +46,9 @@ void processors::xgb(mtable& in, std::vector<Field> features, Field& label, cons
 }
 
 void processors::partition(mtable& in, Field& f) {
+  CHECK(!in.placement_index->empty());
+  CHECK_NOTNULL(in.getSchema());
+
   auto schema_ptr = in.getSchema();
   auto node_ptr = in.getNodePtr();
   auto row_count = in.row_size();
