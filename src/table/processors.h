@@ -14,9 +14,9 @@ namespace surfingdb {
 namespace table {
 class processors {
 public:
-  static void map(mtable& in, mtable& out, std::function<void(const RowBuffer&, RowBuffer&)> transform);
+  static void map(std::shared_ptr<mtable>,std::shared_ptr<mtable>, std::function<void(const RowBuffer&, RowBuffer&)>);
 
-  static void partition(mtable& in, Field& f);
+  static void partition(std::shared_ptr<mtable>, Field&);
 
   static void xgb(mtable& in, std::vector<Field> features, Field& label, const XGBParameters& parameters);
 };

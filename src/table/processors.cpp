@@ -8,16 +8,16 @@
 namespace surfingdb {
 namespace table {
 
-void processors::map(mtable& in, mtable& out, std::function<void(const RowBuffer&, RowBuffer&)> transform) {
-  out.reserveRow(in.row_size());
+void processors::map(std::shared_ptr<mtable> in, std::shared_ptr<mtable> out, std::function<void(const RowBuffer&, RowBuffer&)> transform) {
+  out->reserveRow(in->row_size());
 #pragma omp parallel for shared(out) schedule(dynamic, 100)
-  for (size_t i = 0; i < in.row_size(); i++) {
-    auto in_row = in.readRow(i);
-    RowBuffer out_row(out.getSchema());
+  for (size_t i = 0; i < in->row_size(); i++) {
+    auto in_row = in->readRow(i);
+    RowBuffer out_row(out->getSchema());
     transform(*in_row.get(), out_row);
-    CHECK_EQ(out_row.schema_sig(), out.getSchema()->signature());
+    CHECK_EQ(out_row.schema_sig(), out->getSchema()->signature());
 #pragma omp critical(append)
-    out.appendRow(out_row);
+    out->appendRow(out_row);
   }
 }
 
@@ -45,21 +45,21 @@ void processors::xgb(mtable& in, std::vector<Field> features, Field& label, cons
   }
 }
 
-void processors::partition(mtable& in, Field& f) {
-  CHECK(!in.placement_index->empty());
-  CHECK_NOTNULL(in.getSchema());
+void processors::partition(std::shared_ptr<mtable> in, Field& f) {
+  CHECK(!in->placement_index->empty());
+  CHECK_NOTNULL(in->getSchema());
 
-  auto schema_ptr = in.getSchema();
-  auto node_ptr = in.getNodePtr();
-  auto row_count = in.row_size();
+  auto schema_ptr = in->getSchema();
+  auto node_ptr = in->getNodePtr();
+  auto row_count = in->row_size();
   MPI_Aint recv_buffer_rows = 0;
 
   size_t expected_rows[node_ptr->world], expected_start_index[node_ptr->world];
   memset(expected_rows, 0, node_ptr->world * sizeof(size_t));
   memset(expected_start_index, 0, node_ptr->world * sizeof(size_t));
 
-  for (auto k : *in.key_dist) {
-    int place = in.placement(k.first);
+  for (auto k : *in->key_dist) {
+    int place = in->placement(k.first);
     if (place == node_ptr->rank) {
       for (auto p : k.second) {
         recv_buffer_rows += p.second;
@@ -80,34 +80,34 @@ void processors::partition(mtable& in, Field& f) {
     MPI_Iscatter(expected_start_index, 1, MPI_UNSIGNED_LONG, &target_disp[i], 1, MPI_UNSIGNED_LONG, i, MPI_COMM_WORLD, &request);
     requests[i] = request;
   }
-  in.reserve_rma_memory(recv_buffer_rows);
+  in->reserve_rma_memory(recv_buffer_rows);
 
-  MPI_Win_fence(0, in.win);
+  MPI_Win_fence(0, in->win);
   const MPI_Datatype type = *(schema_ptr->schemaMPIType());
 
   for (int dest = 0; dest < node_ptr->world; dest++) {
     int ring_dest = (dest + node_ptr->rank) % node_ptr->world;
-    uint8_t* rangePtr = in.range_ptr(ring_dest);
+    uint8_t* rangePtr = in->range_ptr(ring_dest);
     // lazy evaluate scatter result
     MPI_Wait(&requests[ring_dest], MPI_STATUS_IGNORE);
     int index = (int)target_disp[ring_dest];
     int count = 0;
     // use adjacent map start index to reason number of rows need to send
     if (ring_dest != node_ptr->world - 1) {
-      count = in.placement_index->at(ring_dest + 1) - in.placement_index->at(ring_dest);
+      count = in->placement_index->at(ring_dest + 1) - in->placement_index->at(ring_dest);
     } else {
-      count = row_count - in.placement_index->at(ring_dest);
+      count = row_count - in->placement_index->at(ring_dest);
     }
-    MPI_Win_lock(MPI_LOCK_SHARED, ring_dest, 0, in.win);
-    MPI_Put(rangePtr, count, type, ring_dest, index, count, type, in.win);
-    MPI_Win_unlock(ring_dest, in.win);
+    MPI_Win_lock(MPI_LOCK_SHARED, ring_dest, 0, in->win);
+    MPI_Put(rangePtr, count, type, ring_dest, index, count, type, in->win);
+    MPI_Win_unlock(ring_dest, in->win);
   }
-  MPI_Win_fence(0, in.win);
+  MPI_Win_fence(0, in->win);
   // if recv buffer too large, flush to disk and load
   if (recv_buffer_rows > FLUSH_SIZE) {
-    in.flush_rma_memory(recv_buffer_rows);
+    in->flush_rma_memory(recv_buffer_rows);
   } else {
-    in.copy_rma_memory(recv_buffer_rows);
+    in->copy_rma_memory(recv_buffer_rows);
   }
 }
 } // namespace table

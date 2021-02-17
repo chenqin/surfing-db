@@ -144,35 +144,30 @@ int main(int argc, char** argv) {
   auto start = MPI_Wtime();
   // allow small batch runs on different omp thread, share nothing to avoid race condition
   while (true) {
-//#pragma omp parallel num_threads(CONCURRENCY) reduction(+ \
-                                                        : total)
-    {
-      /*
+
+    /*
        * micro batch generation
        */
-      //should inference compact schema from source (e.g deserialzied kafka events)
-      auto t1 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
-      for (int i = 0; i < rows; i++) {
-        Value v;
-        v.p_val.int_val = i + node->rank;
-        // shard to reduce number of keys per batch
-        //if (v.p_val.int_val % CONCURRENCY == omp_get_thread_num()) {
-          b.write(field1, v);
-          t1->appendRow(b);
-          total += 1;
-        //}
-      }
-      auto t2 = t1->compactTable();
-//#pragma omp critical
-      {
-        t2->group(field1);
-        t2->placement_sort(field1);
-      }
-
-      processors::partition(*t2.get(), field1);
-
-      t2->verify(field1);
-      LOG(INFO) << "Throughput " << total / (MPI_Wtime() - start) << " on thread " << omp_get_thread_num() << "@" << node->rank;
+    //should inference compact schema from source (e.g deserialzied kafka events)
+    auto t1 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
+    for (int i = 0; i < rows; i++) {
+      Value v;
+      v.p_val.int_val = i + node->rank;
+      // shard to reduce number of keys per batch
+      //if (v.p_val.int_val % CONCURRENCY == omp_get_thread_num()) {
+      b.write(field1, v);
+      t1->appendRow(b);
+      total += 1;
+      //}
     }
+    auto t2 = t1->compactTable();
+
+    t2->group(field1);
+    t2->placement_sort(field1);
+
+    processors::partition(t2, field1);
+
+    t2->verify(field1);
+    LOG(INFO) << "Throughput " << total / (MPI_Wtime() - start) << " on thread " << omp_get_thread_num() << "@" << node->rank;
   }
 }
