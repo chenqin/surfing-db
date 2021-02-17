@@ -21,27 +21,24 @@ void processors::map(std::shared_ptr<mtable> in, std::shared_ptr<mtable> out, st
   }
 }
 
-void processors::xgb(mtable& in, std::vector<Field> features, Field& label, const XGBParameters& parameters) {
-  xgbop op(features, label, parameters, in.getNodePtr()->rank, in.getNodePtr()->world);
+void processors::xgb(std::shared_ptr<mtable> in, std::vector<Field> features, Field& label, const XGBParameters& parameters) {
+  xgbop op(features, label, parameters, in->getNodePtr()->rank, in->getNodePtr()->world);
   std::vector<float> features_matrix;
-  features_matrix.resize(op.features() * in.row_size()); // number of features
-  in.readFields(op.fields, &features_matrix[0]);         // read from temp table
+  features_matrix.resize(op.features() * in->row_size()); // number of features
+  in->readFields(op.fields, &features_matrix[0]);         // read from temp table
 
-  std::vector<float> label_matrix;    // number of labels
-  label_matrix.resize(in.row_size()); // number of rows
+  std::vector<float> label_matrix;     // number of labels
+  label_matrix.resize(in->row_size()); // number of rows
 
   if (op.parameters.isTraining) {
-    in.readField(op.labelField, &label_matrix[0]);
-    size_t total_row_count = in.row_size();
-#pragma omp critical
-    {
-      op.gather(&features_matrix[0], &label_matrix[0], total_row_count, op.features()); //gather training dataset to root
-      op.train(&features_matrix[0], &label_matrix[0], total_row_count, op.features());
-      op.syncModel(); // send model to all processes from root
-    }
+    in->readField(op.labelField, &label_matrix[0]);
+    size_t total_row_count = in->row_size();
+    op.gather(&features_matrix[0], &label_matrix[0], total_row_count, op.features()); //gather training dataset to root
+    op.train(&features_matrix[0], &label_matrix[0], total_row_count, op.features());
+    op.syncModel(); // send model to all processes from root
   } else {
-    op.predict(&features_matrix[0], &label_matrix[0], in.row_size(), op.features());
-    in.writeField(op.labelField, &label_matrix[0]);
+    op.predict(&features_matrix[0], &label_matrix[0], in->row_size(), op.features());
+    in->writeField(op.labelField, &label_matrix[0]);
   }
 }
 
