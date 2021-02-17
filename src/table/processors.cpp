@@ -43,6 +43,9 @@ void processors::xgb(std::shared_ptr<mtable> in, std::vector<Field> features, Fi
 }
 
 void processors::partition(std::shared_ptr<mtable> in, Field& f) {
+
+  in->group(f);
+  in->placement_sort(f);
   CHECK(!in->placement_index->empty());
   CHECK_NOTNULL(in->getSchema());
 

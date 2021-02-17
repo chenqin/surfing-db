@@ -161,10 +161,6 @@ int main(int argc, char** argv) {
       //}
     }
     auto t2 = t1->compactTable();
-
-    t2->group(field1);
-    t2->placement_sort(field1);
-
     processors::partition(t2, field1);
 
     t2->verify(field1);
