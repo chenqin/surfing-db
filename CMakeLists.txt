@@ -202,16 +202,13 @@ include(ext/Gflatbuffers_Ext.cmake)
 
 # include rapid JSON
 include(ext/Json_Ext.cmake)
-
 include(ext/OPENSSL_Ext.cmake)
-
+include(ext/Thrift_Ext.cmake)
+include(ext/Kafka_Ext.cmake)
 include(ext/Arrow_Ext.cmake)
-
 include(ext/Sketches_Ext.cmake)
-
 include(ext/XGBoost_Ext.cmake)
 
-include(ext/Thrift_Ext.cmake)
 
 # set up directory to search for headers
 include_directories(include ${GTEST_INCLUDE_DIRS})
@@ -227,12 +224,17 @@ include(src/meta/meta.cmake)
 # build table representation
 include(src/table/table.cmake)
 
+# build table representation
+include(src/connector/connector.cmake)
+
+
 # build test binary
 add_executable(MainTest src/main.cpp)
 
 target_link_libraries(MainTest
         PRIVATE ${META}
-        PRIVATE ${TABLE})
+        PRIVATE ${TABLE}
+        PRIVATE ${CONNECTOR})
 
 # install it into local bin folder
 install(TARGETS MainTest DESTINATION bin)
