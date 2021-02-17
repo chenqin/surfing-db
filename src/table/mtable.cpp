@@ -127,8 +127,9 @@ void mtable::verify(const Field& field) {
 void mtable::group(const Field& f) {
   const int world = node_ptr->world;
   const int rank = node_ptr->rank;
-  auto start = MPI_Wtime();
+
   CHECK(schema_ptr->containField(f));
+
   key_groups->clear(); // reset key_groups
   key_dist->clear();   // reset key_dist
 
@@ -171,28 +172,7 @@ void mtable::group(const Field& f) {
 
   size_t recv[world]; // type should be same as local_group_sizes
   memcpy(recv, local_group_sizes, world*sizeof(size_t));
-                      /**
-   * use tag to support multiple threads calling allreduce caused confusion
-   */
-   /*
-  MPI_Barrier(MPI_COMM_WORLD);
-  if (node_ptr->rank == 0) {
-    for (int i = 1; i < node_ptr->world; i++) {
-      size_t local_rev[world];
-      MPI_Recv(&local_rev, world, MPI_UNSIGNED_LONG, i, omp_get_thread_num(), MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-      for (int i = 0; i < world; i++) {
-        recv[i] = local_rev[i] > recv[i] ? local_rev[i] : recv[i];
-      }
-    }
-    //broadcast with tag
-    for (int i = 1; i < node_ptr->world; i++) {
-      MPI_Send(&recv, world, MPI_UNSIGNED_LONG, i, omp_get_thread_num(), MPI_COMM_WORLD);
-    }
-  } else {
-    MPI_Send(&local_group_sizes, world, MPI_UNSIGNED_LONG, 0, omp_get_thread_num(), MPI_COMM_WORLD);
-    MPI_Recv(&recv, world, MPI_UNSIGNED_LONG, 0, omp_get_thread_num(), MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-  }
-    */
+
   MPI_Allreduce(&local_group_sizes, &recv, world, MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
 
   std::vector<size_t> _g_groups; // keep key, row counts on each process
@@ -226,7 +206,6 @@ void mtable::group(const Field& f) {
       key_dist->at(key).emplace_back(pair);
     }
   }
-  LOG(INFO) << "group by costs " << MPI_Wtime() - start << " on " << rank;
 }
 
 /**
@@ -272,7 +251,6 @@ void mtable::placement_sort(const Field& f) {
       if (placement == (size_t)i) {
         for (auto item : g.second) {
           auto row = this->readRow(item);
-          //TODO(chenqin): shrink list/map columns
           sender.appendRow(*row.get());
           index++;
         }
