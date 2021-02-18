@@ -141,7 +141,7 @@ int main(int argc, char** argv) {
   b.write(field1, v);
   int rows = 1500;
 
-#pragma omp parallel
+#pragma omp parallel num_threads(4)
   while (true) {
     auto start = MPI_Wtime();
     size_t total = 0;
@@ -156,24 +156,13 @@ int main(int argc, char** argv) {
     }
     auto t2 = t1->compactTable();
     auto t3 = t1->compactTable();
-
-    t2->group(field1);
-    t3->group(field1);
-    t2->placement_sort(field1);
-    t3->placement_sort(field1);
-    MPI_Request sends[node->world];
-    MPI_Request recvs[node->world];
-    MPI_Datatype type = *(t2->getSchema()->schemaMPIType());
-
-    for(int j = 0 ; j < node->world; j++) {
-      MPI_Irecv(t3->payload_ptr(), rows, type, j,omp_get_thread_num(), MPI_COMM_WORLD, &recvs[j]);
-      MPI_Isend(t2->payload_ptr(), rows, type, j, omp_get_thread_num(), MPI_COMM_WORLD, &sends[j]);
+#pragma omp critical
+    {
+      processors::partition(t2, field1);
+      processors::partition(t3, field1);
     }
-
-    MPI_Waitall(node->world, sends, MPI_STATUSES_IGNORE);
-    MPI_Waitall(node->world, recvs, MPI_STATUSES_IGNORE);
-    //processors::partition(t2, field1);
-    //t2->verify(field1);
+    t2->verify(field1);
+    t3->verify(field1);
     LOG(INFO) << "Throughput " << total / (MPI_Wtime() - start) << " on thread " << omp_get_thread_num() << "@" << node->rank;
   }
 }

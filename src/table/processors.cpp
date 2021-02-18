@@ -86,7 +86,6 @@ void processors::partition(std::shared_ptr<mtable> in, Field& f) {
   MPI_Win_fence(0, in->win);
   const MPI_Datatype type = *(schema_ptr->schemaMPIType());
 
-#pragma omp parallel for shared(requests)
   for (int dest = 0; dest < node_ptr->world; dest++) {
     int ring_dest = (dest + node_ptr->rank) % node_ptr->world;
     uint8_t* rangePtr = in->range_ptr(ring_dest);
