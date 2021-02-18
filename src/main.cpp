@@ -154,8 +154,21 @@ int main(int argc, char** argv) {
       total += 1;
     }
     auto t2 = t1->compactTable();
-    processors::partition(t2, field1);
-    t2->verify(field1);
+    auto t3 = t1->compactTable();
+    MPI_Request sends[node->world];
+    MPI_Request recvs[node->world];
+    MPI_Datatype type = *(t2->getSchema()->schemaMPIType());
+
+#pragma omp parallel for shared(sends, recvs)
+    for(int j = 0 ; j < node->world; j++) {
+      MPI_Irecv(t3->payload_ptr(), rows, type, j,0, MPI_COMM_WORLD, &recvs[j]);
+      MPI_Isend(t2->payload_ptr(), rows, type, j, 0, MPI_COMM_WORLD, &sends[j]);
+    }
+
+    MPI_Waitall(node->world, sends, MPI_STATUSES_IGNORE);
+    MPI_Waitall(node->world, recvs, MPI_STATUSES_IGNORE);
+    //processors::partition(t2, field1);
+    //t2->verify(field1);
     LOG(INFO) << "Throughput " << total / (MPI_Wtime() - start) << " on thread " << omp_get_thread_num() << "@" << node->rank;
   }
 }
