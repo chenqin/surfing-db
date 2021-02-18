@@ -139,12 +139,12 @@ int main(int argc, char** argv) {
   Value v;
   v.p_val.int_val = 1;
   b.write(field1, v);
-  int rows = 150000;
-  size_t total = 0;
-  auto start = MPI_Wtime();
+  int rows = 1500;
 
-#pragma omp parallel num_threads(100)
+#pragma omp parallel
   while (true) {
+    auto start = MPI_Wtime();
+    size_t total = 0;
     //should inference compact schema from source (e.g deserialzied kafka events)
     auto t1 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
     for (int i = 0; i < rows; i++) {
@@ -156,6 +156,11 @@ int main(int argc, char** argv) {
     }
     auto t2 = t1->compactTable();
     auto t3 = t1->compactTable();
+
+    t2->group(field1);
+    t3->group(field1);
+    t2->placement_sort(field1);
+    t3->placement_sort(field1);
     MPI_Request sends[node->world];
     MPI_Request recvs[node->world];
     MPI_Datatype type = *(t2->getSchema()->schemaMPIType());
