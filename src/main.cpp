@@ -143,6 +143,7 @@ int main(int argc, char** argv) {
   size_t total = 0;
   auto start = MPI_Wtime();
 
+#pragma omp parallel num_threads(100)
   while (true) {
     //should inference compact schema from source (e.g deserialzied kafka events)
     auto t1 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
@@ -159,10 +160,9 @@ int main(int argc, char** argv) {
     MPI_Request recvs[node->world];
     MPI_Datatype type = *(t2->getSchema()->schemaMPIType());
 
-#pragma omp parallel for shared(sends, recvs)
     for(int j = 0 ; j < node->world; j++) {
-      MPI_Irecv(t3->payload_ptr(), rows, type, j,0, MPI_COMM_WORLD, &recvs[j]);
-      MPI_Isend(t2->payload_ptr(), rows, type, j, 0, MPI_COMM_WORLD, &sends[j]);
+      MPI_Irecv(t3->payload_ptr(), rows, type, j,omp_get_thread_num(), MPI_COMM_WORLD, &recvs[j]);
+      MPI_Isend(t2->payload_ptr(), rows, type, j, omp_get_thread_num(), MPI_COMM_WORLD, &sends[j]);
     }
 
     MPI_Waitall(node->world, sends, MPI_STATUSES_IGNORE);
