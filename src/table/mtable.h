@@ -18,17 +18,19 @@ private:
   ValueHasher value_hasher;
 
   std::vector<uint8_t> payload;
-  size_t row_count = 0;     // number of rows in table
-  size_t offset = 0;        //current offset position
   size_t schedule_size = 0; // RMA memory size
 
   // defines the node row table bind to
   std::shared_ptr<node> node_ptr;
   std::shared_ptr<TableSchema> schema_ptr;
-
+  void flush_rma_memory(size_t rows);
+  void copy_rma_memory(size_t rows); //deprecated
+  void reserve_rma_memory(size_t rows);
 public:
   MPI_Win win;
   uint8_t* schedule;
+  size_t row_count = 0;     // number of rows in table
+  size_t offset = 0;        //current offset position
   //partition field
   std::unique_ptr<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>> key_dist; // key hash and per node counts
   std::unique_ptr<std::map<size_t, std::vector<size_t>, std::less<size_t>>> key_groups;               // local key, offsets map
@@ -41,9 +43,6 @@ public:
   std::shared_ptr<TableSchema> getCompactSchema();
   std::shared_ptr<mtable> compactTable();
   void placement_sort(const Field& f);
-  void flush_rma_memory(size_t rows);
-  void copy_rma_memory(size_t rows); //deprecated
-  void reserve_rma_memory(size_t rows);
   uint8_t* range_ptr(int dest);
   size_t range_row_size(int dest);
   uint8_t* payload_ptr();

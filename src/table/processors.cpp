@@ -57,19 +57,33 @@ void processors::partition(std::shared_ptr<mtable> in, Field& f) {
     MPI_Isend(&send_to_i, 1, MPI_UNSIGNED_LONG, i, omp_get_thread_num(), MPI_COMM_WORLD, &sends[i]);
   }
 
-  //for(int i = 0 ; i < node_ptr->world; i++) {
-  //  MPI_Irecv(recv.payload_ptr(), in->row_size(), *schema_ptr->schemaMPIType(), i, omp_get_thread_num(), MPI_COMM_WORLD, &revs[i]);
-  //  MPI_Isend(in->payload_ptr(), in->row_size(), *schema_ptr->schemaMPIType(), i, omp_get_thread_num(), MPI_COMM_WORLD, &sends[i]);
-  // }
   MPI_Waitall(node_ptr->world, sends, MPI_STATUSES_IGNORE);
   MPI_Waitall(node_ptr->world, revs, MPI_STATUSES_IGNORE);
 
-  for(int i = 0 ; i < node_ptr->world; i++) {
-    MPI_Irecv(recv.payload_ptr(), in->row_size(), *schema_ptr->schemaMPIType(), i, omp_get_thread_num(), MPI_COMM_WORLD, &revs[i]);
-    MPI_Isend(in->payload_ptr(), in->row_size(), *schema_ptr->schemaMPIType(), i, omp_get_thread_num(), MPI_COMM_WORLD, &sends[i]);
+  size_t buffer_len = 0;
+  size_t start_index[node_ptr->world];
+
+  for(int i = 0 ; i < node_ptr->world; i++){
+    buffer_len += recv_lens[i];
+    start_index[i] = (i == 0) ? 0 : recv_lens[i-1] + start_index[i-1];
   }
-  MPI_Waitall(node_ptr->world, sends, MPI_STATUSES_IGNORE);
-  MPI_Waitall(node_ptr->world, revs, MPI_STATUSES_IGNORE);
+  std::vector<uint8_t> buffer;
+  buffer.resize(buffer_len * schema_ptr->rowSize());
+  int send_count = 0, recv_count =0;
+  for(int i = 0 ; i < node_ptr->world; i++) {
+    if(recv_lens[i] > 0) {
+      CHECK_LE(start_index[i], buffer_len);
+      MPI_Irecv(&buffer[start_index[i]*schema_ptr->rowSize()], recv_lens[i], *schema_ptr->schemaMPIType(), i, omp_get_thread_num(), MPI_COMM_WORLD, &revs[recv_count++]);
+    }
+    if(in->range_row_size(i) > 0) {
+      MPI_Isend(in->range_ptr(i), in->range_row_size(i), *schema_ptr->schemaMPIType(), i, omp_get_thread_num(), MPI_COMM_WORLD, &sends[send_count++]);
+    }
+  }
+  MPI_Waitall(send_count, sends, MPI_STATUSES_IGNORE);
+  MPI_Waitall(recv_count, revs, MPI_STATUSES_IGNORE);
+  mtable table(node_ptr, schema_ptr, buffer_len * schema_ptr->rowSize());
+  memcpy(table.payload_ptr(), &buffer[0], buffer_len * schema_ptr->rowSize());
+
   /*
    * in->group(f);
   CHECK(!in->placement_index->empty());
