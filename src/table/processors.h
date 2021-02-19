@@ -16,7 +16,7 @@ class processors {
 public:
   static void map(std::shared_ptr<mtable>, std::shared_ptr<mtable>, std::function<void(const RowBuffer&, RowBuffer&)>);
 
-  static void partition(std::shared_ptr<mtable>, Field&);
+  static std::shared_ptr<mtable> partition(std::shared_ptr<mtable>, Field&);
 
   static void xgb(std::shared_ptr<mtable>, std::vector<Field>, Field&, const XGBParameters&);
 };

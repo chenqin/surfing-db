@@ -42,7 +42,7 @@ void processors::xgb(std::shared_ptr<mtable> in, std::vector<Field> features, Fi
   }
 }
 
-void processors::partition(std::shared_ptr<mtable> in, Field& f) {
+std::shared_ptr<mtable> processors::partition(std::shared_ptr<mtable> in, Field& f) {
   auto schema_ptr = in->getSchema();
   auto node_ptr = in->getNodePtr();
   auto row_count = in->row_size();
@@ -81,9 +81,11 @@ void processors::partition(std::shared_ptr<mtable> in, Field& f) {
   }
   MPI_Waitall(send_count, sends, MPI_STATUSES_IGNORE);
   MPI_Waitall(recv_count, revs, MPI_STATUSES_IGNORE);
-  mtable table(node_ptr, schema_ptr, buffer_len * schema_ptr->rowSize());
-  memcpy(table.payload_ptr(), &buffer[0], buffer_len * schema_ptr->rowSize());
-
+  auto table = std::make_shared<mtable>(node_ptr, schema_ptr, buffer_len * schema_ptr->rowSize());
+  memcpy(table->payload_ptr(), &buffer[0], buffer_len * schema_ptr->rowSize());
+  table->offset = buffer_len * schema_ptr->rowSize();
+  table->row_count = buffer_len;
+  return table;
   /*
    * in->group(f);
   CHECK(!in->placement_index->empty());
