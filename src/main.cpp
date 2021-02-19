@@ -158,7 +158,7 @@ int main(int argc, char** argv) {
     auto t3 = t1->compactTable();
 
     processors::partition(t2, field1);
-    processors::partition(t3, field1);
+    //processors::partition(t3, field1);
 
     //t2->verify(field1);
     //t3->verify(field1);

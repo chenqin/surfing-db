@@ -50,12 +50,26 @@ void processors::partition(std::shared_ptr<mtable> in, Field& f) {
   mtable recv(in->getNodePtr(), in->getSchema(), in->row_size() * in->getSchema()->rowSize());
   MPI_Request revs[node_ptr->world];
   MPI_Request sends[node_ptr->world];
+  size_t recv_lens[node_ptr->world];
+  for(int i = 0 ; i < node_ptr->world; i++) {
+    MPI_Irecv(&recv_lens[i], 1, MPI_UNSIGNED_LONG, i, omp_get_thread_num(), MPI_COMM_WORLD, &revs[i]);
+    size_t send_to_i = in->range_row_size(i);
+    MPI_Isend(&send_to_i, 1, MPI_UNSIGNED_LONG, i, omp_get_thread_num(), MPI_COMM_WORLD, &sends[i]);
+  }
+
+  //for(int i = 0 ; i < node_ptr->world; i++) {
+  //  MPI_Irecv(recv.payload_ptr(), in->row_size(), *schema_ptr->schemaMPIType(), i, omp_get_thread_num(), MPI_COMM_WORLD, &revs[i]);
+  //  MPI_Isend(in->payload_ptr(), in->row_size(), *schema_ptr->schemaMPIType(), i, omp_get_thread_num(), MPI_COMM_WORLD, &sends[i]);
+  // }
+  MPI_Waitall(node_ptr->world, sends, MPI_STATUSES_IGNORE);
+  MPI_Waitall(node_ptr->world, revs, MPI_STATUSES_IGNORE);
+
   for(int i = 0 ; i < node_ptr->world; i++) {
     MPI_Irecv(recv.payload_ptr(), in->row_size(), *schema_ptr->schemaMPIType(), i, omp_get_thread_num(), MPI_COMM_WORLD, &revs[i]);
     MPI_Isend(in->payload_ptr(), in->row_size(), *schema_ptr->schemaMPIType(), i, omp_get_thread_num(), MPI_COMM_WORLD, &sends[i]);
   }
-  MPI_Waitall(node_ptr->world, revs, MPI_STATUSES_IGNORE);
   MPI_Waitall(node_ptr->world, sends, MPI_STATUSES_IGNORE);
+  MPI_Waitall(node_ptr->world, revs, MPI_STATUSES_IGNORE);
   /*
    * in->group(f);
   CHECK(!in->placement_index->empty());
