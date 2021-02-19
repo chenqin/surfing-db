@@ -39,6 +39,7 @@ public:
 
   mtable(const std::shared_ptr<node>, const std::shared_ptr<TableSchema>, size_t capacity);
   ~mtable();
+  void release();
   void group(const Field& f);
   std::shared_ptr<TableSchema> getCompactSchema();
   std::shared_ptr<mtable> compactTable();

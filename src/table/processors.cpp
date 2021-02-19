@@ -81,13 +81,17 @@ std::shared_ptr<mtable> processors::partition(std::shared_ptr<mtable> in, Field&
   }
   MPI_Waitall(send_count, sends, MPI_STATUSES_IGNORE);
   MPI_Waitall(recv_count, revs, MPI_STATUSES_IGNORE);
+
   auto table = std::make_shared<mtable>(node_ptr, schema_ptr, buffer_len * schema_ptr->rowSize());
   memcpy(table->payload_ptr(), &buffer[0], buffer_len * schema_ptr->rowSize());
   table->offset = buffer_len * schema_ptr->rowSize();
   table->row_count = buffer_len;
+  buffer.clear();
+  buffer.shrink_to_fit();
   return table;
-  /*
-   * in->group(f);
+
+  /* RMA based approach for 100Gbps network
+  in->group(f);
   CHECK(!in->placement_index->empty());
   CHECK_NOTNULL(in->getSchema());
 

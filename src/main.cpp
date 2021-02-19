@@ -37,7 +37,7 @@ void transform(const RowBuffer& in, RowBuffer& out) {
  */
 int main(int argc, char** argv) {
   google::InstallFailureSignalHandler();
-  omp_set_nested(1);
+  omp_set_num_threads(CONCURRENCY);
 
   //google::InitGoogleLogging(argv[0]);
   // create node of cluster
@@ -140,10 +140,10 @@ int main(int argc, char** argv) {
   v.p_val.int_val = 1;
   b.write(field1, v);
   int rows = 4500;
-
-#pragma omp parallel num_threads(CONCURRENCY)
+  size_t total = 0;
+  auto start = MPI_Wtime();
+#pragma omp parallel
   while (true) {
-    auto start = MPI_Wtime();
     //should inference compact schema from source (e.g deserialzied kafka events)
     auto t1 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
     for (int i = 0; i < rows; i++) {
@@ -153,6 +153,15 @@ int main(int argc, char** argv) {
       t1->appendRow(b);
     }
     auto t2 = t1->compactTable();
-    processors::partition(t2, field1)->verify(field1);
+    t1->release();
+    auto t3 = processors::partition(t2, field1);
+    t3->verify(field1);
+    t2->release();
+#pragma omp atomic
+    total += t3->row_count;
+
+    if(omp_get_thread_num() == 0) {
+      LOG(INFO) << (total / (MPI_Wtime() - start)) * schema_ptr->rowSize() / (1024*1024*1024) << "GBps on " << node->rank;
+    }
   }
 }

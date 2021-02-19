@@ -507,14 +507,14 @@ std::shared_ptr<mtable> mtable::compactTable() {
   }
   CHECK_LE(compact_schema_ptr->rowSize(), schema_ptr->rowSize());
   //LOG(INFO) << compact_schema_ptr->rowSize() << "v.s" << schema_ptr->rowSize();
-  /*
+  return compact_table_ptr;
+}
+void mtable::release() {
   payload.clear();
   payload.shrink_to_fit();
   key_dist->clear();
   key_groups->clear();
   placement_index->clear();
-*/
-  return compact_table_ptr;
 }
 } // namespace table
 } // namespace surfingdb
