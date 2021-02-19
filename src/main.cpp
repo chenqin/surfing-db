@@ -156,13 +156,12 @@ int main(int argc, char** argv) {
     }
     auto t2 = t1->compactTable();
     auto t3 = t1->compactTable();
-#pragma omp critical
-    {
-      processors::partition(t2, field1);
-      processors::partition(t3, field1);
-    }
-    t2->verify(field1);
-    t3->verify(field1);
+
+    processors::partition(t2, field1);
+    processors::partition(t3, field1);
+
+    //t2->verify(field1);
+    //t3->verify(field1);
     LOG(INFO) << "Throughput " << total / (MPI_Wtime() - start) << " on thread " << omp_get_thread_num() << "@" << node->rank;
   }
 }

@@ -43,10 +43,21 @@ void processors::xgb(std::shared_ptr<mtable> in, std::vector<Field> features, Fi
 }
 
 void processors::partition(std::shared_ptr<mtable> in, Field& f) {
-
-  in->group(f);
+  auto schema_ptr = in->getSchema();
+  auto node_ptr = in->getNodePtr();
+  auto row_count = in->row_size();
   in->placement_sort(f);
-
+  mtable recv(in->getNodePtr(), in->getSchema(), in->row_size() * in->getSchema()->rowSize());
+  MPI_Request revs[node_ptr->world];
+  MPI_Request sends[node_ptr->world];
+  for(int i = 0 ; i < node_ptr->world; i++) {
+    MPI_Irecv(recv.payload_ptr(), in->row_size(), *schema_ptr->schemaMPIType(), i, omp_get_thread_num(), MPI_COMM_WORLD, &revs[i]);
+    MPI_Isend(in->payload_ptr(), in->row_size(), *schema_ptr->schemaMPIType(), i, omp_get_thread_num(), MPI_COMM_WORLD, &sends[i]);
+  }
+  MPI_Waitall(node_ptr->world, revs, MPI_STATUSES_IGNORE);
+  MPI_Waitall(node_ptr->world, sends, MPI_STATUSES_IGNORE);
+  /*
+   * in->group(f);
   CHECK(!in->placement_index->empty());
   CHECK_NOTNULL(in->getSchema());
 
@@ -110,6 +121,7 @@ void processors::partition(std::shared_ptr<mtable> in, Field& f) {
   } else {
     in->copy_rma_memory(recv_buffer_rows);
   }
+   */
 }
 } // namespace table
 } // namespace surfingdb

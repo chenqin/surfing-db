@@ -45,6 +45,7 @@ public:
   void copy_rma_memory(size_t rows); //deprecated
   void reserve_rma_memory(size_t rows);
   uint8_t* range_ptr(int dest);
+  size_t range_row_size(int dest);
   uint8_t* payload_ptr();
   size_t placement(size_t key);
   size_t row_size();

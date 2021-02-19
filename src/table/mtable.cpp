@@ -171,7 +171,7 @@ void mtable::group(const Field& f) {
   local_group_sizes[rank] = key_groups->size() * 3;
 
   size_t recv[world]; // type should be same as local_group_sizes
-  memcpy(recv, local_group_sizes, world*sizeof(size_t));
+  memcpy(recv, local_group_sizes, world * sizeof(size_t));
 
   MPI_Allreduce(&local_group_sizes, &recv, world, MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
 
@@ -220,6 +220,14 @@ uint8_t* mtable::range_ptr(int dest) {
 
   int index = placement_index->at(dest);
   return &this->payload[index * schema_ptr->rowSize()];
+}
+
+size_t mtable::range_row_size(int dest) {
+  if (dest == node_ptr->world - 1) {
+    return row_count - placement_index->at(dest);
+  } else {
+    return placement_index->at(dest + 1) - placement_index->at(dest);
+  }
 }
 
 /**
@@ -499,7 +507,7 @@ std::shared_ptr<mtable> mtable::compactTable() {
   }
   CHECK_LE(compact_schema_ptr->rowSize(), schema_ptr->rowSize());
   //LOG(INFO) << compact_schema_ptr->rowSize() << "v.s" << schema_ptr->rowSize();
-/*
+  /*
   payload.clear();
   payload.shrink_to_fit();
   key_dist->clear();
