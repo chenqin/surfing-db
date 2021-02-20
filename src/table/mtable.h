@@ -23,9 +23,6 @@ private:
   // defines the node row table bind to
   std::shared_ptr<node> node_ptr;
   std::shared_ptr<TableSchema> schema_ptr;
-  void flush_rma_memory(size_t rows);
-  void copy_rma_memory(size_t rows); //deprecated
-  void reserve_rma_memory(size_t rows);
 public:
   MPI_Win win;
   uint8_t* schedule;
@@ -45,6 +42,9 @@ public:
   std::shared_ptr<mtable> compactTable();
   void placement_sort(const Field& f);
   uint8_t* range_ptr(int dest);
+  void flush_rma_memory(size_t rows);
+  void copy_rma_memory(size_t rows); //deprecated
+  void reserve_rma_memory(size_t rows);
   size_t range_row_size(int dest);
   uint8_t* payload_ptr();
   size_t placement(size_t key);
