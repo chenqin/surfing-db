@@ -1,9 +1,9 @@
 # surfing-db
-Ride wave map streams with SQL/Python on HPC architectures (NUMA, GPU, RMA) The only data processing framework that utlize high performance computing architecture to run large scale machine learning and data processing all in one place. with SQL or Python.
+The only data processing framework that utlize high performance computing architecture to run large scale machine learning and data processing all in one place.
 
-## data prep, ml training and serving all in one place with SQL.
+## data prep, ml training and serving all in one place with SQL support (ongoing).
 
-## AI native runtime taking advantage map hardware accleration
+## AI native runtime taking advantage of hardware accleration
 
 
 pre-requesite
