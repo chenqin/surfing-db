@@ -54,8 +54,8 @@ int main(int argc, char** argv) {
   SchemaUtils::initField(field4, "d", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
   SchemaUtils::initField(field5, "e", RowType::STRING, MAX_STR_LEN);
 
-  SchemaUtils::initListField(field6, "l", RowType::DOUBLE, 240, sizeof(DOUBLE_TYPE));
-  SchemaUtils::initMapField(field7, "m", RowType::STRING, RowType::LONG, 100, MAX_STR_LEN, sizeof(long));
+  SchemaUtils::initListField(field6, "l", RowType::DOUBLE, 24, sizeof(DOUBLE_TYPE));
+  SchemaUtils::initMapField(field7, "m", RowType::STRING, RowType::LONG, 10, MAX_STR_LEN, sizeof(long));
 
   r.fields.push_back(field1);
   r.fields.push_back(field2);
@@ -145,23 +145,17 @@ int main(int argc, char** argv) {
 #pragma omp parallel
   while (true) {
     //should inference compact schema from source (e.g deserialzied kafka events)
-    auto t1 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
+    auto t2 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
     for (int i = 0; i < rows; i++) {
       Value v;
       v.p_val.int_val = i + node->rank;
       b.write(field1, v);
-      t1->appendRow(b);
+      t2->appendRow(b);
     }
-    auto t2 = t1->compactTable();
-    t1->release();
     auto t3 = processors::partition(t2, field1);
     t3->verify(field1);
     t2->release();
-#pragma omp atomic
     total += t3->row_count;
-
-    if(omp_get_thread_num() == 0) {
-      LOG(INFO) << (total / (MPI_Wtime() - start)) * schema_ptr->rowSize() / (1024*1024*1024) << "GBps on " << node->rank;
-    }
+    LOG(INFO) << (total / (MPI_Wtime() - start)) * schema_ptr->rowSize() / (1024*1024*1024) << "GBps on " << node->rank << " " <<omp_get_thread_num();
   }
 }
