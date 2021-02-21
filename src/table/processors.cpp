@@ -87,7 +87,16 @@ std::shared_ptr<mtable> processors::partition(std::shared_ptr<mtable> in, Field&
     }
   }
   MPI_Waitall(send_count, sends, MPI_STATUSES_IGNORE);
-  MPI_Waitall(recv_count, revs, MPI_STATUSES_IGNORE);
+  MPI_Status statuses[node_ptr->world];
+  MPI_Waitall(recv_count, revs, statuses);
+  for(int i = 0 ; i < node_ptr->world; i++) {
+    if(statuses[i].MPI_ERROR != 0) {
+      char buffer[1024];
+      int size;
+      MPI_Error_string(statuses[i].MPI_ERROR, buffer, &size);
+      LOG(INFO) << node_ptr->rank << " from " << i << buffer;
+    }
+  }
   auto table = std::make_shared<mtable>(node_ptr, schema_ptr, buffer_len * schema_ptr->rowSize());
   memcpy(table->payload_ptr(), &buffer[0], buffer_len * schema_ptr->rowSize());
   table->offset = buffer_len * schema_ptr->rowSize();
