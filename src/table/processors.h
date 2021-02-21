@@ -14,11 +14,11 @@ namespace surfingdb {
 namespace table {
 class processors {
 public:
-  static void map(std::shared_ptr<mtable>, std::shared_ptr<mtable>, std::function<void(const RowBuffer&, RowBuffer&)>);
+  static std::shared_ptr<mtable> map(std::shared_ptr<mtable>, std::shared_ptr<TableSchema>, std::function<void(const RowBuffer&, RowBuffer&)>);
 
-  static std::shared_ptr<mtable> partition_rma(std::shared_ptr<mtable>, Field&);
+  static std::shared_ptr<mtable> shuffleRMA(std::shared_ptr<mtable>, Field&);
 
-  static std::shared_ptr<mtable> partition(std::shared_ptr<mtable>, Field&);
+  static std::shared_ptr<mtable> shuffle(std::shared_ptr<mtable>, Field&);
 
   static void xgb(std::shared_ptr<mtable>, std::vector<Field>, Field&, const XGBParameters&);
 };

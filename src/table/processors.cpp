@@ -8,8 +8,8 @@
 namespace surfingdb {
 namespace table {
 
-void processors::map(std::shared_ptr<mtable> in, std::shared_ptr<mtable> out, std::function<void(const RowBuffer&, RowBuffer&)> transform) {
-  out->reserveRow(in->row_size());
+std::shared_ptr<mtable> processors::map(std::shared_ptr<mtable> in, std::shared_ptr<TableSchema> out_schema_ptr, std::function<void(const RowBuffer&, RowBuffer&)> transform) {
+  auto out = std::make_shared<mtable>(in->getNodePtr(), out_schema_ptr, in->row_count* out_schema_ptr->rowSize());
 #pragma omp parallel for shared(out) schedule(dynamic, 100)
   for (size_t i = 0; i < in->row_size(); i++) {
     auto in_row = in->readRow(i);
@@ -19,6 +19,7 @@ void processors::map(std::shared_ptr<mtable> in, std::shared_ptr<mtable> out, st
 #pragma omp critical(append)
     out->appendRow(out_row);
   }
+  return out;
 }
 
 void processors::xgb(std::shared_ptr<mtable> in, std::vector<Field> features, Field& label, const XGBParameters& parameters) {
@@ -42,12 +43,11 @@ void processors::xgb(std::shared_ptr<mtable> in, std::vector<Field> features, Fi
   }
 }
 
-std::shared_ptr<mtable> processors::partition(std::shared_ptr<mtable> in, Field& f) {
+std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f) {
   auto schema_ptr = in->getSchema();
   auto node_ptr = in->getNodePtr();
   in->placement_sort(f);
   mtable recv(in->getNodePtr(), in->getSchema(), in->row_size() * in->getSchema()->rowSize());
-  MPI_Request revs[node_ptr->world];
   MPI_Request sends[node_ptr->world];
   size_t recv_lens[node_ptr->world];
 
@@ -67,9 +67,6 @@ std::shared_ptr<mtable> processors::partition(std::shared_ptr<mtable> in, Field&
     }
   }
 
-  //MPI_Waitall(node_ptr->world, sends, MPI_STATUSES_IGNORE);
-  //MPI_Waitall(node_ptr->world, revs, MPI_STATUSES_IGNORE);
-
   size_t buffer_len = 0;
   size_t start_index[node_ptr->world];
 
@@ -79,7 +76,7 @@ std::shared_ptr<mtable> processors::partition(std::shared_ptr<mtable> in, Field&
   }
   std::vector<uint8_t> buffer;
   buffer.resize(buffer_len * schema_ptr->rowSize());
-  int send_count = 0, recv_count =0;
+  int send_count = 0;
 
   for(int i = 0 ; i < node_ptr->world; i++) {
     if(in->range_row_size(i) > 0) {
@@ -101,9 +98,6 @@ std::shared_ptr<mtable> processors::partition(std::shared_ptr<mtable> in, Field&
   }
   MPI_Status statuses[node_ptr->world];
   MPI_Waitall(send_count, sends, statuses);
-
-  //MPI_Waitall(recv_count, revs, statuses);
-
   for(int i = 0 ; i < node_ptr->world; i++) {
     if(statuses[i].MPI_ERROR != 0) {
       char buffer[1024];
@@ -118,11 +112,10 @@ std::shared_ptr<mtable> processors::partition(std::shared_ptr<mtable> in, Field&
   table->row_count = buffer_len;
   buffer.clear();
   buffer.shrink_to_fit();
-  LOG(INFO) << "parition complete";
   return table;
 }
 
-std::shared_ptr<mtable> processors::partition_rma(std::shared_ptr<mtable> in, Field& f) {
+std::shared_ptr<mtable> processors::shuffleRMA(std::shared_ptr<mtable> in, Field& f) {
 //#pragma omp critical
   in->group(f);
   in->placement_sort(f);
