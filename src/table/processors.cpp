@@ -91,6 +91,7 @@ std::shared_ptr<mtable> processors::partition(std::shared_ptr<mtable> in, Field&
 }
 
 std::shared_ptr<mtable> processors::partition_rma(std::shared_ptr<mtable> in, Field& f) {
+//#pragma omp critical
   in->group(f);
   in->placement_sort(f);
   CHECK(!in->placement_index->empty());

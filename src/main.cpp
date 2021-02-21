@@ -142,6 +142,7 @@ int main(int argc, char** argv) {
   size_t total = 0;
   auto start = MPI_Wtime();
   int round = 0;
+#pragma omp parallel num_threads(2)
   while (true) {
     //should inference compact schema from source (e.g deserialzied kafka events)
     auto t2 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
@@ -151,7 +152,7 @@ int main(int argc, char** argv) {
       b.write(field1, v);
       t2->appendRow(b);
     }
-    if(round++%2 == 0) {
+    if(omp_get_thread_num()%2 == 0) {
       auto t3 = processors::partition_rma(t2, field1);
       t3->verify(field1);
       total += t3->row_count;
