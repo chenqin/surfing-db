@@ -142,21 +142,8 @@ int main(int argc, char** argv) {
   size_t total = 0;
   auto start = MPI_Wtime();
   int round = 0;
-#pragma omp parallel num_threads(2)
+#pragma omp parallel num_threads(3)
   while(true) {
-    if (omp_get_thread_num() == 0) {
-      //should inference compact schema from source (e.g deserialzied kafka events)
-      auto t2 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
-      for (int i = 0; i < rows; i++) {
-        Value v;
-        v.p_val.int_val = i + node->rank;
-        b.write(field1, v);
-        t2->appendRow(b);
-      }
-      auto t3 = processors::partition_rma(t2, field1);
-      t3->verify(field1);
-      total += t3->row_count;
-    } else {
       //should inference compact schema from source (e.g deserialzied kafka events)
       auto t2 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
       for (int i = 0; i < rows; i++) {
@@ -169,6 +156,5 @@ int main(int argc, char** argv) {
       t3->verify(field1);
       total += t3->row_count;
       LOG(INFO) << (total / (MPI_Wtime() - start)) * schema_ptr->rowSize() / (1024 * 1024) << "MB ps on " << node->rank << " " << omp_get_thread_num();
-    }
   }
 }
