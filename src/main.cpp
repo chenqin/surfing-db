@@ -144,7 +144,7 @@ int main(int argc, char** argv) {
   int round = 0;
 #pragma omp parallel num_threads(2)
   while(true) {
-    if (omp_get_thread_num() == -1) {
+    if (omp_get_thread_num() == 0) {
       //should inference compact schema from source (e.g deserialzied kafka events)
       auto t2 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
       for (int i = 0; i < rows; i++) {

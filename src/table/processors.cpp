@@ -50,19 +50,25 @@ std::shared_ptr<mtable> processors::partition(std::shared_ptr<mtable> in, Field&
   MPI_Request revs[node_ptr->world];
   MPI_Request sends[node_ptr->world];
   size_t recv_lens[node_ptr->world];
+
   for(int i = 0 ; i < node_ptr->world; i++) {
-    MPI_Irecv(&recv_lens[i], 1, MPI_UNSIGNED_LONG, i, omp_get_thread_num(), MPI_COMM_WORLD, &revs[i]);
-    size_t send_to_i = in->range_row_size(i);
-    LOG(INFO) << node_ptr->rank << " => " << i << " size " << send_to_i;
-    MPI_Isend(&send_to_i, 1, MPI_UNSIGNED_LONG, i, omp_get_thread_num(), MPI_COMM_WORLD, &sends[i]);
+    if(node_ptr->rank == i){
+      size_t send_to_i = in->range_row_size(i);
+      MPI_Request request;
+      MPI_Status status;
+      MPI_Isend(&send_to_i, 1, MPI_UNSIGNED_LONG, i, omp_get_thread_num(), MPI_COMM_WORLD, &request);
+      for(int j = 0 ; j < node_ptr->world; j++) {
+        MPI_Recv(&recv_lens[j], 1, MPI_UNSIGNED_LONG, j, omp_get_thread_num(), MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      }
+      MPI_Wait(&request, &status);
+    } else {
+      size_t send_to_i = in->range_row_size(i);
+      MPI_Send(&send_to_i, 1, MPI_UNSIGNED_LONG, i, omp_get_thread_num(), MPI_COMM_WORLD);
+    }
   }
 
-  MPI_Waitall(node_ptr->world, sends, MPI_STATUSES_IGNORE);
-  MPI_Waitall(node_ptr->world, revs, MPI_STATUSES_IGNORE);
-
-  for(int i = 0 ; i < node_ptr->world ; i++) {
-    LOG(INFO) << node_ptr->rank << " <= " << i << " size " << recv_lens[i];
-  }
+  //MPI_Waitall(node_ptr->world, sends, MPI_STATUSES_IGNORE);
+  //MPI_Waitall(node_ptr->world, revs, MPI_STATUSES_IGNORE);
 
   size_t buffer_len = 0;
   size_t start_index[node_ptr->world];
@@ -76,25 +82,34 @@ std::shared_ptr<mtable> processors::partition(std::shared_ptr<mtable> in, Field&
   int send_count = 0, recv_count =0;
 
   for(int i = 0 ; i < node_ptr->world; i++) {
-    if(recv_lens[i] > 0) {
-      CHECK_LE(start_index[i], buffer_len);
-      LOG(INFO) << node_ptr->rank << " <- " << i << " size " << recv_lens[i];
-      MPI_Irecv(&buffer[start_index[i]*schema_ptr->rowSize()], recv_lens[i], *schema_ptr->schemaMPIType(), i, omp_get_thread_num(), MPI_COMM_WORLD, &revs[recv_count++]);
-    }
     if(in->range_row_size(i) > 0) {
-      LOG(INFO) << node_ptr->rank << "-> " << i << " size " << in->range_row_size(i);
+      //LOG(INFO) << node_ptr->rank << "-> " << i << " size " << in->range_row_size(i);
       MPI_Isend(in->range_ptr(i), in->range_row_size(i), *schema_ptr->schemaMPIType(), i, omp_get_thread_num(), MPI_COMM_WORLD, &sends[send_count++]);
     }
+    if(recv_lens[i] > 0) {
+      CHECK_LE(start_index[i], buffer_len);
+      //LOG(INFO) << node_ptr->rank << " <- " << i << " size " << recv_lens[i];
+      MPI_Status status;
+      MPI_Recv(&buffer[start_index[i]*schema_ptr->rowSize()], recv_lens[i], *schema_ptr->schemaMPIType(), i, omp_get_thread_num(), MPI_COMM_WORLD, &status);
+      if(status.MPI_ERROR != 0) {
+        char buffer[1024];
+        int size;
+        MPI_Error_string(status.MPI_ERROR, buffer, &size);
+        LOG(INFO) << node_ptr->rank << " from " << i << "\n" <<buffer;
+      }
+    }
   }
-  MPI_Waitall(send_count, sends, MPI_STATUSES_IGNORE);
   MPI_Status statuses[node_ptr->world];
-  MPI_Waitall(recv_count, revs, statuses);
+  MPI_Waitall(send_count, sends, statuses);
+
+  //MPI_Waitall(recv_count, revs, statuses);
+
   for(int i = 0 ; i < node_ptr->world; i++) {
     if(statuses[i].MPI_ERROR != 0) {
       char buffer[1024];
       int size;
       MPI_Error_string(statuses[i].MPI_ERROR, buffer, &size);
-      LOG(INFO) << node_ptr->rank << " from " << i << buffer;
+      LOG(INFO) << node_ptr->rank << " from " << i << "\n" <<buffer;
     }
   }
   auto table = std::make_shared<mtable>(node_ptr, schema_ptr, buffer_len * schema_ptr->rowSize());

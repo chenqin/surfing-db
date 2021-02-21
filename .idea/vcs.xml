@@ -3,5 +3,9 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/build/pg_query/src/pg_query" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/build/xgboost/src/xgboost" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/build/xgboost/src/xgboost/cub" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/build/xgboost/src/xgboost/dmlc-core" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/build/xgboost/src/xgboost/gputreeshap" vcs="Git" />
   </component>
 </project>
