@@ -141,6 +141,7 @@ int main(int argc, char** argv) {
   int rows = 4500;
   size_t total = 0;
   auto start = MPI_Wtime();
+  int round = 0;
   while (true) {
     //should inference compact schema from source (e.g deserialzied kafka events)
     auto t2 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
@@ -150,9 +151,15 @@ int main(int argc, char** argv) {
       b.write(field1, v);
       t2->appendRow(b);
     }
-    auto t3 = processors::partition(t2, field1);
-    t3->verify(field1);
-    total += t3->row_count;
+    if(round++%2 == 0) {
+      auto t3 = processors::partition_rma(t2, field1);
+      t3->verify(field1);
+      total += t3->row_count;
+    } else {
+      auto t3 = processors::partition(t2, field1);
+      t3->verify(field1);
+      total += t3->row_count;
+    }
     LOG(INFO) << (total / (MPI_Wtime() - start)) * schema_ptr->rowSize() / (1024*1024) << "MB ps on " << node->rank << " " <<omp_get_thread_num();
   }
 }

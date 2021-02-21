@@ -43,10 +43,8 @@ void processors::xgb(std::shared_ptr<mtable> in, std::vector<Field> features, Fi
 }
 
 std::shared_ptr<mtable> processors::partition(std::shared_ptr<mtable> in, Field& f) {
-/*
   auto schema_ptr = in->getSchema();
   auto node_ptr = in->getNodePtr();
-  auto row_count = in->row_size();
   in->placement_sort(f);
   mtable recv(in->getNodePtr(), in->getSchema(), in->row_size() * in->getSchema()->rowSize());
   MPI_Request revs[node_ptr->world];
@@ -90,7 +88,9 @@ std::shared_ptr<mtable> processors::partition(std::shared_ptr<mtable> in, Field&
   buffer.clear();
   buffer.shrink_to_fit();
   return table;
-*/
+}
+
+std::shared_ptr<mtable> processors::partition_rma(std::shared_ptr<mtable> in, Field& f) {
   in->group(f);
   in->placement_sort(f);
   CHECK(!in->placement_index->empty());
