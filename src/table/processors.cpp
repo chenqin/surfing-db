@@ -73,9 +73,11 @@ std::shared_ptr<mtable> processors::partition(std::shared_ptr<mtable> in, Field&
   for(int i = 0 ; i < node_ptr->world; i++) {
     if(recv_lens[i] > 0) {
       CHECK_LE(start_index[i], buffer_len);
+      LOG(INFO) << node_ptr->rank << " <- " << i << " size " << recv_lens[i];
       MPI_Irecv(&buffer[start_index[i]*schema_ptr->rowSize()], recv_lens[i], *type, i, omp_get_thread_num(), MPI_COMM_WORLD, &revs[recv_count++]);
     }
     if(in->range_row_size(i) > 0) {
+      LOG(INFO) << node_ptr->rank << "-> " << i << " size " << in->range_row_size(i);
       MPI_Isend(in->range_ptr(i), in->range_row_size(i), *type, i, omp_get_thread_num(), MPI_COMM_WORLD, &sends[send_count++]);
     }
   }
