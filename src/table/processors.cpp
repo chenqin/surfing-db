@@ -53,11 +53,16 @@ std::shared_ptr<mtable> processors::partition(std::shared_ptr<mtable> in, Field&
   for(int i = 0 ; i < node_ptr->world; i++) {
     MPI_Irecv(&recv_lens[i], 1, MPI_UNSIGNED_LONG, i, omp_get_thread_num(), MPI_COMM_WORLD, &revs[i]);
     size_t send_to_i = in->range_row_size(i);
+    LOG(INFO) << node_ptr->rank << " => " << i << " size " << send_to_i;
     MPI_Isend(&send_to_i, 1, MPI_UNSIGNED_LONG, i, omp_get_thread_num(), MPI_COMM_WORLD, &sends[i]);
   }
 
   MPI_Waitall(node_ptr->world, sends, MPI_STATUSES_IGNORE);
   MPI_Waitall(node_ptr->world, revs, MPI_STATUSES_IGNORE);
+
+  for(int i = 0 ; i < node_ptr->world ; i++) {
+    LOG(INFO) << node_ptr->rank << " <= " << i << " size " << recv_lens[i];
+  }
 
   size_t buffer_len = 0;
   size_t start_index[node_ptr->world];
@@ -69,16 +74,16 @@ std::shared_ptr<mtable> processors::partition(std::shared_ptr<mtable> in, Field&
   std::vector<uint8_t> buffer;
   buffer.resize(buffer_len * schema_ptr->rowSize());
   int send_count = 0, recv_count =0;
-  const MPI_Datatype* type = schema_ptr->schemaMPIType();
+
   for(int i = 0 ; i < node_ptr->world; i++) {
     if(recv_lens[i] > 0) {
       CHECK_LE(start_index[i], buffer_len);
       LOG(INFO) << node_ptr->rank << " <- " << i << " size " << recv_lens[i];
-      MPI_Irecv(&buffer[start_index[i]*schema_ptr->rowSize()], recv_lens[i], *type, i, omp_get_thread_num(), MPI_COMM_WORLD, &revs[recv_count++]);
+      MPI_Irecv(&buffer[start_index[i]*schema_ptr->rowSize()], recv_lens[i], *schema_ptr->schemaMPIType(), i, omp_get_thread_num(), MPI_COMM_WORLD, &revs[recv_count++]);
     }
     if(in->range_row_size(i) > 0) {
       LOG(INFO) << node_ptr->rank << "-> " << i << " size " << in->range_row_size(i);
-      MPI_Isend(in->range_ptr(i), in->range_row_size(i), *type, i, omp_get_thread_num(), MPI_COMM_WORLD, &sends[send_count++]);
+      MPI_Isend(in->range_ptr(i), in->range_row_size(i), *schema_ptr->schemaMPIType(), i, omp_get_thread_num(), MPI_COMM_WORLD, &sends[send_count++]);
     }
   }
   MPI_Waitall(send_count, sends, MPI_STATUSES_IGNORE);
@@ -89,6 +94,7 @@ std::shared_ptr<mtable> processors::partition(std::shared_ptr<mtable> in, Field&
   table->row_count = buffer_len;
   buffer.clear();
   buffer.shrink_to_fit();
+  LOG(INFO) << "parition complete";
   return table;
 }
 
@@ -133,7 +139,7 @@ std::shared_ptr<mtable> processors::partition_rma(std::shared_ptr<mtable> in, Fi
   in->reserve_rma_memory(recv_buffer_rows);
 
   MPI_Win_fence(0, in->win);
-  const MPI_Datatype type = *(schema_ptr->schemaMPIType());
+  MPI_Datatype type = *(schema_ptr->schemaMPIType());
 
   for (int dest = 0; dest < node_ptr->world; dest++) {
     int ring_dest = (dest + node_ptr->rank) % node_ptr->world;

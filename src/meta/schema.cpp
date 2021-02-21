@@ -159,6 +159,7 @@ bool TableSchema::containField(Field field) {
 }
 
 MPI_Datatype* TableSchema::schemaMPIType() {
+#pragma omp critical
   if (!_type_set) {
     _type_set = true;
     for (size_t i = 0; i < fields.size(); i++) {
