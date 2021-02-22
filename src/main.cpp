@@ -142,17 +142,28 @@ int main(int argc, char** argv) {
   size_t total = 0;
   auto start = MPI_Wtime();
   int round = 0;
-#pragma omp parallel num_threads(3)
+#pragma omp parallel num_threads(CONCURRENCY)
   while(true) {
-      //should inference compact schema from source (e.g deserialzied kafka events)
-      auto t2 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
+    //simulate a delay to decode and handle kafka batch
+      std::this_thread::sleep_for(std::chrono::microseconds (10*omp_get_thread_num()));
+      //should inference compact schema from source (e.g handle kafka events)
+      auto t1 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
       for (int i = 0; i < rows; i++) {
         Value v;
         v.p_val.int_val = i + node->rank;
         b.write(field1, v);
-        t2->appendRow(b);
+        t1->appendRow(b);
       }
+      auto t2 = processors::map(t1, schema_ptr, [&](RowBuffer in, RowBuffer out) {
+        for(auto f : schema_ptr->fields) {
+          Value v;
+          in.read(f, v);
+          out.write(f, v);
+        }
+      });
+      t1->release();
       auto t3 = processors::shuffle(t2, field1);
+      t2->release();
       t3->verify(field1);
       total += t3->row_count;
       LOG(INFO) << (total / (MPI_Wtime() - start)) * schema_ptr->rowSize() / (1024 * 1024) << "MB ps on " << node->rank << " " << omp_get_thread_num();

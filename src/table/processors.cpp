@@ -10,13 +10,11 @@ namespace table {
 
 std::shared_ptr<mtable> processors::map(std::shared_ptr<mtable> in, std::shared_ptr<TableSchema> out_schema_ptr, std::function<void(const RowBuffer&, RowBuffer&)> transform) {
   auto out = std::make_shared<mtable>(in->getNodePtr(), out_schema_ptr, in->row_count* out_schema_ptr->rowSize());
-#pragma omp parallel for shared(out) schedule(dynamic, 100)
   for (size_t i = 0; i < in->row_size(); i++) {
     auto in_row = in->readRow(i);
     RowBuffer out_row(out->getSchema());
     transform(*in_row.get(), out_row);
     CHECK_EQ(out_row.schema_sig(), out->getSchema()->signature());
-#pragma omp critical(append)
     out->appendRow(out_row);
   }
   return out;
@@ -88,7 +86,7 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f
       //LOG(INFO) << node_ptr->rank << " <- " << i << " size " << recv_lens[i];
       MPI_Status status;
       MPI_Recv(&buffer[start_index[i]*schema_ptr->rowSize()], recv_lens[i], *schema_ptr->schemaMPIType(), i, omp_get_thread_num(), MPI_COMM_WORLD, &status);
-      if(status.MPI_ERROR != 0) {
+      if(status.MPI_ERROR != 0 && status.MPI_SOURCE < node_ptr->world && status.MPI_SOURCE >=0) {
         char buffer[1024];
         int size;
         MPI_Error_string(status.MPI_ERROR, buffer, &size);
@@ -99,7 +97,7 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f
   MPI_Status statuses[node_ptr->world];
   MPI_Waitall(send_count, sends, statuses);
   for(int i = 0 ; i < node_ptr->world; i++) {
-    if(statuses[i].MPI_ERROR != 0) {
+    if(statuses[i].MPI_ERROR != 0 && statuses[i].MPI_SOURCE < node_ptr->world && statuses[i].MPI_SOURCE >=0) {
       char buffer[1024];
       int size;
       MPI_Error_string(statuses[i].MPI_ERROR, buffer, &size);
