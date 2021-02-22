@@ -114,7 +114,7 @@ void mtable::appendRow(RowBuffer& row) {
 }
 
 void mtable::verify(const Field& field) {
-  //LOG(INFO) << "verify " << row_count << " rows";
+  LOG(INFO) << "verify " << row_count << " rows" << omp_get_thread_num() << " " << node_ptr->rank;
   for (size_t i = 0; i < row_count; i++) {
     auto r = this->readRow(i);
     Value v;

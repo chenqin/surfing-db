@@ -141,7 +141,7 @@ int main(int argc, char** argv) {
   int rows = 50000;
   size_t total = 0;
   auto start = MPI_Wtime();
-  std::unordered_map<Value, Value, ValueHasher> results;
+  std::unordered_map<Value , float, ValueHasher> results;
 #pragma omp parallel num_threads(CONCURRENCY) shared(results)
   {
     while (true) {
@@ -167,11 +167,28 @@ int main(int argc, char** argv) {
       t2->release();
       t3->verify(field1);
       total += t3->row_count;
-      /**
-       * before reduction, sort by key already shuffled to processes
-       */
       t3->group(field1, true);
 
+//reduction
+#pragma omp critical
+      {
+        for (auto p : *t3->key_groups) {
+          long sum = 0;
+          Value key;
+          for (auto k : p.second) {
+            Value v;
+            t3->readRow(k)->read(field1, key);
+            t3->readRow(k)->read(field2, v);
+            sum += v.p_val.long_val;
+          }
+
+          if (results.find(key) == results.end()) {
+            results[key] = sum;
+          } else {
+            results[key] += sum;
+          }
+        }
+      }
       LOG(INFO) << (total / (MPI_Wtime() - start)) * schema_ptr->rowSize() / (1024 * 1024) << "MB ps on " << node->rank << " " << omp_get_thread_num();
     }
   }
