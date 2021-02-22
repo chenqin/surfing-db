@@ -16,7 +16,7 @@ class processors {
 public:
   static std::shared_ptr<mtable> map(std::shared_ptr<mtable>, std::shared_ptr<TableSchema>, std::function<void(const RowBuffer&, RowBuffer&)>);
 
-  static void reduce(std::shared_ptr<mtable>, Field&, std::shared_ptr<std::unordered_map<Value , std::shared_ptr<RowBuffer>, ValueHasher>> result_ptr, std::shared_ptr<TableSchema> reduce_schema_ptr, std::function<void(Value&,std::vector<std::unique_ptr<RowBuffer>>, std::shared_ptr<RowBuffer>)>);
+  static void reduce(std::shared_ptr<mtable>, Field&, std::shared_ptr<std::unordered_map<Value , std::shared_ptr<RowBuffer>, ValueHasher>> result_ptr, std::shared_ptr<TableSchema> reduce_schema_ptr, std::function<void(Value&,std::vector<std::unique_ptr<RowBuffer>>&, std::shared_ptr<RowBuffer>&)>);
 
   static std::shared_ptr<mtable> shuffleRMA(std::shared_ptr<mtable>, Field&);
 

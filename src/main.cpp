@@ -140,13 +140,14 @@ int main(int argc, char** argv) {
   b.write(field1, v);
   int rows = 50000;
   size_t total = 0;
+  srand(std::time(nullptr));
   auto start = MPI_Wtime();
-  auto results_ptr = std::make_shared<std::unordered_map<Value , RowBuffer, ValueHasher>>();
+  auto results_ptr = std::make_shared<std::unordered_map<Value , std::shared_ptr<RowBuffer>, ValueHasher>>();
 #pragma omp parallel num_threads(4) shared(results_ptr, total)
   {
     while (true) {
       //simulate a delay to decode and handle kafka batch
-      std::this_thread::sleep_for(std::chrono::microseconds(10 * omp_get_thread_num()));
+      std::this_thread::sleep_for(std::chrono::microseconds(rand()%30));
       //should inference compact schema from source (e.g handle kafka events)
       auto t1 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
       for (int i = 0; i < rows; i++) {
@@ -166,11 +167,14 @@ int main(int argc, char** argv) {
       auto t3 = processors::shuffle(t2, field1);
       t2->release();
       t3->verify(field1);
+      processors::reduce(t3, field1, results_ptr, schema_ptr, [=](Value& key,std::vector<std::unique_ptr<RowBuffer>>& vals, std::shared_ptr<RowBuffer>& result){
+        Value v;
+        result->read(field1,v);
+        v.p_val.long_val += vals.size();
+        result->write(field1, v);
+      });
 #pragma omp critical
       total += t3->row_count;
-      processors::reduce(t3, field1, results_ptr, schema_ptr, [&](Value& key,std::vector<std::unique_ptr<RowBuffer>> vals, RowBuffer& agg){
-
-      });
       if(omp_get_thread_num() == 0) {
         LOG(INFO) << (total / (MPI_Wtime() - start)) * schema_ptr->rowSize() / (1024 * 1024) << "MB ps on " << node->rank;
       }

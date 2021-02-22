@@ -9,7 +9,7 @@ namespace surfingdb {
 namespace table {
 
 std::shared_ptr<mtable> processors::map(std::shared_ptr<mtable> in, std::shared_ptr<TableSchema> out_schema_ptr, std::function<void(const RowBuffer&, RowBuffer&)> transform) {
-  auto out = std::make_shared<mtable>(in->getNodePtr(), out_schema_ptr, in->row_count* out_schema_ptr->rowSize());
+  auto out = std::make_shared<mtable>(in->getNodePtr(), out_schema_ptr, in->row_count * out_schema_ptr->rowSize());
   for (size_t i = 0; i < in->row_size(); i++) {
     auto in_row = in->readRow(i);
     RowBuffer out_row(out->getSchema());
@@ -20,22 +20,29 @@ std::shared_ptr<mtable> processors::map(std::shared_ptr<mtable> in, std::shared_
   return out;
 }
 
-void processors::reduce(std::shared_ptr<mtable> in_ptr, Field& field, std::shared_ptr<std::unordered_map<Value , std::shared_ptr<RowBuffer>, ValueHasher>> result_ptr, std::shared_ptr<TableSchema> reduce_schema_ptr, std::function<void(Value&,std::vector<std::unique_ptr<RowBuffer>>, std::shared_ptr<RowBuffer>)> reducer) {
+void processors::reduce(std::shared_ptr<mtable> in_ptr,
+                        Field& field,
+                        std::shared_ptr<std::unordered_map<Value, std::shared_ptr<RowBuffer>, ValueHasher>> result_ptr,
+                        std::shared_ptr<TableSchema> reduce_schema_ptr,
+                        std::function<void(Value&, std::vector<std::unique_ptr<RowBuffer>>&, std::shared_ptr<RowBuffer>&)> reducer) {
   in_ptr->group(field, true);
-  for(auto g : *in_ptr->key_groups) {
+  for (auto g : *in_ptr->key_groups) {
     auto vals = g.second;
     std::vector<std::unique_ptr<RowBuffer>> val_list;
     Value key;
-    for(auto index : vals) {
+    for (auto index : vals) {
       auto r = in_ptr->readRow(index);
       r->read(field, key);
       val_list.push_back(std::move(r));
     }
-    if(result_ptr->find(key) == result_ptr->end()) {
-      auto row = std::make_shared<RowBuffer>(reduce_schema_ptr);
-      result_ptr->insert({key, row});
+#pragma omp critical
+    {
+      if (result_ptr->find(key) == result_ptr->end()) {
+        result_ptr->insert({ key, std::make_shared<RowBuffer>(reduce_schema_ptr) });
+      }
+      std::shared_ptr<RowBuffer> row = result_ptr->at(key);
+      reducer(key, val_list, row);
     }
-    //reducer(key, val_list, result_ptr->at(key));
   }
 }
 
@@ -68,13 +75,13 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f
   MPI_Request sends[node_ptr->world];
   size_t recv_lens[node_ptr->world];
 
-  for(int i = 0 ; i < node_ptr->world; i++) {
-    if(node_ptr->rank == i){
+  for (int i = 0; i < node_ptr->world; i++) {
+    if (node_ptr->rank == i) {
       size_t send_to_i = in->range_row_size(i);
       MPI_Request request;
       MPI_Status status;
       MPI_Isend(&send_to_i, 1, MPI_UNSIGNED_LONG, i, omp_get_thread_num(), MPI_COMM_WORLD, &request);
-      for(int j = 0 ; j < node_ptr->world; j++) {
+      for (int j = 0; j < node_ptr->world; j++) {
         MPI_Recv(&recv_lens[j], 1, MPI_UNSIGNED_LONG, j, omp_get_thread_num(), MPI_COMM_WORLD, MPI_STATUS_IGNORE);
       }
       MPI_Wait(&request, &status);
@@ -87,40 +94,42 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f
   size_t buffer_len = 0;
   size_t start_index[node_ptr->world];
 
-  for(int i = 0 ; i < node_ptr->world; i++){
+  for (int i = 0; i < node_ptr->world; i++) {
     buffer_len += recv_lens[i];
-    start_index[i] = (i == 0) ? 0 : recv_lens[i-1] + start_index[i-1];
+    start_index[i] = (i == 0) ? 0 : recv_lens[i - 1] + start_index[i - 1];
   }
   std::vector<uint8_t> buffer;
   buffer.resize(buffer_len * schema_ptr->rowSize());
   int send_count = 0;
 
-  for(int i = 0 ; i < node_ptr->world; i++) {
-    if(in->range_row_size(i) > 0) {
+  for (int i = 0; i < node_ptr->world; i++) {
+    if (in->range_row_size(i) > 0) {
       //LOG(INFO) << node_ptr->rank << "-> " << i << " size " << in->range_row_size(i);
       MPI_Isend(in->range_ptr(i), in->range_row_size(i), *schema_ptr->schemaMPIType(), i, omp_get_thread_num(), MPI_COMM_WORLD, &sends[send_count++]);
     }
-    if(recv_lens[i] > 0) {
+    if (recv_lens[i] > 0) {
       CHECK_LE(start_index[i], buffer_len);
       //LOG(INFO) << node_ptr->rank << " <- " << i << " size " << recv_lens[i];
       MPI_Status status;
-      MPI_Recv(&buffer[start_index[i]*schema_ptr->rowSize()], recv_lens[i], *schema_ptr->schemaMPIType(), i, omp_get_thread_num(), MPI_COMM_WORLD, &status);
-      if(status.MPI_ERROR != 0 && status.MPI_SOURCE < node_ptr->world && status.MPI_SOURCE >=0) {
+      MPI_Recv(&buffer[start_index[i] * schema_ptr->rowSize()], recv_lens[i], *schema_ptr->schemaMPIType(), i, omp_get_thread_num(), MPI_COMM_WORLD, &status);
+      if (status.MPI_ERROR != 0 && status.MPI_SOURCE < node_ptr->world && status.MPI_SOURCE >= 0) {
         char buffer[1024];
         int size;
         MPI_Error_string(status.MPI_ERROR, buffer, &size);
-        LOG(INFO) << node_ptr->rank << " from " << i << "\n" <<buffer;
+        LOG(INFO) << node_ptr->rank << " from " << i << "\n"
+                  << buffer;
       }
     }
   }
   MPI_Status statuses[node_ptr->world];
   MPI_Waitall(send_count, sends, statuses);
-  for(int i = 0 ; i < node_ptr->world; i++) {
-    if(statuses[i].MPI_ERROR != 0 && statuses[i].MPI_SOURCE < node_ptr->world && statuses[i].MPI_SOURCE >=0) {
+  for (int i = 0; i < node_ptr->world; i++) {
+    if (statuses[i].MPI_ERROR != 0 && statuses[i].MPI_SOURCE < node_ptr->world && statuses[i].MPI_SOURCE >= 0) {
       char buffer[1024];
       int size;
       MPI_Error_string(statuses[i].MPI_ERROR, buffer, &size);
-      LOG(INFO) << node_ptr->rank << " from " << i << "\n" <<buffer;
+      LOG(INFO) << node_ptr->rank << " from " << i << "\n"
+                << buffer;
     }
   }
   auto table = std::make_shared<mtable>(node_ptr, schema_ptr, buffer_len * schema_ptr->rowSize());
@@ -133,7 +142,7 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f
 }
 
 std::shared_ptr<mtable> processors::shuffleRMA(std::shared_ptr<mtable> in, Field& f) {
-//#pragma omp critical
+  //#pragma omp critical
   in->group(f, false);
   in->placement_sort(f);
   CHECK(!in->placement_index->empty());
