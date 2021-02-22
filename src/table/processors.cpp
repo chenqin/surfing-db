@@ -115,7 +115,7 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f
 
 std::shared_ptr<mtable> processors::shuffleRMA(std::shared_ptr<mtable> in, Field& f) {
 //#pragma omp critical
-  in->group(f);
+  in->group(f, false);
   in->placement_sort(f);
   CHECK(!in->placement_index->empty());
   CHECK_NOTNULL(in->getSchema());
@@ -182,5 +182,6 @@ std::shared_ptr<mtable> processors::shuffleRMA(std::shared_ptr<mtable> in, Field
   }
   return in;
 }
+
 } // namespace table
 } // namespace surfingdb

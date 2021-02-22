@@ -124,7 +124,7 @@ void mtable::verify(const Field& field) {
   }
 }
 
-void mtable::group(const Field& f) {
+void mtable::group(const Field& f, bool local) {
   const int world = node_ptr->world;
   const int rank = node_ptr->rank;
 
@@ -144,6 +144,7 @@ void mtable::group(const Field& f) {
     }
     key_groups->at(key).emplace_back(i);
   }
+  if(local) return;
   /**
    * [hash_key, size, rank]
    */
