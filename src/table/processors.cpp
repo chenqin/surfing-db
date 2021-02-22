@@ -20,6 +20,25 @@ std::shared_ptr<mtable> processors::map(std::shared_ptr<mtable> in, std::shared_
   return out;
 }
 
+void processors::reduce(std::shared_ptr<mtable> in_ptr, Field& field, std::shared_ptr<std::unordered_map<Value , std::shared_ptr<RowBuffer>, ValueHasher>> result_ptr, std::shared_ptr<TableSchema> reduce_schema_ptr, std::function<void(Value&,std::vector<std::unique_ptr<RowBuffer>>, std::shared_ptr<RowBuffer>)> reducer) {
+  in_ptr->group(field, true);
+  for(auto g : *in_ptr->key_groups) {
+    auto vals = g.second;
+    std::vector<std::unique_ptr<RowBuffer>> val_list;
+    Value key;
+    for(auto index : vals) {
+      auto r = in_ptr->readRow(index);
+      r->read(field, key);
+      val_list.push_back(std::move(r));
+    }
+    if(result_ptr->find(key) == result_ptr->end()) {
+      auto row = std::make_shared<RowBuffer>(reduce_schema_ptr);
+      result_ptr->insert({key, row});
+    }
+    //reducer(key, val_list, result_ptr->at(key));
+  }
+}
+
 void processors::xgb(std::shared_ptr<mtable> in, std::vector<Field> features, Field& label, const XGBParameters& parameters) {
   xgbop op(features, label, parameters, in->getNodePtr()->rank, in->getNodePtr()->world);
   std::vector<float> features_matrix;

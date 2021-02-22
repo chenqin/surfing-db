@@ -141,8 +141,8 @@ int main(int argc, char** argv) {
   int rows = 50000;
   size_t total = 0;
   auto start = MPI_Wtime();
-  std::unordered_map<Value , float, ValueHasher> results;
-#pragma omp parallel num_threads(CONCURRENCY) shared(results)
+  auto results_ptr = std::make_shared<std::unordered_map<Value , RowBuffer, ValueHasher>>();
+#pragma omp parallel num_threads(4) shared(results_ptr, total)
   {
     while (true) {
       //simulate a delay to decode and handle kafka batch
@@ -166,30 +166,14 @@ int main(int argc, char** argv) {
       auto t3 = processors::shuffle(t2, field1);
       t2->release();
       t3->verify(field1);
-      total += t3->row_count;
-      t3->group(field1, true);
-
-//reduction
 #pragma omp critical
-      {
-        for (auto p : *t3->key_groups) {
-          long sum = 0;
-          Value key;
-          for (auto k : p.second) {
-            Value v;
-            t3->readRow(k)->read(field1, key);
-            t3->readRow(k)->read(field2, v);
-            sum += v.p_val.long_val;
-          }
+      total += t3->row_count;
+      processors::reduce(t3, field1, results_ptr, schema_ptr, [&](Value& key,std::vector<std::unique_ptr<RowBuffer>> vals, RowBuffer& agg){
 
-          if (results.find(key) == results.end()) {
-            results[key] = sum;
-          } else {
-            results[key] += sum;
-          }
-        }
+      });
+      if(omp_get_thread_num() == 0) {
+        LOG(INFO) << (total / (MPI_Wtime() - start)) * schema_ptr->rowSize() / (1024 * 1024) << "MB ps on " << node->rank;
       }
-      LOG(INFO) << (total / (MPI_Wtime() - start)) * schema_ptr->rowSize() / (1024 * 1024) << "MB ps on " << node->rank << " " << omp_get_thread_num();
     }
   }
 }
