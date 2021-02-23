@@ -147,7 +147,7 @@ int main(int argc, char** argv) {
   {
     while (true) {
       //simulate a delay to decode and handle kafka batch
-      std::this_thread::sleep_for(std::chrono::microseconds(rand()%30));
+      std::this_thread::sleep_for(std::chrono::microseconds(rand()%10));
       //should inference compact schema from source (e.g handle kafka events)
       auto t1 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
       for (int i = 0; i < rows; i++) {
@@ -156,6 +156,7 @@ int main(int argc, char** argv) {
         b.write(field1, v);
         t1->appendRow(b);
       }
+
       auto t2 = processors::map(t1, schema_ptr, [&](RowBuffer in, RowBuffer out) {
         for (auto f : schema_ptr->fields) {
           Value v;
@@ -173,6 +174,7 @@ int main(int argc, char** argv) {
         v.p_val.long_val += vals.size();
         result->write(field1, v);
       });
+
 #pragma omp critical
       total += t3->row_count;
       if(omp_get_thread_num() == 0) {

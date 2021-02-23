@@ -70,6 +70,11 @@ void processors::xgb(std::shared_ptr<mtable> in, std::vector<Field> features, Fi
 std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f) {
   auto schema_ptr = in->getSchema();
   auto node_ptr = in->getNodePtr();
+
+  MPI_Datatype row_type;
+  MPI_Type_contiguous(schema_ptr->rowSize(), MPI_CHAR, &row_type);
+  MPI_Type_commit(&row_type);
+
   in->placement_sort(f);
   mtable recv(in->getNodePtr(), in->getSchema(), in->row_size() * in->getSchema()->rowSize());
   MPI_Request sends[node_ptr->world];
@@ -105,20 +110,12 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f
   for (int i = 0; i < node_ptr->world; i++) {
     if (in->range_row_size(i) > 0) {
       //LOG(INFO) << node_ptr->rank << "-> " << i << " size " << in->range_row_size(i);
-      MPI_Isend(in->range_ptr(i), in->range_row_size(i), *schema_ptr->schemaMPIType(), i, omp_get_thread_num(), MPI_COMM_WORLD, &sends[send_count++]);
+      MPI_Isend(in->range_ptr(i), in->range_row_size(i), row_type, i, omp_get_thread_num(), MPI_COMM_WORLD, &sends[send_count++]);
     }
     if (recv_lens[i] > 0) {
       CHECK_LE(start_index[i], buffer_len);
       //LOG(INFO) << node_ptr->rank << " <- " << i << " size " << recv_lens[i];
-      MPI_Status status;
-      MPI_Recv(&buffer[start_index[i] * schema_ptr->rowSize()], recv_lens[i], *schema_ptr->schemaMPIType(), i, omp_get_thread_num(), MPI_COMM_WORLD, &status);
-      if (status.MPI_ERROR != 0 && status.MPI_SOURCE < node_ptr->world && status.MPI_SOURCE >= 0) {
-        char buffer[1024];
-        int size;
-        MPI_Error_string(status.MPI_ERROR, buffer, &size);
-        LOG(INFO) << node_ptr->rank << " from " << i << "\n"
-                  << buffer;
-      }
+      MPI_Recv(&buffer[start_index[i] * schema_ptr->rowSize()], recv_lens[i], row_type, i, omp_get_thread_num(), MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
   }
   MPI_Status statuses[node_ptr->world];
@@ -138,6 +135,7 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f
   table->row_count = buffer_len;
   buffer.clear();
   buffer.shrink_to_fit();
+  MPI_Type_free(&row_type);
   return table;
 }
 
