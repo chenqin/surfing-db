@@ -108,12 +108,12 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f
   int send_count = 0;
 
   for (int i = 0; i < node_ptr->world; i++) {
-    int send_rank_offset = (i + omp_get_thread_num() << 1)%node_ptr->world;
+    int send_rank_offset = i;
     if (in->range_row_size(send_rank_offset) > 0) {
       //LOG(INFO) << node_ptr->rank << "-> " << i << " size " << in->range_row_size(i);
       MPI_Isend(in->range_ptr(send_rank_offset), in->range_row_size(send_rank_offset), row_type, send_rank_offset, omp_get_thread_num(), MPI_COMM_WORLD, &sends[send_count++]);
     }
-    int recv_rank_offset = (i + omp_get_thread_num() << 1)%node_ptr->world;
+    int recv_rank_offset = i;
     if (recv_lens[recv_rank_offset] > 0) {
       CHECK_LE(start_index[recv_rank_offset], buffer_len);
       //LOG(INFO) << node_ptr->rank << " <- " << i << " size " << recv_lens[i];
