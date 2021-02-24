@@ -143,7 +143,7 @@ int main(int argc, char** argv) {
   srand(std::time(nullptr));
   auto start = MPI_Wtime();
   auto results_ptr = std::make_shared<std::unordered_map<Value , std::shared_ptr<RowBuffer>, ValueHasher>>();
-#pragma omp parallel num_threads(3) shared(results_ptr, total)
+#pragma omp parallel shared(results_ptr, total)
   {
     while (true) {
       //simulate a delay to decode and handle kafka batch

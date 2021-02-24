@@ -80,7 +80,8 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f
   MPI_Request sends[node_ptr->world];
   size_t recv_lens[node_ptr->world];
 
-  for (int i = 0; i < node_ptr->world; i++) {
+  for (int j = 0; j < node_ptr->world; j++) {
+    int i = (j + (omp_get_thread_num() << 1))%node_ptr->world;
     if (node_ptr->rank == i) {
       size_t send_to_i = in->range_row_size(i);
       MPI_Request request;
