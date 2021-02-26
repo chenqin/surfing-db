@@ -297,7 +297,7 @@ namespace surfingdb {
 				}
 
 				// build the subscription pipeline
-				KafkaConsumer::KafkaConsumer(std::string &topic, const std::unordered_map<std::string, std::string> &settings,
+				KafkaConsumer::KafkaConsumer(std::string &topic, std::string &brokers, const std::unordered_map<std::string, std::string> &settings,
 				                             Segment& segment) : segment_(segment) {
 					// subscribe is designed for group balance, we use assign directly
 					LOG(INFO) << "Consume " << topic << "/" << topic << ":" << segment_.id();
@@ -307,7 +307,7 @@ namespace surfingdb {
 					auto offset = segment_.offset;
 
 					// assign the partition to start consuming
-					consumer_ = KafkaConsumer::getConsumer(topic, settings);
+					consumer_ = KafkaConsumer::getConsumer(brokers, settings);
 
 					// a segment can have offset even smaller than valid range of the partition
 					// due to range chunking, adjust partition offset if this is the case

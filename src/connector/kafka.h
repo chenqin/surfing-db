@@ -108,7 +108,7 @@ namespace surfingdb {
 										const std::string &, const std::unordered_map<std::string, std::string> &);
 				public:
 						std::unique_ptr<RdKafka::Message> message();
-						KafkaConsumer(std::string &topic, const std::unordered_map<std::string, std::string> &settings,
+						KafkaConsumer(std::string &topic, std::string& brokers, const std::unordered_map<std::string, std::string> &settings,
 						              Segment &segment);
 				};
 
