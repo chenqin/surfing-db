@@ -17,7 +17,7 @@
 #ifndef SURFINGDB_KAFKA_H
 #define SURFINGDB_KAFKA_H
 
-#include <rdkafkacpp.h>
+#include <librdkafka/rdkafkacpp.h>
 #include "meta/schema.h"
 
 namespace surfingdb {

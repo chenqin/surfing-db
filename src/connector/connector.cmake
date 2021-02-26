@@ -14,7 +14,8 @@ target_link_libraries(${CONNECTOR}
         PUBLIC ${JSON_LIBRARY}
         PUBLIC ${THRIFT_LIBRARY}
         PUBLIC ${ARROW_LIBRARY}
-        PUBLIC ${KAFKA_LIBRARY})
+        PUBLIC rdkafka++
+        PUBLIC rdkafka)
 
 # discover all gtests in this module
 include(GoogleTest)

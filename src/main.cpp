@@ -20,6 +20,7 @@
 #include <omp.h>
 #include "meta/node.h"
 #include "table/processors.h"
+#include "connector/kafka.h"
 
 #define FLUSH_DIR "/tmp/"
 
@@ -145,6 +146,10 @@ int main(int argc, char** argv) {
   auto results_ptr = std::make_shared<std::unordered_map<Value , std::shared_ptr<RowBuffer>, ValueHasher>>();
 #pragma omp parallel shared(results_ptr, total)
   {
+  	//std::string host = "localhost:2108";
+  	//auto s = surfingdb::connector::Segment(omp_get_thread_num(), -1, 10000);
+  	//auto k = surfingdb::connector::KafkaConsumer(host, {}, s);
+  	//k.message();
     while (true) {
       //simulate a delay to decode and handle kafka batch
       std::this_thread::sleep_for(std::chrono::microseconds(rand()%10));

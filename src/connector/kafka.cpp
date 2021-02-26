@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "kafka.h"
+#include <librdkafka/rdkafkacpp.h>
 
 namespace surfingdb {
 		namespace connector {
