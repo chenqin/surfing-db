@@ -17,7 +17,9 @@
 #ifndef SURFINGDB_KAFKA_H
 #define SURFINGDB_KAFKA_H
 
-#include <librdkafka/rdkafkacpp.h>
+#include <librdkafka/rdkafka.h>
+#include <vector>
+#include <string>
 
 namespace surfingdb {
 		namespace connector {
@@ -27,16 +29,21 @@ namespace surfingdb {
 				 */
 				class KafkaConnector {
 				public:
-						std::vector<RdKafka::Message *>
-						consume_batch(size_t batch_size, int batch_tmout);
-
-						KafkaConnector(std::vector<std::string> &topics, std::string &brokers);
+            void init(std::string, std::string);
+            KafkaConnector() {}
+            std::vector<rd_kafka_message_t *> consume_batch(size_t batch_size, int batch_tmout);
 						~KafkaConnector();
 				private:
-						RdKafka::KafkaConsumer *consumer;
-						RdKafka::Conf *conf;
-						std::string codec = "none";
-						void msg_consume(RdKafka::Message *message, void *opaque);
+          rd_kafka_t *rk;          /* Consumer instance handle */
+          rd_kafka_conf_t *conf;   /* Temporary configuration object */
+          rd_kafka_resp_err_t err; /* librdkafka API error code */
+          char errstr[512];        /* librdkafka API error reporting buffer */
+          const char *brokers;     /* Argument: broker list */
+          const char *groupid;     /* Argument: Consumer group id */
+          char *topics;           /* Argument: list of topics to subscribe to */
+          int topic_cnt;           /* Number of topics to subscribe to */
+          rd_kafka_topic_partition_list_t *subscription; /* Subscribed topics */
+          int i;
 				};
 		} // namespace surfingdb
 

@@ -140,31 +140,40 @@ int main(int argc, char** argv) {
   Value v;
   v.p_val.int_val = 1;
   b.write(field1, v);
-  int rows = 1;
+  int rows = 10;
   size_t total = 0;
   srand(std::time(nullptr));
   auto start = MPI_Wtime();
   auto results_ptr = std::make_shared<std::unordered_map<Value , std::shared_ptr<RowBuffer>, ValueHasher>>();
-#pragma omp parallel shared(results_ptr, total)
+//#pragma omp parallel shared(results_ptr, total)
   {
-  	auto v = std::vector<std::string>();
-  	v.push_back("xenon_metrics_dev");
-  	std::string brokers = "datakafka08005:9092,datakafka08001:9092,datakafka08006:9092";
-  	auto consumer = KafkaConnector(v, brokers);
+
+  	std::string v = "xenon_metrics_prod";
+  	std::string brokers = "datakafka08001:9092,datakafka08002:9092,datakafka08003:9092";
+  	auto consumer = KafkaConnector();
+    consumer.init(v, brokers);
+    auto t1 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
+
     while (true) {
 
       //simulate a delay to decode and handle kafka batch
       std::this_thread::sleep_for(std::chrono::microseconds(rand()%10));
       //should inference compact schema from source (e.g handle kafka events)
 	    auto t1 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
-			auto messages = consumer.consume_batch(rows, 1000);
+			auto messages = consumer.consume_batch(rows, 100);
+      //TODO (chenqin): need to handle empty result
+      //if(messages.size() == 0) {
+      //  continue;
+      //}
       for (auto m : messages) {
         Value v;
-        v.p_val.int_val = (int) m->offset();
+        //rd_kafka_topic_name(m->rkt), m->partition,
+        v.p_val.int_val = (int) m->offset;
         b.write(field1, v);
         t1->appendRow(b);
+        rd_kafka_message_destroy(m);
       }
-      LOG(INFO) << messages.size() << "on" << omp_get_thread_num() << "@" << node->rank;
+      //LOG(INFO) << messages.size() << "on" << omp_get_thread_num() << "@" << node->rank;
 
       auto t2 = processors::map(t1, schema_ptr, [&](RowBuffer in, RowBuffer out) {
         for (auto f : schema_ptr->fields) {
@@ -174,7 +183,7 @@ int main(int argc, char** argv) {
         }
       });
       t1->release();
-      auto t3 = omp_get_thread_num() == 0 ? processors::shuffleRMA(t2, field1) : processors::shuffle(t2, field1);
+      auto t3 = processors::shuffle(t2, field1);
       //t2->release();
       t3->verify(field1);
       processors::reduce(t3, field1, results_ptr, schema_ptr, [=](Value& key,std::vector<std::unique_ptr<RowBuffer>>& vals, std::shared_ptr<RowBuffer>& result){

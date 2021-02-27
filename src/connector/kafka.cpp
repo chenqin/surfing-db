@@ -14,273 +14,198 @@
  * limitations under the License.
  */
 #include "kafka.h"
-#include <iostream>
 #include <mpi.h>
 #include <glog/logging.h>
 #include <sys/time.h>
 #include <csignal>
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+#include <vector>
+#include <librdkafka/rdkafka.h>
 
 namespace surfingdb {
 		namespace connector {
-				static volatile sig_atomic_t run = 1;
-				static bool exit_eof = false;
-				static int eof_cnt = 0;
-				static int partition_cnt = 0;
-				static int verbosity = 1;
-				static long msg_cnt = 0;
-				static int64_t msg_bytes = 0;
 
-				static void sigterm(int sig) {
-					run = 0;
-				}
+volatile sig_atomic_t run = 1;
 
-				class ExampleEventCb : public RdKafka::EventCb {
-				public:
-						void event_cb(RdKafka::Event &event) {
-							switch (event.type()) {
-								case RdKafka::Event::EVENT_ERROR:
-									if (event.fatal()) {
-										std::cerr << "FATAL ";
-										run = 0;
-									}
-									std::cerr << "ERROR (" << RdKafka::err2str(event.err()) << "): " <<
-									          event.str() << std::endl;
-									break;
+/**
+ * @brief Signal termination of program
+ */
+void stop(int sig) {
+  run = 0;
+}
 
-								case RdKafka::Event::EVENT_STATS:
-									std::cerr << "\"STATS\": " << event.str() << std::endl;
-									break;
+/**
+ * @returns 1 if all bytes are printable, else 0.
+ */
+int is_printable(const char* buf, size_t size) {
+  size_t i;
 
-								case RdKafka::Event::EVENT_LOG:
-									fprintf(stderr, "LOG-%i-%s: %s\n",
-									        event.severity(), event.fac().c_str(), event.str().c_str());
-									break;
+  for (i = 0; i < size; i++)
+    if (!isprint((int)buf[i]))
+      return 0;
 
-								case RdKafka::Event::EVENT_THROTTLE:
-									std::cerr << "THROTTLED: " << event.throttle_time() << "ms by " <<
-									          event.broker_name() << " id " << (int) event.broker_id() << std::endl;
-									break;
+  return 1;
+}
 
-								default:
-									std::cerr << "EVENT " << event.type() <<
-									          " (" << RdKafka::err2str(event.err()) << "): " <<
-									          event.str() << std::endl;
-									break;
-							}
-						}
-				};
+void KafkaConnector::init(std::string topic, std::string brokers) {
+  this->brokers = (char*)brokers.c_str();
+  std::string groupid = "surfingdb.test";
+  this->groupid = (char*) groupid.c_str();
+  topics = (char*) topic.c_str();
+  topic_cnt = 1;
+  conf = rd_kafka_conf_new();
 
-				class ExampleRebalanceCb : public RdKafka::RebalanceCb {
-				private:
-						static void part_list_print(const std::vector<RdKafka::TopicPartition *> &partitions) {
-							for (unsigned int i = 0; i < partitions.size(); i++)
-								std::cerr << partitions[i]->topic() <<
-								          "[" << partitions[i]->partition() << "], ";
-							std::cerr << "\n";
-						}
+  /* Set bootstrap broker(s) as a comma-separated list of
+       * host or host:port (default port 9092).
+       * librdkafka will use the bootstrap brokers to acquire the full
+       * set of brokers from the cluster. */
+  if (rd_kafka_conf_set(conf, "bootstrap.servers", this->brokers,
+                        errstr, sizeof(errstr))
+      != RD_KAFKA_CONF_OK) {
+    LOG(ERROR) << errstr;
+    rd_kafka_conf_destroy(conf);
+    return;
+  }
 
-				public:
-						void rebalance_cb(RdKafka::KafkaConsumer *consumer,
-						                  RdKafka::ErrorCode err,
-						                  std::vector<RdKafka::TopicPartition *> &partitions) {
-							std::cerr << "RebalanceCb: " << RdKafka::err2str(err) << ": ";
+  /* Set the consumer group id.
+ * All consumers sharing the same group id will join the same
+ * group, and the subscribed topic' partitions will be assigned
+ * according to the partition.assignment.strategy
+ * (consumer config property) to the consumers in the group. */
+  if (rd_kafka_conf_set(conf, "group.id", this->groupid,
+                        errstr, sizeof(errstr))
+      != RD_KAFKA_CONF_OK) {
+    LOG(ERROR) << errstr;
+    rd_kafka_conf_destroy(conf);
+    return;
+  }
 
-							part_list_print(partitions);
+  /* If there is no previously committed offset for a partition
+       * the auto.offset.reset strategy will be used to decide where
+       * in the partition to start fetching messages.
+       * By setting this to earliest the consumer will read all messages
+       * in the partition if there was no previously committed offset. */
+  if (rd_kafka_conf_set(conf, "auto.offset.reset", "earliest",
+                        errstr, sizeof(errstr))
+      != RD_KAFKA_CONF_OK) {
+    LOG(ERROR) << errstr;
+    rd_kafka_conf_destroy(conf);
+    return;
+  }
 
-							RdKafka::Error *error = NULL;
-							RdKafka::ErrorCode ret_err = RdKafka::ERR_NO_ERROR;
+  /*
+       * Create consumer instance.
+       *
+       * NOTE: rd_kafka_new() takes ownership of the conf object
+       *       and the application must not reference it again after
+       *       this call.
+       */
+  rk = rd_kafka_new(RD_KAFKA_CONSUMER, conf, errstr, sizeof(errstr));
+  if (!rk) {
+    LOG(ERROR) << errstr;
+    return;
+  }
 
-							if (err == RdKafka::ERR__ASSIGN_PARTITIONS) {
-								if (consumer->rebalance_protocol() == "COOPERATIVE")
-									error = consumer->incremental_assign(partitions);
-								else
-									ret_err = consumer->assign(partitions);
-								partition_cnt += (int) partitions.size();
-							} else {
-								if (consumer->rebalance_protocol() == "COOPERATIVE") {
-									error = consumer->incremental_unassign(partitions);
-									partition_cnt -= (int) partitions.size();
-								} else {
-									ret_err = consumer->unassign();
-									partition_cnt = 0;
-								}
-							}
-							eof_cnt = 0; /* FIXME: Won't work with COOPERATIVE */
+  conf = NULL; /* Configuration object is now owned, and freed,
+                      * by the rd_kafka_t instance. */
 
-							if (error) {
-								std::cerr << "incremental assign failed: " << error->str() << "\n";
-								delete error;
-							} else if (ret_err)
-								std::cerr << "assign failed: " << RdKafka::err2str(ret_err) << "\n";
+  /* Redirect all messages from per-partition queues to
+       * the main queue so that messages can be consumed with one
+       * call from all assigned partitions.
+       *
+       * The alternative is to poll the main queue (for events)
+       * and each partition queue separately, which requires setting
+       * up a rebalance callback and keeping track of the assignment:
+       * but that is more complex and typically not recommended. */
+  rd_kafka_poll_set_consumer(rk);
 
-						}
-				};
+  /* Convert the list of topics to a format suitable for librdkafka */
+  subscription = rd_kafka_topic_partition_list_new(topic_cnt);
 
+  rd_kafka_topic_partition_list_add(subscription,
+                                    topics,
+                                    /* the partition is ignored
+         * by subscribe() */
+                                    RD_KAFKA_PARTITION_UA);
 
-				static int64_t now() {
-#ifndef _WIN32
-					struct timeval tv;
-					gettimeofday(&tv, NULL);
-					return ((int64_t) tv.tv_sec * 1000) + (tv.tv_usec / 1000);
-#else
-#error "now() not implemented for Windows, please submit a PR"
-#endif
-				}
+  /* Subscribe to the list of topics */
+  err = rd_kafka_subscribe(rk, subscription);
 
+  if (err) {
+    fprintf(stderr,
+            "%% Failed to subscribe to %d topics: %s\n",
+            subscription->cnt, rd_kafka_err2str(err));
+    rd_kafka_topic_partition_list_destroy(subscription);
+    rd_kafka_destroy(rk);
+  }
 
-    class ExampleOffsetCommitCb : public RdKafka::OffsetCommitCb {
-    public:
-      void offset_commit_cb (RdKafka::ErrorCode err,
-                             std::vector<RdKafka::TopicPartition*> &offsets) {
-        std::cerr << now() << ": Propagate offset for " << offsets.size() << " partitions, error: " << RdKafka::err2str(err) << std::endl;
+  fprintf(stderr,
+          "%% Subscribed to %d topic(s), "
+          "waiting for rebalance and messages...\n",
+          subscription->cnt);
 
-        /* No offsets to commit, dont report anything. */
-        if (err == RdKafka::ERR__NO_OFFSET)
-          return;
+  rd_kafka_topic_partition_list_destroy(subscription);
+  signal(SIGINT, stop);
+}
 
-      }
-    };
+std::vector<rd_kafka_message_t*> KafkaConnector::consume_batch(size_t batch_size, int batch_tmout) {
+  std::vector<rd_kafka_message_t*> results;
+  while (batch_size-- > 0) {
+    rd_kafka_message_t* rkm;
 
-				KafkaConnector::KafkaConnector(std::vector<std::string> &topics, std::string &brokers) {
-					std::string errstr;
-					conf = RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL);
-					//RdKafka::Conf *tconf = RdKafka::Conf::create(RdKafka::Conf::CONF_TOPIC);
-          /*
-          ExampleRebalanceCb ex_rebalance_cb;
-          if (conf->set("rebalance_cb", &ex_rebalance_cb, errstr) != RdKafka::Conf::CONF_OK) {
-            LOG(ERROR) << errstr;
-          }
+    rkm = rd_kafka_consumer_poll(rk, batch_tmout);
+    if (!rkm)
+      continue; /* Timeout: no message within 100ms,
+                                   *  try again. This short timeout allows
+                                   *  checking for `run` at frequent intervals.
+                                   */
 
-          ExampleEventCb ex_event_cb;
-          if (conf->set("event_cb", &ex_event_cb, errstr) != RdKafka::Conf::CONF_OK) {
-            LOG(ERROR) << errstr;
-          }
-           */
+    /* consumer_poll() will return either a proper message
+         * or a consumer error (rkm->err is set). */
+    if (rkm->err) {
+      /* Consumer errors are generally to be considered
+           * informational as the consumer will automatically
+           * try to recover from all types of errors. */
+      fprintf(stderr,
+              "%% Consumer error: %s\n",
+              rd_kafka_message_errstr(rkm));
+      rd_kafka_message_destroy(rkm);
+      continue;
+    }
 
-          ExampleOffsetCommitCb offset_commit_cb;
-          conf->set("offset_commit_cb", &offset_commit_cb, errstr);
+    /* Proper message. */
+    //printf("Message on %s [%" PRId32 "] at offset %" PRId64 ":\n",
+    //       rd_kafka_topic_name(rkm->rkt), rkm->partition,
+    //       rkm->offset);
 
-					if (conf->set("enable.partition.eof", "false", errstr) != RdKafka::Conf::CONF_OK) {
-            LOG(ERROR) << errstr;
-					}
-					if (conf->set("group.id", "surfingdb.test", errstr) != RdKafka::Conf::CONF_OK) {
-            LOG(ERROR) << errstr;
-					}
-					if (conf->set("bootstrap.servers", brokers, errstr) != RdKafka::Conf::CONF_OK) {
-            LOG(ERROR) << errstr;
-					}
+    /* Print the message key. */
+    //if (rkm->key && is_printable((const char*)rkm->key, rkm->key_len))
+      //printf(" Key: %.*s\n",
+      //       (int)rkm->key_len, (const char*)rkm->key);
+    //else if (rkm->key)
+      //printf(" Key: (%d bytes)\n", (int)rkm->key_len);
 
-					if (conf->set("compression.codec", codec, errstr) !=
-					    RdKafka::Conf::CONF_OK) {
-            LOG(ERROR) << errstr;
-					}
+    /* Print the message value/payload. */
+    //if (rkm->payload && is_printable((const char*)rkm->payload, rkm->len))
+      //printf(" Value: %.*s\n",
+      //       (int)rkm->len, (const char*)rkm->payload);
+    //else if (rkm->payload)
+      //printf(" Value: (%d bytes)\n", (int)rkm->len);
+    results.push_back(rkm);
+  }
+  //rd_kafka_message_destroy(rkm);
+  return results;
+}
 
-					//conf->set("default_topic_conf", tconf, errstr);
-					//delete tconf;
+KafkaConnector::~KafkaConnector() {
+  /* Close the consumer: commit final offsets and leave the group. */
+  fprintf(stderr, "%% Closing consumer\n");
+  rd_kafka_consumer_close(rk);
 
-					consumer = RdKafka::KafkaConsumer::create(conf, errstr);
-					if (!consumer) {
-            LOG(ERROR) << errstr;
-					}
-					delete conf;
-					/* Subscribe to topics */
-					RdKafka::ErrorCode err = consumer->subscribe(topics);
-					if (err) {
-						std::cerr << "Failed to subscribe to " << topics.size() << " topics: "
-						          << RdKafka::err2str(err) << std::endl;
-
-					}
-				}
-
-				std::vector<RdKafka::Message *>
-				KafkaConnector::consume_batch(size_t batch_size, int batch_tmout) {
-
-					std::vector<RdKafka::Message *> msgs;
-					msgs.reserve(batch_size);
-
-					int64_t end = now() + batch_tmout;
-					int remaining_timeout = batch_tmout;
-
-					while (msgs.size() < batch_size) {
-						RdKafka::Message *msg = consumer->consume(remaining_timeout);
-
-						switch (msg->err()) {
-							case RdKafka::ERR__TIMED_OUT:
-								delete msg;
-								return msgs;
-
-							case RdKafka::ERR_NO_ERROR:
-								msgs.push_back(msg);
-								break;
-							default:
-								std::cerr << "%% Consumer error: " << msg->errstr() << std::endl;
-								delete msg;
-								return msgs;
-						}
-						remaining_timeout = end - now();
-						if (remaining_timeout < 0)
-							break;
-					}
-
-					return msgs;
-				}
-
-				void KafkaConnector::msg_consume(RdKafka::Message *message, void *opaque) {
-					switch (message->err()) {
-						case RdKafka::ERR__TIMED_OUT:
-							break;
-
-						case RdKafka::ERR_NO_ERROR:
-							/* Real message */
-							msg_cnt++;
-							msg_bytes += message->len();
-							if (verbosity >= 3)
-								std::cerr << "Read msg at offset " << message->offset() << std::endl;
-							RdKafka::MessageTimestamp ts;
-							ts = message->timestamp();
-							if (verbosity >= 2 &&
-							    ts.type != RdKafka::MessageTimestamp::MSG_TIMESTAMP_NOT_AVAILABLE) {
-								std::string tsname = "?";
-								if (ts.type == RdKafka::MessageTimestamp::MSG_TIMESTAMP_CREATE_TIME)
-									tsname = "create time";
-								else if (ts.type == RdKafka::MessageTimestamp::MSG_TIMESTAMP_LOG_APPEND_TIME)
-									tsname = "log append time";
-								std::cout << "Timestamp: " << tsname << " " << ts.timestamp << std::endl;
-							}
-							if (verbosity >= 2 && message->key()) {
-								std::cout << "Key: " << *message->key() << std::endl;
-							}
-							if (verbosity >= 1) {
-								printf("%.*s\n",
-								       static_cast<int>(message->len()),
-								       static_cast<const char *>(message->payload()));
-							}
-							break;
-
-						case RdKafka::ERR__PARTITION_EOF:
-							/* Last message */
-							if (exit_eof && ++eof_cnt == partition_cnt) {
-								std::cerr << "%% EOF reached for all " << partition_cnt <<
-								          " partition(s)" << std::endl;
-								run = 0;
-							}
-							break;
-
-						case RdKafka::ERR__UNKNOWN_TOPIC:
-						case RdKafka::ERR__UNKNOWN_PARTITION:
-							std::cerr << "Consume failed: " << message->errstr() << std::endl;
-							run = 0;
-							break;
-
-						default:
-							/* Errors */
-							std::cerr << "Consume failed: " << message->errstr() << std::endl;
-							run = 0;
-					}
-				}
-
-				KafkaConnector::~KafkaConnector() {
-					consumer->unsubscribe();
-				}
-		}
+  /* Destroy the consumer */
+  rd_kafka_destroy(rk);
+}
+}
 } // namespace surfingdb
