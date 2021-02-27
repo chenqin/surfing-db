@@ -41,7 +41,7 @@ else ()
         set(NCXX /usr/bin/g++)
         set(NCC /usr/bin/gcc)
         list(APPEND LNCFLAGS
-                "-Wall -Wextra -lstdc++ -lstdc++fs -lrdkafka++"
+                "-Wall -Wextra -lstdc++ -lstdc++fs"
                 "-Wl,--no-as-needed -no-pie -ldl"
                 "-I/usr/include/ -I/usr/local/include -L/usr/local/lib -L/usr/lib")
 
@@ -204,7 +204,7 @@ include(ext/Gflatbuffers_Ext.cmake)
 include(ext/Json_Ext.cmake)
 include(ext/OPENSSL_Ext.cmake)
 include(ext/Thrift_Ext.cmake)
-#include(ext/Kafka_Ext.cmake)
+include(ext/Kafka_Ext.cmake)
 include(ext/Arrow_Ext.cmake)
 include(ext/Sketches_Ext.cmake)
 include(ext/XGBoost_Ext.cmake)

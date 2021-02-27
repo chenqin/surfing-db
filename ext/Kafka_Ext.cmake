@@ -1,26 +1,30 @@
 # Adding kafka support to read streaming data
 find_package(Threads REQUIRED)
-
 # http://roaringbitmap.org/
 # by default, roaring is providng dynamic lib for linking
 # however I changed it to build static here - we may want to adjust in final deployment
 include(ExternalProject)
+
 SET(KAFKA_OPTS
         -DCMAKE_BUILD_TYPE=Release
         -DRDKAFKA_BUILD_STATIC=1
         -DENABLE_LZ4_EXT=OFF
-        -DWITH_SSL=OFF
-        -DWITH_SASL=OFF)
+        -DWITH_SSL=ON
+        -DWITH_SASL=ON)
+
 ExternalProject_Add(kafka
         PREFIX kafka
         GIT_REPOSITORY https://github.com/edenhill/librdkafka.git
         GIT_TAG v1.5.2
         UPDATE_COMMAND ""
-        INSTALL_COMMAND ""
+        BUILD_IN_SOURCE 1
+        CONFIGURE_COMMAND <SOURCE_DIR>/configure --install-deps --enable-static --source-deps-only
         CMAKE_ARGS ${KAFKA_OPTS}
         LOG_DOWNLOAD ON
         LOG_CONFIGURE ON
         LOG_BUILD ON)
+
+ExternalProject_Add_StepTargets(kafka configure build install)
 
 # get source dir after download step
 ExternalProject_Get_Property(kafka SOURCE_DIR)
