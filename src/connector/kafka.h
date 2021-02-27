@@ -35,7 +35,7 @@ namespace surfingdb {
 				private:
 						RdKafka::KafkaConsumer *consumer;
 						RdKafka::Conf *conf;
-						std::string codec = "gzip";
+						std::string codec = "none";
 						void msg_consume(RdKafka::Message *message, void *opaque);
 				};
 		} // namespace surfingdb

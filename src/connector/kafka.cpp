@@ -16,6 +16,7 @@
 #include "kafka.h"
 #include <iostream>
 #include <mpi.h>
+#include <glog/logging.h>
 #include <sys/time.h>
 #include <csignal>
 
@@ -115,6 +116,7 @@ namespace surfingdb {
 						}
 				};
 
+
 				static int64_t now() {
 #ifndef _WIN32
 					struct timeval tv;
@@ -125,40 +127,60 @@ namespace surfingdb {
 #endif
 				}
 
+
+    class ExampleOffsetCommitCb : public RdKafka::OffsetCommitCb {
+    public:
+      void offset_commit_cb (RdKafka::ErrorCode err,
+                             std::vector<RdKafka::TopicPartition*> &offsets) {
+        std::cerr << now() << ": Propagate offset for " << offsets.size() << " partitions, error: " << RdKafka::err2str(err) << std::endl;
+
+        /* No offsets to commit, dont report anything. */
+        if (err == RdKafka::ERR__NO_OFFSET)
+          return;
+
+      }
+    };
+
 				KafkaConnector::KafkaConnector(std::vector<std::string> &topics, std::string &brokers) {
 					std::string errstr;
 					conf = RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL);
 					//RdKafka::Conf *tconf = RdKafka::Conf::create(RdKafka::Conf::CONF_TOPIC);
-					ExampleRebalanceCb ex_rebalance_cb;
-					if (conf->set("rebalance_cb", &ex_rebalance_cb, errstr) != RdKafka::Conf::CONF_OK) {
-						std::cerr << errstr << std::endl;
-					}
-					ExampleEventCb ex_event_cb;
-					if (conf->set("event_cb", &ex_event_cb, errstr) != RdKafka::Conf::CONF_OK) {
-						std::cerr << errstr << std::endl;
-					}
+          /*
+          ExampleRebalanceCb ex_rebalance_cb;
+          if (conf->set("rebalance_cb", &ex_rebalance_cb, errstr) != RdKafka::Conf::CONF_OK) {
+            LOG(ERROR) << errstr;
+          }
+
+          ExampleEventCb ex_event_cb;
+          if (conf->set("event_cb", &ex_event_cb, errstr) != RdKafka::Conf::CONF_OK) {
+            LOG(ERROR) << errstr;
+          }
+           */
+
+          ExampleOffsetCommitCb offset_commit_cb;
+          conf->set("offset_commit_cb", &offset_commit_cb, errstr);
 
 					if (conf->set("enable.partition.eof", "false", errstr) != RdKafka::Conf::CONF_OK) {
-						std::cerr << errstr << std::endl;
+            LOG(ERROR) << errstr;
 					}
 					if (conf->set("group.id", "surfingdb.test", errstr) != RdKafka::Conf::CONF_OK) {
-						std::cerr << errstr << std::endl;
+            LOG(ERROR) << errstr;
 					}
 					if (conf->set("bootstrap.servers", brokers, errstr) != RdKafka::Conf::CONF_OK) {
-						std::cerr << errstr << std::endl;
+            LOG(ERROR) << errstr;
 					}
 
 					if (conf->set("compression.codec", codec, errstr) !=
 					    RdKafka::Conf::CONF_OK) {
-						std::cerr << errstr << std::endl;
+            LOG(ERROR) << errstr;
 					}
 
 					//conf->set("default_topic_conf", tconf, errstr);
 					//delete tconf;
 
-					RdKafka::KafkaConsumer::create(conf, errstr);
+					consumer = RdKafka::KafkaConsumer::create(conf, errstr);
 					if (!consumer) {
-						std::cerr << "Failed to create consumer: " << errstr << std::endl;
+            LOG(ERROR) << errstr;
 					}
 					delete conf;
 					/* Subscribe to topics */

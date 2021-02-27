@@ -140,7 +140,7 @@ int main(int argc, char** argv) {
   Value v;
   v.p_val.int_val = 1;
   b.write(field1, v);
-  int rows = 50000;
+  int rows = 1;
   size_t total = 0;
   srand(std::time(nullptr));
   auto start = MPI_Wtime();
@@ -148,8 +148,8 @@ int main(int argc, char** argv) {
 #pragma omp parallel shared(results_ptr, total)
   {
   	auto v = std::vector<std::string>();
-  	v.push_back("a");
-  	std::string brokers = "";
+  	v.push_back("xenon_metrics_dev");
+  	std::string brokers = "datakafka08005:9092,datakafka08001:9092,datakafka08006:9092";
   	auto consumer = KafkaConnector(v, brokers);
     while (true) {
 
@@ -164,6 +164,7 @@ int main(int argc, char** argv) {
         b.write(field1, v);
         t1->appendRow(b);
       }
+      LOG(INFO) << messages.size() << "on" << omp_get_thread_num() << "@" << node->rank;
 
       auto t2 = processors::map(t1, schema_ptr, [&](RowBuffer in, RowBuffer out) {
         for (auto f : schema_ptr->fields) {

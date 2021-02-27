@@ -4,19 +4,21 @@
 set(CONNECTOR surfconnector)
 
 execute_process(COMMAND sudo apt remove librdkafka-pin)
-
+execute_process(COMMAND sudo apt install librdkafka++-dev)
 # build nebula.ingest library
 add_library(${CONNECTOR} STATIC
         ${SURFINGDB_SRC}/connector/kafka.cpp)
 
 target_link_libraries(${CONNECTOR}
+        PUBLIC ${GLOG_LIBRARY}
         PUBLIC ${META}
         PUBLIC ${GLOG_LIBRARY}
         PUBLIC ${GFLAGS_LIBRARY}
         PUBLIC ${JSON_LIBRARY}
         PUBLIC ${THRIFT_LIBRARY}
         PUBLIC ${ARROW_LIBRARY}
-        PUBLIC ${KAFKA_LIBRARY})
+        PUBLIC rdkafka
+        PUBLIC rdkafka++)
 
 # discover all gtests in this module
 include(GoogleTest)
