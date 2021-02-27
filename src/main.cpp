@@ -152,6 +152,7 @@ int main(int argc, char** argv) {
   	std::string brokers = "";
   	auto consumer = KafkaConnector(v, brokers);
     while (true) {
+
       //simulate a delay to decode and handle kafka batch
       std::this_thread::sleep_for(std::chrono::microseconds(rand()%10));
       //should inference compact schema from source (e.g handle kafka events)

@@ -115,52 +115,6 @@ namespace surfingdb {
 						}
 				};
 
-				class ExampleRebalanceCb : public RdKafka::RebalanceCb {
-				private:
-						static void part_list_print(const std::vector<RdKafka::TopicPartition *> &partitions) {
-							for (unsigned int i = 0; i < partitions.size(); i++)
-								std::cerr << partitions[i]->topic() <<
-								          "[" << partitions[i]->partition() << "], ";
-							std::cerr << "\n";
-						}
-
-				public:
-						void rebalance_cb(RdKafka::KafkaConsumer *consumer,
-						                  RdKafka::ErrorCode err,
-						                  std::vector<RdKafka::TopicPartition *> &partitions) {
-							std::cerr << "RebalanceCb: " << RdKafka::err2str(err) << ": ";
-
-							part_list_print(partitions);
-
-							RdKafka::Error *error = NULL;
-							RdKafka::ErrorCode ret_err = RdKafka::ERR_NO_ERROR;
-
-							if (err == RdKafka::ERR__ASSIGN_PARTITIONS) {
-								if (consumer->rebalance_protocol() == "COOPERATIVE")
-									error = consumer->incremental_assign(partitions);
-								else
-									ret_err = consumer->assign(partitions);
-								partition_cnt += (int) partitions.size();
-							} else {
-								if (consumer->rebalance_protocol() == "COOPERATIVE") {
-									error = consumer->incremental_unassign(partitions);
-									partition_cnt -= (int) partitions.size();
-								} else {
-									ret_err = consumer->unassign();
-									partition_cnt = 0;
-								}
-							}
-							eof_cnt = 0; /* FIXME: Won't work with COOPERATIVE */
-
-							if (error) {
-								std::cerr << "incremental assign failed: " << error->str() << "\n";
-								delete error;
-							} else if (ret_err)
-								std::cerr << "assign failed: " << RdKafka::err2str(ret_err) << "\n";
-
-						}
-				};
-
 				static int64_t now() {
 #ifndef _WIN32
 					struct timeval tv;
@@ -236,13 +190,11 @@ namespace surfingdb {
 							case RdKafka::ERR_NO_ERROR:
 								msgs.push_back(msg);
 								break;
-
 							default:
 								std::cerr << "%% Consumer error: " << msg->errstr() << std::endl;
 								delete msg;
 								return msgs;
 						}
-
 						remaining_timeout = end - now();
 						if (remaining_timeout < 0)
 							break;
