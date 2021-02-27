@@ -140,12 +140,12 @@ int main(int argc, char** argv) {
   Value v;
   v.p_val.int_val = 1;
   b.write(field1, v);
-  int rows = 10;
+  int rows = 150;
   size_t total = 0;
   srand(std::time(nullptr));
   auto start = MPI_Wtime();
   auto results_ptr = std::make_shared<std::unordered_map<Value , std::shared_ptr<RowBuffer>, ValueHasher>>();
-//#pragma omp parallel shared(results_ptr, total)
+//#pragma omp parallel num_threads(3) shared(results_ptr, total)
   {
 
   	std::string v = "xenon_metrics_prod";
