@@ -27,6 +27,7 @@
 using namespace surfingdb::table::schema;
 using surfingdb::meta::node;
 using namespace surfingdb::table;
+using namespace surfingdb::connector;
 
 void transform(const RowBuffer& in, RowBuffer& out) {
   out = in;
@@ -146,18 +147,19 @@ int main(int argc, char** argv) {
   auto results_ptr = std::make_shared<std::unordered_map<Value , std::shared_ptr<RowBuffer>, ValueHasher>>();
 #pragma omp parallel shared(results_ptr, total)
   {
-  	//std::string host = "localhost:2108";
-  	//auto s = surfingdb::connector::Segment(omp_get_thread_num(), -1, 10000);
-  	//auto k = surfingdb::connector::KafkaConsumer(host, {}, s);
-  	//k.message();
+  	auto v = std::vector<std::string>();
+  	v.push_back("a");
+  	std::string brokers = "";
+  	auto consumer = KafkaConnector(v, brokers);
     while (true) {
       //simulate a delay to decode and handle kafka batch
       std::this_thread::sleep_for(std::chrono::microseconds(rand()%10));
       //should inference compact schema from source (e.g handle kafka events)
-      auto t1 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
-      for (int i = 0; i < rows; i++) {
+	    auto t1 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
+			auto messages = consumer.consume_batch(rows, 1000);
+      for (auto m : messages) {
         Value v;
-        v.p_val.int_val = i + node->rank;
+        v.p_val.int_val = (int) m->offset();
         b.write(field1, v);
         t1->appendRow(b);
       }

@@ -14,356 +14,299 @@
  * limitations under the License.
  */
 #include "kafka.h"
-#include <librdkafka/rdkafkacpp.h>
+#include <iostream>
+#include <mpi.h>
+#include <sys/time.h>
+#include <csignal>
 
 namespace surfingdb {
 		namespace connector {
-				class KafkaEventCb : public RdKafka::EventCb {
+				static volatile sig_atomic_t run = 1;
+				static bool exit_eof = false;
+				static int eof_cnt = 0;
+				static int partition_cnt = 0;
+				static int verbosity = 1;
+				static long msg_cnt = 0;
+				static int64_t msg_bytes = 0;
+
+				static void sigterm(int sig) {
+					run = 0;
+				}
+
+				class ExampleEventCb : public RdKafka::EventCb {
 				public:
-						virtual void event_cb(RdKafka::Event &event) override {
+						void event_cb(RdKafka::Event &event) {
 							switch (event.type()) {
 								case RdKafka::Event::EVENT_ERROR:
 									if (event.fatal()) {
-										LOG(FATAL) << "event error";
+										std::cerr << "FATAL ";
+										run = 0;
 									}
-									LOG(ERROR) << "ERROR (" << RdKafka::err2str(event.err()) << "): " << event.str();
+									std::cerr << "ERROR (" << RdKafka::err2str(event.err()) << "): " <<
+									          event.str() << std::endl;
 									break;
 
 								case RdKafka::Event::EVENT_STATS:
-									// LOG(ERROR) << "\"STATS\": " << event.str();
+									std::cerr << "\"STATS\": " << event.str() << std::endl;
 									break;
 
 								case RdKafka::Event::EVENT_LOG:
-									LOG(ERROR) << event.severity() << "-" << event.fac().c_str() << "-" << event.str().c_str();
+									fprintf(stderr, "LOG-%i-%s: %s\n",
+									        event.severity(), event.fac().c_str(), event.str().c_str());
 									break;
 
 								case RdKafka::Event::EVENT_THROTTLE:
-									LOG(ERROR) << "THROTTLED: " << event.throttle_time() << "ms by " << event.broker_name() << " id "
-									           << (int) event.broker_id();
+									std::cerr << "THROTTLED: " << event.throttle_time() << "ms by " <<
+									          event.broker_name() << " id " << (int) event.broker_id() << std::endl;
 									break;
 
 								default:
-									LOG(ERROR) << "EVENT " << event.type() << " (" << RdKafka::err2str(event.err()) << "): "
-									           << event.str();
+									std::cerr << "EVENT " << event.type() <<
+									          " (" << RdKafka::err2str(event.err()) << "): " <<
+									          event.str() << std::endl;
 									break;
 							}
 						}
 				};
 
-				class SegmentedRebalanceCb : public RdKafka::RebalanceCb {
-				public:
-						SegmentedRebalanceCb(Segment segment) : segment_{std::move(segment)} {
+				class ExampleRebalanceCb : public RdKafka::RebalanceCb {
+				private:
+						static void part_list_print(const std::vector<RdKafka::TopicPartition *> &partitions) {
+							for (unsigned int i = 0; i < partitions.size(); i++)
+								std::cerr << partitions[i]->topic() <<
+								          "[" << partitions[i]->partition() << "], ";
+							std::cerr << "\n";
 						}
 
 				public:
-						virtual void rebalance_cb(RdKafka::KafkaConsumer *consumer,
-						                          RdKafka::ErrorCode err,
-						                          std::vector<RdKafka::TopicPartition *> &partitions) override {
+						void rebalance_cb(RdKafka::KafkaConsumer *consumer,
+						                  RdKafka::ErrorCode err,
+						                  std::vector<RdKafka::TopicPartition *> &partitions) {
+							std::cerr << "RebalanceCb: " << RdKafka::err2str(err) << ": ";
 
-							// pick the partition we want to target
-							RdKafka::TopicPartition *target = nullptr;
-							for (auto p : partitions) {
-								if (p->partition() == segment_.partition) {
-									target = p;
-									break;
-								}
-							}
+							part_list_print(partitions);
 
-							CHECK_NOTNULL(target);
-
-							// set offset of this partition
-							target->set_offset(segment_.offset);
+							RdKafka::Error *error = NULL;
+							RdKafka::ErrorCode ret_err = RdKafka::ERR_NO_ERROR;
 
 							if (err == RdKafka::ERR__ASSIGN_PARTITIONS) {
-								consumer->assign({target});
+								if (consumer->rebalance_protocol() == "COOPERATIVE")
+									error = consumer->incremental_assign(partitions);
+								else
+									ret_err = consumer->assign(partitions);
+								partition_cnt += (int) partitions.size();
 							} else {
-								consumer->unassign();
+								if (consumer->rebalance_protocol() == "COOPERATIVE") {
+									error = consumer->incremental_unassign(partitions);
+									partition_cnt -= (int) partitions.size();
+								} else {
+									ret_err = consumer->unassign();
+									partition_cnt = 0;
+								}
 							}
-						}
+							eof_cnt = 0; /* FIXME: Won't work with COOPERATIVE */
 
-				private:
-						Segment segment_;
+							if (error) {
+								std::cerr << "incremental assign failed: " << error->str() << "\n";
+								delete error;
+							} else if (ret_err)
+								std::cerr << "assign failed: " << RdKafka::err2str(ret_err) << "\n";
+
+						}
 				};
 
-				bool KafkaTopic::init() noexcept {
-					// set up the kafka configurations
-					std::string error;
-					conf_ = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
-					tconf_ = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_TOPIC));
+				class ExampleRebalanceCb : public RdKafka::RebalanceCb {
+				private:
+						static void part_list_print(const std::vector<RdKafka::TopicPartition *> &partitions) {
+							for (unsigned int i = 0; i < partitions.size(); i++)
+								std::cerr << partitions[i]->topic() <<
+								          "[" << partitions[i]->partition() << "], ";
+							std::cerr << "\n";
+						}
 
-#define SET_KEY_VALUE_CHECK(K, V)                            \
-  if (conf_->set(#K, #V, error) != RdKafka::Conf::CONF_OK) { \
-    LOG(ERROR) << "Kafka: " << error;                        \
-    return false;                                            \
-  }
+				public:
+						void rebalance_cb(RdKafka::KafkaConsumer *consumer,
+						                  RdKafka::ErrorCode err,
+						                  std::vector<RdKafka::TopicPartition *> &partitions) {
+							std::cerr << "RebalanceCb: " << RdKafka::err2str(err) << ": ";
 
-					// set brokers
-					conf_->set("metadata.broker.list", brokers_, error);
+							part_list_print(partitions);
 
-					// group Id is a must
-					SET_KEY_VALUE_CHECK(group.id, 0)
+							RdKafka::Error *error = NULL;
+							RdKafka::ErrorCode ret_err = RdKafka::ERR_NO_ERROR;
 
-					// set default topic config
-					conf_->set("default_topic_conf", tconf_.get(), error);
+							if (err == RdKafka::ERR__ASSIGN_PARTITIONS) {
+								if (consumer->rebalance_protocol() == "COOPERATIVE")
+									error = consumer->incremental_assign(partitions);
+								else
+									ret_err = consumer->assign(partitions);
+								partition_cnt += (int) partitions.size();
+							} else {
+								if (consumer->rebalance_protocol() == "COOPERATIVE") {
+									error = consumer->incremental_unassign(partitions);
+									partition_cnt -= (int) partitions.size();
+								} else {
+									ret_err = consumer->unassign();
+									partition_cnt = 0;
+								}
+							}
+							eof_cnt = 0; /* FIXME: Won't work with COOPERATIVE */
 
-#undef SET_KEY_VALUE_CHECK
-					return true;
+							if (error) {
+								std::cerr << "incremental assign failed: " << error->str() << "\n";
+								delete error;
+							} else if (ret_err)
+								std::cerr << "assign failed: " << RdKafka::err2str(ret_err) << "\n";
+
+						}
+				};
+
+				static int64_t now() {
+#ifndef _WIN32
+					struct timeval tv;
+					gettimeofday(&tv, NULL);
+					return ((int64_t) tv.tv_sec * 1000) + (tv.tv_usec / 1000);
+#else
+#error "now() not implemented for Windows, please submit a PR"
+#endif
 				}
 
-// based on the start time, return a kafka segment list
-// this function will generate segments for each partition given start time stamp and segment width
-// it is querying the start and end offset by the time condition of each partition
-// and figure out "STARTING point" of each segment by width (W) in the line of
-//  [0, W) [W, 2W) [2W, 3W) .... [NW, (N+1)W)
-				std::list<Segment> KafkaTopic::topicByTimestamp(size_t timeMs, size_t width) noexcept {
-					std::list<Segment> segments;
-					std::string error;
+				KafkaConnector::KafkaConnector(std::vector<std::string> &topics, std::string &brokers) {
+					std::string errstr;
+					conf = RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL);
+					//RdKafka::Conf *tconf = RdKafka::Conf::create(RdKafka::Conf::CONF_TOPIC);
+					ExampleRebalanceCb ex_rebalance_cb;
+					if (conf->set("rebalance_cb", &ex_rebalance_cb, errstr) != RdKafka::Conf::CONF_OK) {
+						std::cerr << errstr << std::endl;
+					}
+					ExampleEventCb ex_event_cb;
+					if (conf->set("event_cb", &ex_event_cb, errstr) != RdKafka::Conf::CONF_OK) {
+						std::cerr << errstr << std::endl;
+					}
 
-					// create a consumer
-					auto consumer = std::unique_ptr<RdKafka::KafkaConsumer>(RdKafka::KafkaConsumer::create(conf_.get(), error));
+					if (conf->set("enable.partition.eof", "false", errstr) != RdKafka::Conf::CONF_OK) {
+						std::cerr << errstr << std::endl;
+					}
+					if (conf->set("group.id", "surfingdb.test", errstr) != RdKafka::Conf::CONF_OK) {
+						std::cerr << errstr << std::endl;
+					}
+					if (conf->set("bootstrap.servers", brokers, errstr) != RdKafka::Conf::CONF_OK) {
+						std::cerr << errstr << std::endl;
+					}
+
+					if (conf->set("compression.codec", codec, errstr) !=
+					    RdKafka::Conf::CONF_OK) {
+						std::cerr << errstr << std::endl;
+					}
+
+					//conf->set("default_topic_conf", tconf, errstr);
+					//delete tconf;
+
+					RdKafka::KafkaConsumer::create(conf, errstr);
 					if (!consumer) {
-						LOG(ERROR) << "Kafka: " << error;
-						return segments;
+						std::cerr << "Failed to create consumer: " << errstr << std::endl;
 					}
+					delete conf;
+					/* Subscribe to topics */
+					RdKafka::ErrorCode err = consumer->subscribe(topics);
+					if (err) {
+						std::cerr << "Failed to subscribe to " << topics.size() << " topics: "
+						          << RdKafka::err2str(err) << std::endl;
 
-					// figure out partition count
-					auto topic = std::unique_ptr<RdKafka::Topic>(
-									RdKafka::Topic::create(consumer.get(), topic_, tconf_.get(), error));
-					if (!topic) {
-						LOG(ERROR) << "Kafka: " << error;
-						return segments;
 					}
-
-					// fetch metadata
-					RdKafka::Metadata *metadata;
-					if (consumer->metadata(false, topic.get(), &metadata, timeoutMs_) != RdKafka::ERR_NO_ERROR) {
-						LOG(ERROR) << "Kafka: can not fetch metadata";
-						return segments;
-					}
-
-					// save metadata info
-					auto topicMetadata = metadata->topics()->at(0);
-					auto partitions = topicMetadata->partitions();
-					if (partitions->size() == 0) {
-						LOG(ERROR) << "Kafka: topic has no partitions.";
-						return segments;
-					}
-
-					std::vector<int32_t> pids;
-					pids.reserve(partitions->size());
-					std::transform(partitions->cbegin(), partitions->cend(),
-					               std::back_insert_iterator(pids),
-					               [](auto p) {
-							               return p->id();
-					               });
-
-					// delete metadata object and return
-					delete metadata;
-
-					// overwrite width if this topic specified size
-					//if (serde_.size > 0) {
-					//width = serde_.size;
-					//}
-
-					for (auto part : pids) {
-						// create partition pointing to a specific time stamp
-						auto p = std::unique_ptr<RdKafka::TopicPartition>(
-										RdKafka::TopicPartition::create(topic_, part, timeMs));
-						std::vector<RdKafka::TopicPartition *> ps{p.get()};
-						if (consumer->assign(ps) != RdKafka::ERR_NO_ERROR) {
-							LOG(ERROR) << "Kafka: partition assignment failed.";
-
-							return segments;
-						}
-
-						auto err = consumer->offsetsForTimes(ps, timeoutMs_);
-						auto startOffset = p->offset();
-						if (err != RdKafka::ERR_NO_ERROR) {
-							LOG(ERROR) << "Kafka: failed to call offset for time: " << timeMs << ", err=" << err;
-							startOffset = -1;
-						}
-
-						// get high end
-						int64_t lowOffset = -1;
-						int64_t highOffset = -1;
-						if (consumer->query_watermark_offsets(
-										topic_, part, &lowOffset, &highOffset, timeoutMs_)
-						    != RdKafka::ERR_NO_ERROR) {
-							LOG(ERROR) << "Kafka: failed to query watermark offsets.";
-							continue;
-						}
-
-						// if the broker doesn't support offsetsForTimes, we have to assuming
-						if (startOffset == -1) {
-							// try to use serde retention in seconds
-							// to estimate the range of offsets.
-							startOffset = lowOffset;
-							/*
-							if (serde_.retention > 0) {
-								auto retentionMs = serde_.retention * 1000.0;
-								auto timeRange = (nebula::common::Evidence::unix_timestamp() * 1000 - timeMs);
-								startOffset = highOffset - (timeRange / retentionMs) * (highOffset - lowOffset);
-								LOG(INFO) << "Estimate start offset by retention: " << serde_.retention
-								          << ", start=" << startOffset
-								          << ", low=" << lowOffset
-								          << ", high=" << highOffset
-								          << ", timems=" << timeRange;
-							}*/
-						}
-
-						// we use this range [startOffset, highOffset] to pick the latest range [start, end)
-						// any future updates will cover uncovered ranges
-						auto start = startOffset / width;
-						auto end = highOffset / width;
-						// if no segements to generate, log a warning
-						if (start >= end) {
-							LOG(WARNING) << "No segments to produce: batch=" << width
-							             << ", start-off=" << startOffset << ", low-off=" << lowOffset << ", high-off=" << highOffset
-							             << ", partition=" << part << ", topic=" << topic_;
-						}
-
-						// Here places an interesting case, because end=(highOffset/width),
-						// so any message in current band not full to a batch will not be consumed.
-						// for example, width is 1000, the last number of message passing x*1000,
-						// let's say 900 won't be consumed until it's filled up
-						// This problem potentially will apply a latency between latest message and time when it show up in Nebula.
-						while (start < end) {
-							segments.emplace_back(part, width * start++, width);
-						}
-
-						// unassign
-						consumer->unassign();
-					}
-
-					// close the consumer
-					consumer->close();
-
-					return segments;
 				}
 
+				std::vector<RdKafka::Message *>
+				KafkaConnector::consume_batch(size_t batch_size, int batch_tmout) {
 
-				// Kafka consumer handle is expensive resource which is supposed to reuse
-// in the same thread.
-				std::unique_ptr<RdKafka::KafkaConsumer> KafkaConsumer::getConsumer(
-								const std::string &brokers,
-								const std::unordered_map<std::string, std::string> &settings) {
-					// set up the kafka configurations
-					std::string error;
-					auto conf = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
-					auto tconf = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_TOPIC));
+					std::vector<RdKafka::Message *> msgs;
+					msgs.reserve(batch_size);
 
-#define SET_KEY_VALUE_CHECK(K, V)                         \
-  if (conf->set(K, V, error) != RdKafka::Conf::CONF_OK) { \
-    LOG(INFO) << "Kafka: " << error;                      \
-    return nullptr;                                       \
-  }
+					int64_t end = now() + batch_tmout;
+					int remaining_timeout = batch_tmout;
 
-					// for kafka - the configs are all go to consumers
-					constexpr std::string_view KAFKA_PFX = "kafka.";
-					constexpr auto KAFKA_PFX_LEN = KAFKA_PFX.size();
-					for (auto itr = settings.begin(); itr != settings.end(); ++itr) {
-						const auto &key = itr->first;
-						LOG(INFO) << key << ":" << itr->second;
-						/*
-						if (Chars::prefix(key.data(), key.size(), KAFKA_PFX.data(), KAFKA_PFX_LEN)) {
-							std::string realKey(key.data() + KAFKA_PFX_LEN, key.size() - KAFKA_PFX_LEN);
-							LOG(INFO) << "Set kafka config from user settings: " << realKey;
-							SET_KEY_VALUE_CHECK(realKey, itr->second);
+					while (msgs.size() < batch_size) {
+						RdKafka::Message *msg = consumer->consume(remaining_timeout);
+
+						switch (msg->err()) {
+							case RdKafka::ERR__TIMED_OUT:
+								delete msg;
+								return msgs;
+
+							case RdKafka::ERR_NO_ERROR:
+								msgs.push_back(msg);
+								break;
+
+							default:
+								std::cerr << "%% Consumer error: " << msg->errstr() << std::endl;
+								delete msg;
+								return msgs;
 						}
-						 */
+
+						remaining_timeout = end - now();
+						if (remaining_timeout < 0)
+							break;
 					}
 
-					// set brokers
-					SET_KEY_VALUE_CHECK("metadata.broker.list", brokers)
-
-					// set group id anyways even we don't use consumer group at all
-					SET_KEY_VALUE_CHECK("group.id", "surfingdb.kafka");
-
-					// const auto INTEGER_MAX = std::to_string(std::numeric_limits<int32_t>::max());
-					SET_KEY_VALUE_CHECK("max.poll.interval.ms", "86400000");
-
-					// set event callback by a static instance
-					static KafkaEventCb ecb;
-					SET_KEY_VALUE_CHECK("event_cb", &ecb)
-
-					// set default topic config
-					SET_KEY_VALUE_CHECK("default_topic_conf", tconf.get())
-
-#undef SET_KEY_VALUE_CHECK
-
-					auto ptr = RdKafka::KafkaConsumer::create(conf.get(), error);
-					CHECK_NOTNULL(ptr);
-					return std::unique_ptr<RdKafka::KafkaConsumer>(ptr);
+					return msgs;
 				}
 
-				// build the subscription pipeline
-				KafkaConsumer::KafkaConsumer(std::string &topic, const std::unordered_map<std::string, std::string> &settings,
-				                             Segment& segment) : segment_(segment) {
-					// subscribe is designed for group balance, we use assign directly
-					LOG(INFO) << "Consume " << topic << "/" << topic << ":" << segment_.id();
-					partition_ = std::unique_ptr<RdKafka::TopicPartition>(
-									RdKafka::TopicPartition::create(topic, segment_.partition, timeoutMs_));
+				void KafkaConnector::msg_consume(RdKafka::Message *message, void *opaque) {
+					switch (message->err()) {
+						case RdKafka::ERR__TIMED_OUT:
+							break;
 
-					auto offset = segment_.offset;
+						case RdKafka::ERR_NO_ERROR:
+							/* Real message */
+							msg_cnt++;
+							msg_bytes += message->len();
+							if (verbosity >= 3)
+								std::cerr << "Read msg at offset " << message->offset() << std::endl;
+							RdKafka::MessageTimestamp ts;
+							ts = message->timestamp();
+							if (verbosity >= 2 &&
+							    ts.type != RdKafka::MessageTimestamp::MSG_TIMESTAMP_NOT_AVAILABLE) {
+								std::string tsname = "?";
+								if (ts.type == RdKafka::MessageTimestamp::MSG_TIMESTAMP_CREATE_TIME)
+									tsname = "create time";
+								else if (ts.type == RdKafka::MessageTimestamp::MSG_TIMESTAMP_LOG_APPEND_TIME)
+									tsname = "log append time";
+								std::cout << "Timestamp: " << tsname << " " << ts.timestamp << std::endl;
+							}
+							if (verbosity >= 2 && message->key()) {
+								std::cout << "Key: " << *message->key() << std::endl;
+							}
+							if (verbosity >= 1) {
+								printf("%.*s\n",
+								       static_cast<int>(message->len()),
+								       static_cast<const char *>(message->payload()));
+							}
+							break;
 
-					// assign the partition to start consuming
-					consumer_ = KafkaConsumer::getConsumer(topic, settings);
+						case RdKafka::ERR__PARTITION_EOF:
+							/* Last message */
+							if (exit_eof && ++eof_cnt == partition_cnt) {
+								std::cerr << "%% EOF reached for all " << partition_cnt <<
+								          " partition(s)" << std::endl;
+								run = 0;
+							}
+							break;
 
-					// a segment can have offset even smaller than valid range of the partition
-					// due to range chunking, adjust partition offset if this is the case
-					int64_t lowOffset = -1;
-					int64_t highOffset = -1;
-					if (consumer_->query_watermark_offsets(
-									topic, segment_.partition, &lowOffset, &highOffset, timeoutMs_)
-					    == RdKafka::ERR_NO_ERROR
-					    && lowOffset > offset) {
-						offset = lowOffset;
-						LOG(INFO) << "Adjust partition offset to low bound.";
+						case RdKafka::ERR__UNKNOWN_TOPIC:
+						case RdKafka::ERR__UNKNOWN_PARTITION:
+							std::cerr << "Consume failed: " << message->errstr() << std::endl;
+							run = 0;
+							break;
+
+						default:
+							/* Errors */
+							std::cerr << "Consume failed: " << message->errstr() << std::endl;
+							run = 0;
 					}
-
-					// set partition offset to read and assign to current consumer
-					partition_->set_offset(offset);
-					consumer_->assign({ partition_.get() });
-/*
-					// create parser
-					// support thrift binary and json
-					if (table_->format == "thrift" && table_->serde.protocol == "binary") {
-						parser_ = std::make_unique<ThriftRow>(table_->serde.cmap);
-					} else if (table_->format == "json") {
-						parser_ = std::make_unique<JsonRow>(nebula::type::TypeSerializer::from(table_->schema));
-					} else {
-						throw NException("Only support thrift(TBinaryProtocol) and JSON for now.");
-					}
-*/
-					// set errors to 0 and set maximum messages to load
-					auto errors_ = 0;
-
-					// load the first message
-					msg_ = message();
 				}
 
-				std::unique_ptr<RdKafka::Message> KafkaConsumer::message() {
-
-					// when this message is consumed from queue, please delete it
-					std::unique_ptr<RdKafka::Message> msg(consumer_->consume(timeoutMs_));
-
-					// message may be empty
-					if (msg && msg->len() > 0) {
-						// check if the message has error
-						if (msg->err() != RdKafka::ERR_NO_ERROR) {
-							LOG(ERROR) << "Error in reading kafka message: " << msg->errstr();
-
-						}
-					}
-					return msg;
-				}
-
-				inline size_t readMessageTimestamp(const RdKafka::Message& msg) {
-					// convert to seconds, nebula use seconds as timestamp
-					return (size_t)msg.timestamp().timestamp / 1000;
-					// if (ts.type != RdKafka::MessageTimestamp::MSG_TIMESTAMP_NOT_AVAILABLE)
-					// if (ts.type == RdKafka::MessageTimestamp::MSG_TIMESTAMP_CREATE_TIME)
-					// if (ts.type == RdKafka::MessageTimestamp::MSG_TIMESTAMP_LOG_APPEND_TIME)
+				KafkaConnector::~KafkaConnector() {
+					consumer->unsubscribe();
 				}
 		}
 } // namespace surfingdb
