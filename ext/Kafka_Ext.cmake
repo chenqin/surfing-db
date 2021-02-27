@@ -19,6 +19,7 @@ ExternalProject_Add(kafka
         UPDATE_COMMAND ""
         BUILD_IN_SOURCE 1
         CONFIGURE_COMMAND <SOURCE_DIR>/configure --install-deps --enable-static --source-deps-only
+        INSTALL_COMMAND sudo make install
         CMAKE_ARGS ${KAFKA_OPTS}
         LOG_DOWNLOAD ON
         LOG_CONFIGURE ON
