@@ -29,9 +29,9 @@ namespace surfingdb {
 				 */
 				class KafkaConnector {
 				public:
-            void init(std::string, std::string);
+						KafkaConnector(std::string, std::string);
             KafkaConnector() {}
-            std::vector<rd_kafka_message_t *> consume_batch(size_t batch_size, int batch_tmout);
+            rd_kafka_message_t * consume(int batch_tmout);
 						~KafkaConnector();
 				private:
           rd_kafka_t *rk;          /* Consumer instance handle */
