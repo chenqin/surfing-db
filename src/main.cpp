@@ -172,7 +172,9 @@ int main(int argc, char** argv) {
         b.write(field1, v);
         t1->appendRow(b);
         rd_kafka_message_destroy(m);
+        delete m;
       }
+      messages.clear();
       //LOG(INFO) << messages.size() << "on" << omp_get_thread_num() << "@" << node->rank;
 
       auto t2 = processors::map(t1, schema_ptr, [&](RowBuffer in, RowBuffer out) {

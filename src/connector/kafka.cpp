@@ -153,9 +153,7 @@ void KafkaConnector::init(std::string topic, std::string brokers) {
 std::vector<rd_kafka_message_t*> KafkaConnector::consume_batch(size_t batch_size, int batch_tmout) {
   std::vector<rd_kafka_message_t*> results;
   while (batch_size-- > 0) {
-    rd_kafka_message_t* rkm;
-
-    rkm = rd_kafka_consumer_poll(rk, batch_tmout);
+    rd_kafka_message_t* rkm = rd_kafka_consumer_poll(rk, batch_tmout);
     if (!rkm)
       continue; /* Timeout: no message within 100ms,
                                    *  try again. This short timeout allows
