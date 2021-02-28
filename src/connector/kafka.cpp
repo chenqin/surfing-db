@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 #include "kafka.h"
+#include <mpi.h>
 #include <glog/logging.h>
+#include <sys/time.h>
 #include <csignal>
 #include <stdio.h>
 #include <string.h>
@@ -24,6 +26,15 @@
 
 namespace surfingdb {
 		namespace connector {
+
+volatile sig_atomic_t run = 1;
+
+/**
+ * @brief Signal termination of program
+ */
+void stop(int sig) {
+  run = 0;
+}
 
 /**
  * @returns 1 if all bytes are printable, else 0.
@@ -38,7 +49,7 @@ int is_printable(const char* buf, size_t size) {
   return 1;
 }
 
-KafkaConnector::KafkaConnector(std::string topic, std::string brokers) {
+void KafkaConnector::init(std::string topic, std::string brokers) {
   this->brokers = (char*)brokers.c_str();
   std::string groupid = "surfingdb.test";
   this->groupid = (char*) groupid.c_str();
@@ -134,12 +145,22 @@ KafkaConnector::KafkaConnector(std::string topic, std::string brokers) {
           "%% Subscribed to %d topic(s), "
           "waiting for rebalance and messages...\n",
           subscription->cnt);
+
+  rd_kafka_topic_partition_list_destroy(subscription);
+  signal(SIGINT, stop);
 }
 
-rd_kafka_message_t* KafkaConnector::consume(int batch_tmout) {
+std::vector<rd_kafka_message_t*> KafkaConnector::consume_batch(size_t batch_size, int batch_tmout) {
+  std::vector<rd_kafka_message_t*> results;
+  while (batch_size-- > 0) {
     rd_kafka_message_t* rkm;
 
     rkm = rd_kafka_consumer_poll(rk, batch_tmout);
+    if (!rkm)
+      continue; /* Timeout: no message within 100ms,
+                                   *  try again. This short timeout allows
+                                   *  checking for `run` at frequent intervals.
+                                   */
 
     /* consumer_poll() will return either a proper message
          * or a consumer error (rkm->err is set). */
@@ -151,7 +172,7 @@ rd_kafka_message_t* KafkaConnector::consume(int batch_tmout) {
               "%% Consumer error: %s\n",
               rd_kafka_message_errstr(rkm));
       rd_kafka_message_destroy(rkm);
-	    return consume(batch_tmout);
+      continue;
     }
 
     /* Proper message. */
@@ -172,16 +193,17 @@ rd_kafka_message_t* KafkaConnector::consume(int batch_tmout) {
       //       (int)rkm->len, (const char*)rkm->payload);
     //else if (rkm->payload)
       //printf(" Value: (%d bytes)\n", (int)rkm->len);
-
+    results.push_back(rkm);
+  }
   //rd_kafka_message_destroy(rkm);
-  return rkm;
+  return results;
 }
 
 KafkaConnector::~KafkaConnector() {
   /* Close the consumer: commit final offsets and leave the group. */
   fprintf(stderr, "%% Closing consumer\n");
   rd_kafka_consumer_close(rk);
-	rd_kafka_topic_partition_list_destroy(subscription);
+
   /* Destroy the consumer */
   rd_kafka_destroy(rk);
 }
