@@ -151,53 +151,6 @@ namespace surfingdb {
 					signal(SIGINT, stop);
 				}
 
-				std::vector<rd_kafka_message_t *> KafkaConnector::consume_batch(size_t batch_size, int batch_tmout) {
-					std::vector<rd_kafka_message_t *> results;
-					while (batch_size-- > 0) {
-						rd_kafka_message_t *rkm = rd_kafka_consumer_poll(rk, batch_tmout);
-						if (!rkm)
-							continue; /* Timeout: no message within 100ms,
-                                   *  try again. This short timeout allows
-                                   *  checking for `run` at frequent intervals.
-                                   */
-
-						/* consumer_poll() will return either a proper message
-								 * or a consumer error (rkm->err is set). */
-						if (rkm->err) {
-							/* Consumer errors are generally to be considered
-									 * informational as the consumer will automatically
-									 * try to recover from all types of errors. */
-							fprintf(stderr,
-							        "%% Consumer error: %s\n",
-							        rd_kafka_message_errstr(rkm));
-							rd_kafka_message_destroy(rkm);
-							continue;
-						}
-
-						/* Proper message. */
-						//printf("Message on %s [%" PRId32 "] at offset %" PRId64 ":\n",
-						//       rd_kafka_topic_name(rkm->rkt), rkm->partition,
-						//       rkm->offset);
-
-						/* Print the message key. */
-						//if (rkm->key && is_printable((const char*)rkm->key, rkm->key_len))
-						//printf(" Key: %.*s\n",
-						//       (int)rkm->key_len, (const char*)rkm->key);
-						//else if (rkm->key)
-						//printf(" Key: (%d bytes)\n", (int)rkm->key_len);
-
-						/* Print the message value/payload. */
-						//if (rkm->payload && is_printable((const char*)rkm->payload, rkm->len))
-						//printf(" Value: %.*s\n",
-						//       (int)rkm->len, (const char*)rkm->payload);
-						//else if (rkm->payload)
-						//printf(" Value: (%d bytes)\n", (int)rkm->len);
-						results.push_back(rkm);
-						rd_kafka_message_destroy(rkm);
-					}
-					return results;
-				}
-
 				KafkaConnector::~KafkaConnector() {
 					/* Close the consumer: commit final offsets and leave the group. */
 					fprintf(stderr, "%% Closing consumer\n");
