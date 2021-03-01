@@ -160,12 +160,12 @@ int main(int argc, char** argv) {
       std::this_thread::sleep_for(std::chrono::microseconds(rand()%10));
       //should inference compact schema from source (e.g handle kafka events)
 	    auto t1 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
-			auto messages = consumer.consume_batch(rows, 100 ,schema_ptr);
+			auto messages = consumer.consume_batch(rows, 1000 ,schema_ptr);
       for (auto m : messages) {
         Value v;
         v.p_val.int_val = (int) MPI_Wtime()*100;
-        m.write(field1, v);
-        t1->appendRow(m);
+        b.write(field1, v);
+        t1->appendRow(b);
       }
       messages.clear();
 
