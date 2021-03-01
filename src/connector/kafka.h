@@ -20,9 +20,11 @@
 #include <librdkafka/rdkafka.h>
 #include <vector>
 #include <string>
+#include "table/row.h"
 
 namespace surfingdb {
 		namespace connector {
+				using namespace surfingdb::table;
 				/**
 				 * thin kafka client wrapper
 				 * https://docs.confluent.io/5.5.1/clients/librdkafka/md_CONFIGURATION.html
@@ -31,7 +33,7 @@ namespace surfingdb {
 				public:
             void init(std::string, std::string);
             KafkaConnector() {}
-            std::vector<rd_kafka_message_t *> consume_batch(size_t batch_size, int batch_tmout);
+            std::vector<RowBuffer> consume_batch(size_t max_batch_size, int timeout, std::shared_ptr<surfingdb::meta::TableSchema> schema_ptr);
 						~KafkaConnector();
 				private:
           rd_kafka_t *rk;          /* Consumer instance handle */

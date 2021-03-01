@@ -160,22 +160,14 @@ int main(int argc, char** argv) {
       std::this_thread::sleep_for(std::chrono::microseconds(rand()%10));
       //should inference compact schema from source (e.g handle kafka events)
 	    auto t1 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
-			auto messages = consumer.consume_batch(rows, 100);
-      //TODO (chenqin): need to handle empty result
-      //if(messages.size() == 0) {
-      //  continue;
-      //}
+			auto messages = consumer.consume_batch(rows, 100 ,schema_ptr);
       for (auto m : messages) {
         Value v;
-        //rd_kafka_topic_name(m->rkt), m->partition,
-        v.p_val.int_val = (int) m->offset;
-        b.write(field1, v);
-        t1->appendRow(b);
-        rd_kafka_message_destroy(m);
-        delete m;
+        v.p_val.int_val = (int) MPI_Wtime()*100;
+        m.write(field1, v);
+        t1->appendRow(m);
       }
       messages.clear();
-      //LOG(INFO) << messages.size() << "on" << omp_get_thread_num() << "@" << node->rank;
 
       auto t2 = processors::map(t1, schema_ptr, [&](RowBuffer in, RowBuffer out) {
         for (auto f : schema_ptr->fields) {
