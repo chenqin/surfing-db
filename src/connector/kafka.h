@@ -25,27 +25,32 @@
 namespace surfingdb {
 		namespace connector {
 				using namespace surfingdb::table;
+
 				/**
 				 * thin kafka client wrapper
 				 * https://docs.confluent.io/5.5.1/clients/librdkafka/md_CONFIGURATION.html
 				 */
 				class KafkaConnector {
 				public:
-            void init(std::string, std::string);
-            KafkaConnector() {}
-						std::vector<std::shared_ptr<RowBuffer>> consume_batch(size_t max_batch_size, int timeout, std::shared_ptr<surfingdb::meta::TableSchema> schema_ptr);
+						KafkaConnector(std::string, std::string);
+
+						std::vector<std::shared_ptr<RowBuffer>>
+						consume_batch(size_t max_batch_size, int timeout, std::shared_ptr<surfingdb::meta::TableSchema> schema_ptr);
+
 						~KafkaConnector();
+
 				private:
-          rd_kafka_t *rk;          /* Consumer instance handle */
-          rd_kafka_conf_t *conf;   /* Temporary configuration object */
-          rd_kafka_resp_err_t err; /* librdkafka API error code */
-          char errstr[512];        /* librdkafka API error reporting buffer */
-          const char *brokers;     /* Argument: broker list */
-          const char *groupid;     /* Argument: Consumer group id */
-          char *topics;           /* Argument: list of topics to subscribe to */
-          int topic_cnt;           /* Number of topics to subscribe to */
-          rd_kafka_topic_partition_list_t *subscription; /* Subscribed topics */
-          int i;
+						rd_kafka_t *rk;          /* Consumer instance handle */
+						rd_kafka_topic_conf_t *topic_conf;
+						rd_kafka_conf_t *conf;   /* Temporary configuration object */
+						rd_kafka_resp_err_t err; /* librdkafka API error code */
+						char errstr[512];        /* librdkafka API error reporting buffer */
+						const char *brokers;     /* Argument: broker list */
+						const char *groupid;     /* Argument: Consumer group id */
+						char *topics;           /* Argument: list of topics to subscribe to */
+						int topic_cnt;           /* Number of topics to subscribe to */
+						rd_kafka_topic_partition_list_t *subscription; /* Subscribed topics */
+						int i;
 				};
 		} // namespace surfingdb
 

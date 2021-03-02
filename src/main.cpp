@@ -71,8 +71,7 @@ int main(int argc, char** argv) {
 
   	std::string v = "xenon_metrics_prod";
   	std::string brokers = "datakafka08001:9092,datakafka08002:9092,datakafka08003:9092";
-  	auto consumer = KafkaConnector();
-    consumer.init(v, brokers);
+  	auto consumer = KafkaConnector(v, brokers);
     auto t1 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
 
     while (true) {

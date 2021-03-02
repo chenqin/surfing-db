@@ -37,27 +37,72 @@ namespace surfingdb {
 				void stop(int sig) {
 					run = 0;
 				}
+				int exit_eof = 0;
+				int wait_eof = 0;  /* number of partitions awaiting EOF */
 
-/**
- * @returns 1 if all bytes are printable, else 0.
- */
-				int is_printable(const char *buf, size_t size) {
-					size_t i;
+				void rebalance_cb (rd_kafka_t *rk,
+				                                   rd_kafka_resp_err_t err,
+				                                   rd_kafka_topic_partition_list_t *partitions,
+				                                   void *opaque) {
+					rd_kafka_error_t *error = NULL;
+					rd_kafka_resp_err_t ret_err = RD_KAFKA_RESP_ERR_NO_ERROR;
 
-					for (i = 0; i < size; i++)
-						if (!isprint((int) buf[i]))
-							return 0;
+					fprintf(stderr, "%% Consumer group rebalanced: ");
 
-					return 1;
+					switch (err)
+					{
+						case RD_KAFKA_RESP_ERR__ASSIGN_PARTITIONS:
+							fprintf(stderr, "assigned (%s):\n",
+							        rd_kafka_rebalance_protocol(rk));
+							//print_partition_list(stderr, partitions);
+
+							if (!strcmp(rd_kafka_rebalance_protocol(rk), "COOPERATIVE"))
+								error = rd_kafka_incremental_assign(rk, partitions);
+							else
+								ret_err = rd_kafka_assign(rk, partitions);
+							wait_eof += partitions->cnt;
+							break;
+
+						case RD_KAFKA_RESP_ERR__REVOKE_PARTITIONS:
+							fprintf(stderr, "revoked (%s):\n",
+							        rd_kafka_rebalance_protocol(rk));
+							//print_partition_list(stderr, partitions);
+
+							if (!strcmp(rd_kafka_rebalance_protocol(rk), "COOPERATIVE")) {
+								error = rd_kafka_incremental_unassign(rk, partitions);
+								wait_eof -= partitions->cnt;
+							} else {
+								ret_err = rd_kafka_assign(rk, NULL);
+								wait_eof = 0;
+							}
+							break;
+
+						default:
+							fprintf(stderr, "failed: %s\n",
+							        rd_kafka_err2str(err));
+							rd_kafka_assign(rk, NULL);
+							break;
+					}
+
+					if (error) {
+						fprintf(stderr, "incremental assign failure: %s\n",
+						        rd_kafka_error_string(error));
+						rd_kafka_error_destroy(error);
+					} else if (ret_err) {
+						fprintf(stderr, "assign failure: %s\n",
+						        rd_kafka_err2str(ret_err));
+					}
 				}
 
-				void KafkaConnector::init(std::string topic, std::string brokers) {
+				KafkaConnector::KafkaConnector(std::string topic, std::string brokers) {
 					this->brokers = (char *) brokers.c_str();
 					std::string groupid = "surfingdb.test";
 					this->groupid = (char *) groupid.c_str();
 					topics = (char *) topic.c_str();
+
 					topic_cnt = 1;
 					conf = rd_kafka_conf_new();
+					topic_conf = rd_kafka_topic_conf_new();
 
 					/* Set bootstrap broker(s) as a comma-separated list of
 							 * host or host:port (default port 9092).
@@ -83,6 +128,15 @@ namespace surfingdb {
 						rd_kafka_conf_destroy(conf);
 						return;
 					}
+
+					/* Set default topic config for pattern-matched topics. */
+					rd_kafka_conf_set_default_topic_conf(conf, topic_conf);
+
+					/* Callback called on partition assignment changes */
+					rd_kafka_conf_set_rebalance_cb(conf, rebalance_cb);
+
+					rd_kafka_conf_set(conf, "enable.partition.eof", "true",
+					                  NULL, 0);
 
 					/* If there is no previously committed offset for a partition
 							 * the auto.offset.reset strategy will be used to decide where
@@ -162,7 +216,7 @@ namespace surfingdb {
 				}
 
 				std::vector<std::shared_ptr<RowBuffer>> KafkaConnector::consume_batch(size_t max_batch_size, int timeout,
-				                                                     std::shared_ptr<surfingdb::meta::TableSchema> schema_ptr) {
+				                                                                      std::shared_ptr<surfingdb::meta::TableSchema> schema_ptr) {
 					auto results = std::vector<std::shared_ptr<RowBuffer>>();
 					auto start = MPI_Wtime();
 					while ((MPI_Wtime() - start) * 1000 < timeout && results.size() < max_batch_size) {
@@ -186,53 +240,31 @@ namespace surfingdb {
 							continue;
 						}
 
-						/* Proper message. */
-						//printf("Message on %s [%" PRId32 "] at offset %" PRId64 ":\n",
-						//       rd_kafka_topic_name(rkm->rkt), rkm->partition,
-						//       rkm->offset);
-
-						/* Print the message key. */
-						//if (rkm->key && is_printable((const char*)rkm->key, rkm->key_len))
-						//printf(" Key: %.*s\n",
-						//       (int)rkm->key_len, (const char*)rkm->key);
-						//else if (rkm->key)
-						//printf(" Key: (%d bytes)\n", (int)rkm->key_len);
-
-						/* Print the message value/payload. */
-						//if (rkm->payload && is_printable((const char*)rkm->payload, rkm->len))
-						//printf(" Value: %.*s\n",
-						//       (int)rkm->len, (const char*)rkm->payload);
-						//else if (rkm->payload)
-						//printf(" Value: (%d bytes)\n", (int)rkm->len);
 						auto r = std::make_shared<RowBuffer>(schema_ptr);
 						rapidjson::Document document;
-            rapidjson::ParseResult ok = document.Parse((const char*)rkm->payload);
-            if(ok) {
-              for (auto f : schema_ptr->fields) {
-                Value v;
-                if (f.type == RowType::LONG) {
-                  v.p_val.long_val = document[f.name.c_str()].GetInt64();
-                  r->write(f, v);
-                } else if (f.type == RowType::STRING) {
-                  CHECK(document[f.name.c_str()].GetStringLength() < 2048);
-                  v.p_val.string_val = std::string(document[f.name.c_str()].GetString());
-                } else if (f.type == RowType::DOUBLE) {
-                  std::string val = std::string(document[f.name.c_str()].GetString());
-                  try
-                  {
-                    v.p_val.double_val = std::stod(val);
-                  }
-                  catch(std::exception& e)
-                  {
-                    //LOG(INFO) << f.name<<"="<<val;
-                    v.p_val.double_val = 0;
-                  }
-                }
-              }
-              results.push_back(std::move(r));
-            }else {
-              LOG(INFO) << "invalid data";
-            }
+						rapidjson::ParseResult ok = document.Parse((const char *) rkm->payload);
+						if (ok) {
+							for (auto f : schema_ptr->fields) {
+								Value v;
+								if (f.type == RowType::LONG) {
+									v.p_val.long_val = document[f.name.c_str()].GetInt64();
+									r->write(f, v);
+								} else if (f.type == RowType::STRING) {
+									CHECK(document[f.name.c_str()].GetStringLength() < 2048);
+									v.p_val.string_val = std::string(document[f.name.c_str()].GetString());
+								} else if (f.type == RowType::DOUBLE) {
+									std::string val = std::string(document[f.name.c_str()].GetString());
+									try {
+										v.p_val.double_val = std::stod(val);
+									} catch (std::exception &e) {
+										v.p_val.double_val = 0;
+									}
+								}
+							}
+							results.push_back(std::move(r));
+						} else {
+							LOG(INFO) << "invalid data";
+						}
 						rd_kafka_message_destroy(rkm);
 					}
 					return results;
