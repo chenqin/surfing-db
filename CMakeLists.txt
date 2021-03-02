@@ -205,6 +205,8 @@ include(ext/Json_Ext.cmake)
 include(ext/OPENSSL_Ext.cmake)
 include(ext/Thrift_Ext.cmake)
 include(ext/Arrow_Ext.cmake)
+
+# include ML libs
 include(ext/Sketches_Ext.cmake)
 include(ext/XGBoost_Ext.cmake)
 

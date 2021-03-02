@@ -131,7 +131,7 @@ TableSchema::TableSchema(const RowSchema& schema) {
   _schema_sig = schema_hasher.operator()(schema);
   _size = sizeof(size_t); // store _schema_sig
 
-  // primitive types
+  // allocate primitive types first CPU cache friendly
   for (size_t i = 0; i < schema.fields.size(); i++) {
     auto f = schema.fields.at(i);
     if (f.type == RowType::LIST || f.type == RowType::MAP) continue;
@@ -140,7 +140,6 @@ TableSchema::TableSchema(const RowSchema& schema) {
     _max_unit->emplace(f, f.max_unit_size);
     _size += SchemaUtils::getFieldSize(f);
   }
-  _primitive_size = _size;
 
   // collective types
   for (size_t i = 0; i < schema.fields.size(); i++) {

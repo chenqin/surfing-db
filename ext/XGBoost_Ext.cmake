@@ -1,9 +1,16 @@
 
 #set(LIBPG_QUERY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libpg_query)
 include(ExternalProject)
+
+SET(XGB_OPTS
+        -DBUILD_STATIC_LIB=ON
+        -DUSE_OPENMP=ON
+        -DUSE_S3=ON)
+
 ExternalProject_Add(xgboost
         GIT_REPOSITORY https://github.com/chenqin/xgboost
         PREFIX xgboost
+        CMAKE_ARGS ${XGB_OPTS}
         INSTALL_COMMAND "" #not install to /usr/local/include/xgboost
         LOG_BUILD ON)
 
