@@ -64,6 +64,7 @@ public:
   std::shared_ptr<TableSchema> getSchema();
   std::unique_ptr<RowBuffer> readRow(int index);
   void appendRow(RowBuffer& row);
+  void appendRows(std::vector<std::shared_ptr<RowBuffer>>& rows);
   void verify(const Field& field);
   void reserveRow(size_t rows);
   void load(const string& path);

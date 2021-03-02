@@ -24,6 +24,7 @@
 #include <vector>
 #include <chrono>
 #include <librdkafka/rdkafka.h>
+#include <rapidjson/document.h>
 
 namespace surfingdb {
 		namespace connector {
@@ -204,6 +205,22 @@ namespace surfingdb {
 						//else if (rkm->payload)
 						//printf(" Value: (%d bytes)\n", (int)rkm->len);
 						auto r = std::make_shared<RowBuffer>(schema_ptr);
+						rapidjson::Document document;
+						document.Parse((const char*)rkm->payload);
+						for(auto f : schema_ptr->fields) {
+							CHECK(document.HasMember(f.name.c_str()));
+							Value v;
+							if(f.type == RowType::LONG) {
+								v.p_val.long_val = document[f.name.c_str()].GetInt64();
+								r->write(f, v);
+							} else if(f.type == RowType::STRING) {
+								CHECK(document[f.name.c_str()].GetStringLength() < 2048);
+								v.p_val.string_val = std::string(document[f.name.c_str()].GetString());
+							} else if (f.type == RowType::DOUBLE) {
+								v.p_val.double_val = (DOUBLE_TYPE) document[f.name.c_str()].GetFloat();
+							}
+						}
+						document.Clear();
 						results.push_back(std::move(r));
 						rd_kafka_message_destroy(rkm);
 					}
