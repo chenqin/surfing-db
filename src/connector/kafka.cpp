@@ -160,9 +160,9 @@ namespace surfingdb {
 					rd_kafka_destroy(rk);
 				}
 
-				std::vector<RowBuffer> KafkaConnector::consume_batch(size_t max_batch_size, int timeout,
+				std::vector<std::shared_ptr<RowBuffer>> KafkaConnector::consume_batch(size_t max_batch_size, int timeout,
 				                                                     std::shared_ptr<surfingdb::meta::TableSchema> schema_ptr) {
-					auto results = std::vector<RowBuffer>();
+					auto results = std::vector<std::shared_ptr<RowBuffer>>();
 					auto start = MPI_Wtime();
 					while ((MPI_Wtime() - start) * 1000 < timeout && results.size() < max_batch_size) {
 						rd_kafka_message_t *rkm = rd_kafka_consumer_poll(rk, 10);
@@ -203,8 +203,8 @@ namespace surfingdb {
 						//       (int)rkm->len, (const char*)rkm->payload);
 						//else if (rkm->payload)
 						//printf(" Value: (%d bytes)\n", (int)rkm->len);
-						RowBuffer r = RowBuffer(schema_ptr);
-						results.push_back(r);
+						auto r = std::make_shared<RowBuffer>(schema_ptr);
+						results.push_back(std::move(r));
 						rd_kafka_message_destroy(rkm);
 					}
 					return results;

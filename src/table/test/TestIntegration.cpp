@@ -25,7 +25,6 @@
 namespace surfingdb {
 namespace table {
 namespace test {
-
 TEST(TableTest, testRowBuffer) {
   RowSchema r;
   r.fields = std::vector<surfingdb::table::schema::Field>();

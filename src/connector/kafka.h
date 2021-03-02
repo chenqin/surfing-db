@@ -33,7 +33,7 @@ namespace surfingdb {
 				public:
             void init(std::string, std::string);
             KafkaConnector() {}
-            std::vector<RowBuffer> consume_batch(size_t max_batch_size, int timeout, std::shared_ptr<surfingdb::meta::TableSchema> schema_ptr);
+						std::vector<std::shared_ptr<RowBuffer>> consume_batch(size_t max_batch_size, int timeout, std::shared_ptr<surfingdb::meta::TableSchema> schema_ptr);
 						~KafkaConnector();
 				private:
           rd_kafka_t *rk;          /* Consumer instance handle */
