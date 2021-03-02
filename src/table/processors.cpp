@@ -135,6 +135,7 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f
   }
   MPI_Status statuses[node_ptr->world];
   MPI_Waitall(send_count, sends, statuses);
+  /*
   for (int i = 0; i < node_ptr->world; i++) {
     if (statuses[i].MPI_ERROR != 0 && statuses[i].MPI_SOURCE < node_ptr->world && statuses[i].MPI_SOURCE >= 0) {
       char buffer[1024];
@@ -144,6 +145,7 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f
                 << buffer;
     }
   }
+   */
   auto table = std::make_shared<mtable>(node_ptr, schema_ptr, buffer_len * schema_ptr->rowSize());
   memcpy(table->payload_ptr(), &buffer[0], buffer_len * schema_ptr->rowSize());
   table->offset = buffer_len * schema_ptr->rowSize();

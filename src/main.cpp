@@ -93,10 +93,9 @@ int main(int argc, char** argv) {
         }
       });
       t1->release();
-      auto t3 = processors::shuffle(t2, field1);
-      //t2->release();
-      t3->verify(field1);
-      processors::reduce(t3, field1, results_ptr, schema_ptr, [=](Value& key,std::vector<std::unique_ptr<RowBuffer>>& vals, std::shared_ptr<RowBuffer>& result){
+      auto t3 = processors::shuffle(t2, field3);
+      t3->verify(field3);
+      processors::reduce(t3, field3, results_ptr, schema_ptr, [=](Value& key,std::vector<std::unique_ptr<RowBuffer>>& vals, std::shared_ptr<RowBuffer>& result){
         Value v;
         result->read(field1,v);
         v.p_val.long_val += vals.size();
