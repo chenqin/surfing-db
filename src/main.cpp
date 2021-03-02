@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
 
   SchemaUtils::initField(field1, "timestamp", RowType::LONG, sizeof(long));
   SchemaUtils::initField(field2, "host", RowType::STRING, MAX_STR_LEN);
-  SchemaUtils::initField(field3, "metricName", RowType::STRING, 2048);
+  SchemaUtils::initField(field3, "metricName", RowType::STRING, MAX_STR_LEN);
   SchemaUtils::initField(field4, "metricValue", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
 
   r.fields.push_back(field1);
