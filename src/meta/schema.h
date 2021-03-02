@@ -57,7 +57,7 @@ struct FieldHasher {
     using std::size_t;
     using std::string;
     std::size_t result = (hash<string>()(k.name));
-    result^= (hash<int>()(k.type)) << 1;
+    result ^= (hash<int>()(k.type)) << 1;
     result ^= (hash<int>()(k.list_type)) << 2;
     result ^= (hash<int>()(k.map_key_type)) << 3;
     result ^= (hash<int>()(k.map_value_type)) << 4;
@@ -81,20 +81,17 @@ struct SchemaHasher {
 
 struct ValueHasher {
   std::size_t operator()(const PValue& k) const {
-    size_t result = hash<string>()(k.string_val);
-    result ^= hash<int>()(k.int_val) << 1;
-    result ^= hash<long>()(k.long_val) << 2;
-    result ^= hash<double>()(k.double_val) << 3;
-    result ^= hash<bool>()(k.bool_val) << 4;
+	  size_t result = 0;
+  	if(!k.string_val.empty()) result = hash<string>()(k.string_val);
+    if(!k.int_val) result ^= hash<int>()(k.int_val) << 1;
+	  if(!k.long_val) result ^= hash<long>()(k.long_val) << 2;
+    if(std::abs(k.double_val) <= 1e-5) result ^= hash<double>()(k.double_val) << 3;
+    if(k.bool_val) result ^= hash<bool>()(k.bool_val) << 4;
     return result;
   }
 
   std::size_t operator()(const Value& k) const {
-    size_t result = hash<string>()(k.p_val.string_val);
-    result ^= hash<int>()(k.p_val.int_val) << 1;
-    result ^= hash<long>()(k.p_val.long_val) << 2;
-    result ^= hash<double>()(k.p_val.double_val) << 3;
-    result ^= hash<bool>()(k.p_val.bool_val) << 4;
+	  size_t result = operator()(k.p_val);
     for (auto l : k.list_value) {
       result ^= operator()(l);
     }
@@ -168,7 +165,6 @@ public:
 
 class TableSchema : public RowSchema {
 private:
-  size_t _primitive_size; // fixed size of primitive fields
   size_t _size;          // fixed size of each row
   size_t _schema_sig; //schema fields hash
   bool _type_set;
@@ -184,12 +180,6 @@ public:
   size_t rowSize() {
     CHECK_GT(_size, 0);
     return _size;
-  }
-
-  size_t rowPrimitiveSize() {
-    CHECK_GT(_primitive_size, 0);
-    CHECK_LE(_primitive_size, _size);
-    return _primitive_size;
   }
 
   size_t signature() {

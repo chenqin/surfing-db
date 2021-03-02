@@ -66,7 +66,8 @@ int main(int argc, char** argv) {
   srand(std::time(nullptr));
   auto start = MPI_Wtime();
   auto results_ptr = std::make_shared<std::unordered_map<Value , std::shared_ptr<RowBuffer>, ValueHasher>>();
-//#pragma omp parallel num_threads(3) shared(results_ptr, total)
+
+#pragma omp parallel num_threads(CONCURRENCY) shared(results_ptr, total)
   {
 
   	std::string v = "xenon_metrics_prod";

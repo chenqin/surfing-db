@@ -515,7 +515,6 @@ namespace surfingdb {
 					for (size_t index = 0; index < row_size(); index++) {
 						auto r = readRow(index);
 						auto rcompact = RowBuffer(compact_schema_ptr);
-						memcpy(compact_table_ptr->payload_ptr(), r->payload_ptr(), compact_schema_ptr->rowPrimitiveSize());
 						for (auto f : schema_ptr->fields) {
 							if (f.type != RowType::LIST && f.type != RowType::MAP) continue;
 							Value v;
