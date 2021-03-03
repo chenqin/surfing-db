@@ -104,6 +104,7 @@ int main(int argc, char** argv) {
 										v.p_val.double_val = 0;
 									}
 								}
+                r->write(f, v);
 							}
 							return r;
 						} else {
