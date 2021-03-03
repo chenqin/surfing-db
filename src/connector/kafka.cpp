@@ -24,7 +24,6 @@
 #include <vector>
 #include <chrono>
 #include <librdkafka/rdkafka.h>
-#include <rapidjson/document.h>
 
 namespace surfingdb {
 		namespace connector {
@@ -37,20 +36,20 @@ namespace surfingdb {
 				void stop(int sig) {
 					run = 0;
 				}
+
 				int exit_eof = 0;
 				int wait_eof = 0;  /* number of partitions awaiting EOF */
 
-				void rebalance_cb (rd_kafka_t *rk,
-				                                   rd_kafka_resp_err_t err,
-				                                   rd_kafka_topic_partition_list_t *partitions,
-				                                   void *opaque) {
+				void rebalance_cb(rd_kafka_t *rk,
+				                  rd_kafka_resp_err_t err,
+				                  rd_kafka_topic_partition_list_t *partitions,
+				                  void *opaque) {
 					rd_kafka_error_t *error = NULL;
 					rd_kafka_resp_err_t ret_err = RD_KAFKA_RESP_ERR_NO_ERROR;
 
 					fprintf(stderr, "%% Consumer group rebalanced: ");
 
-					switch (err)
-					{
+					switch (err) {
 						case RD_KAFKA_RESP_ERR__ASSIGN_PARTITIONS:
 							fprintf(stderr, "assigned (%s):\n",
 							        rd_kafka_rebalance_protocol(rk));
@@ -216,7 +215,10 @@ namespace surfingdb {
 				}
 
 				std::vector<std::shared_ptr<RowBuffer>> KafkaConnector::consume_batch(size_t max_batch_size, int timeout,
-				                                                                      std::shared_ptr<surfingdb::meta::TableSchema> schema_ptr) {
+				                                                                      std::shared_ptr<surfingdb::meta::TableSchema> schema_ptr,
+				                                                                      std::function<std::shared_ptr<RowBuffer>(
+								                                                                      const char *,
+								                                                                      std::shared_ptr<surfingdb::meta::TableSchema>)> convert) {
 					auto results = std::vector<std::shared_ptr<RowBuffer>>();
 					auto start = MPI_Wtime();
 					while ((MPI_Wtime() - start) * 1000 < timeout && results.size() < max_batch_size) {
@@ -239,32 +241,8 @@ namespace surfingdb {
 							rd_kafka_message_destroy(rkm);
 							continue;
 						}
-
-						auto r = std::make_shared<RowBuffer>(schema_ptr);
-						rapidjson::Document document;
-						rapidjson::ParseResult ok = document.Parse((const char *) rkm->payload);
-						if (ok) {
-							for (auto f : schema_ptr->fields) {
-								Value v;
-								if (f.type == RowType::LONG) {
-									v.p_val.long_val = document[f.name.c_str()].GetInt64();
-									r->write(f, v);
-								} else if (f.type == RowType::STRING) {
-									CHECK(document[f.name.c_str()].GetStringLength() < 2048);
-									v.p_val.string_val = std::string(document[f.name.c_str()].GetString());
-								} else if (f.type == RowType::DOUBLE) {
-									std::string val = std::string(document[f.name.c_str()].GetString());
-									try {
-										v.p_val.double_val = std::stod(val);
-									} catch (std::exception &e) {
-										v.p_val.double_val = 0;
-									}
-								}
-							}
-							results.push_back(std::move(r));
-						} else {
-							LOG(INFO) << "invalid data";
-						}
+						auto b = convert((const char *) rkm->payload, schema_ptr);
+						if(b != nullptr) results.push_back(b);
 						rd_kafka_message_destroy(rkm);
 					}
 					return results;

@@ -21,6 +21,7 @@
 #include "meta/node.h"
 #include "table/processors.h"
 #include "connector/kafka.h"
+#include <rapidjson/document.h>
 
 #define FLUSH_DIR "/tmp/"
 
@@ -81,7 +82,35 @@ int main(int argc, char** argv) {
       std::this_thread::sleep_for(std::chrono::microseconds(rand()%10));
       //should inference compact schema from source (e.g handle kafka events)
 	    auto t1 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
-			auto messages = consumer.consume_batch(rows, 1000 ,schema_ptr);
+
+	    auto messages = consumer.consume_batch(rows, 1000 , schema_ptr, [=](const char *payload, std::shared_ptr<surfingdb::meta::TableSchema> schema_ptr) -> std::shared_ptr<RowBuffer> {
+						auto r = std::make_shared<RowBuffer>(schema_ptr);
+						rapidjson::Document document;
+						rapidjson::ParseResult ok = document.Parse((const char *) payload);
+						if (ok) {
+							for (auto f : schema_ptr->fields) {
+								Value v;
+								if (f.type == RowType::LONG) {
+									v.p_val.long_val = document[f.name.c_str()].GetInt64();
+									r->write(f, v);
+								} else if (f.type == RowType::STRING) {
+									CHECK(document[f.name.c_str()].GetStringLength() < 2048);
+									v.p_val.string_val = std::string(document[f.name.c_str()].GetString());
+								} else if (f.type == RowType::DOUBLE) {
+									std::string val = std::string(document[f.name.c_str()].GetString());
+									try {
+										v.p_val.double_val = std::stod(val);
+									} catch (std::exception &e) {
+										v.p_val.double_val = 0;
+									}
+								}
+							}
+							return r;
+						} else {
+							LOG(INFO) << "invalid data";
+							return nullptr;
+						}
+			});
       t1->appendRows(messages);
       messages.clear();
 
