@@ -23,6 +23,7 @@
 #include <ctype.h>
 #include <vector>
 #include <chrono>
+#include <zookeeper/zookeeper.h>
 #include <librdkafka/rdkafka.h>
 
 namespace surfingdb {
@@ -40,6 +41,17 @@ namespace surfingdb {
 				int exit_eof = 0;
 				int wait_eof = 0;  /* number of partitions awaiting EOF */
 
+				void print_partition_list (const rd_kafka_topic_partition_list_t
+								*partitions) {
+							int i;
+							for (i = 0 ; i < partitions->cnt ; i++) {
+							LOG(INFO) <<
+							partitions->elems[i].topic <<
+							partitions->elems[i].partition <<
+							partitions->elems[i].offset;
+					}
+				}
+
 				void rebalance_cb(rd_kafka_t *rk,
 				                  rd_kafka_resp_err_t err,
 				                  rd_kafka_topic_partition_list_t *partitions,
@@ -53,7 +65,7 @@ namespace surfingdb {
 						case RD_KAFKA_RESP_ERR__ASSIGN_PARTITIONS:
 							fprintf(stderr, "assigned (%s):\n",
 							        rd_kafka_rebalance_protocol(rk));
-							//print_partition_list(stderr, partitions);
+							print_partition_list(partitions);
 
 							if (!strcmp(rd_kafka_rebalance_protocol(rk), "COOPERATIVE"))
 								error = rd_kafka_incremental_assign(rk, partitions);
