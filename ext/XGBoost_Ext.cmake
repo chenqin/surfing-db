@@ -3,7 +3,7 @@
 include(ExternalProject)
 
 SET(XGB_OPTS
-        -DBUILD_STATIC_LIB=ON
+        -DBUILD_STATIC_LIB=OFF
         -DUSE_OPENMP=ON
         -DUSE_S3=ON)
 
