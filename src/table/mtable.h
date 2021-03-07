@@ -18,7 +18,20 @@
 #define SURFINGDB_MTABLE_H
 #pragma once
 
-#include "table.h"
+#include <cstdarg>
+#include <fcntl.h>
+#include <future>
+#include <math.h>
+#include <mpi.h>
+#include <omp.h>
+#include <stdio.h>
+#include <string.h>
+
+#include "KMeanOperator.h"
+#include "row.h"
+#include "xgbop.h"
+
+#pragma once
 
 namespace surfingdb {
 namespace table {

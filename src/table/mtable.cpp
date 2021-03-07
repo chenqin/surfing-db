@@ -18,7 +18,6 @@
 #include <unistd.h>
 #include "arrow/io/file.h"
 #include "parquet/stream_writer.h"
-#include "table.h"
 
 namespace surfingdb {
 		namespace table {

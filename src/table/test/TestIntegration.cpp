@@ -35,7 +35,7 @@ namespace surfingdb {
 							SchemaUtils::initField(field2, "b", RowType::LONG, sizeof(long));
 							SchemaUtils::initField(field3, "c", RowType::BOOL, sizeof(bool));
 							SchemaUtils::initField(field4, "d", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
-							SchemaUtils::initField(field5, "e", RowType::STRING, MAX_STR_LEN);
+							SchemaUtils::initField(field5, "e", RowType::STRING, 205);
 
 							SchemaUtils::initListField(field6, "l", RowType::DOUBLE, 3, sizeof(DOUBLE_TYPE));
 							SchemaUtils::initMapField(field7, "m", RowType::STRING, RowType::LONG, 3, MAX_STR_LEN, sizeof(long));
