@@ -436,6 +436,9 @@ namespace surfingdb {
 							max_units.push_back(0); // max key unit
 							max_units.push_back(0); // max value unit
 						}
+						if (field.type == RowType::STRING) {
+							max_units.push_back(0); // max unit
+						}
 					}
 
 					for (size_t i = 0; i < row_count; i++) {
@@ -459,6 +462,12 @@ namespace surfingdb {
 								max_units.at(index + 2) = max_units.at(index) < map_lens.at(2) ? map_lens.at(2) : max_units.at(index);
 								index += 3;
 							}
+							if(field.type == RowType::STRING) {
+								std::vector<size_t> map_lens = r->readLen(field, offset);
+								// leave extra space for \0
+								max_units.at(index) = max_units.at(index) < map_lens.at(0) + 1 ? map_lens.at(0) + 1: max_units.at(index);
+								index += 1;
+							}
 						}
 					}
 					size_t global_units[max_units.size()];
@@ -467,24 +476,26 @@ namespace surfingdb {
 					/**
 					 * use tag to support multiple threads calling allreduce caused confusion
 					 */
-					if (node_ptr->rank == 0) {
-						for (int i = 1; i < node_ptr->world; i++) {
-							size_t local_units[max_units.size()];
-							MPI_Recv(&local_units, max_size, MPI_UNSIGNED_LONG, i, omp_get_thread_num(), MPI_COMM_WORLD,
-							         MPI_STATUS_IGNORE);
-							for (int i = 0; i < max_size; i++) {
-								global_units[i] = local_units[i] > global_units[i] ? local_units[i] : global_units[i];
-							}
-						}
-						//broadcast with tag
-						for (int i = 1; i < node_ptr->world; i++) {
-							MPI_Send(&global_units, max_size, MPI_UNSIGNED_LONG, i, omp_get_thread_num(), MPI_COMM_WORLD);
-						}
-					} else {
-						MPI_Send(&max_units[0], max_size, MPI_UNSIGNED_LONG, 0, omp_get_thread_num(), MPI_COMM_WORLD);
-						MPI_Recv(&global_units, max_size, MPI_UNSIGNED_LONG, 0, omp_get_thread_num(), MPI_COMM_WORLD,
-						         MPI_STATUS_IGNORE);
-					}
+					 if(node_ptr != nullptr) {
+						 if (node_ptr->rank == 0) {
+							 for (int i = 1; i < node_ptr->world; i++) {
+								 size_t local_units[max_units.size()];
+								 MPI_Recv(&local_units, max_size, MPI_UNSIGNED_LONG, i, omp_get_thread_num(), MPI_COMM_WORLD,
+								          MPI_STATUS_IGNORE);
+								 for (int i = 0; i < max_size; i++) {
+									 global_units[i] = local_units[i] > global_units[i] ? local_units[i] : global_units[i];
+								 }
+							 }
+							 //broadcast with tag
+							 for (int i = 1; i < node_ptr->world; i++) {
+								 MPI_Send(&global_units, max_size, MPI_UNSIGNED_LONG, i, omp_get_thread_num(), MPI_COMM_WORLD);
+							 }
+						 } else {
+							 MPI_Send(&max_units[0], max_size, MPI_UNSIGNED_LONG, 0, omp_get_thread_num(), MPI_COMM_WORLD);
+							 MPI_Recv(&global_units, max_size, MPI_UNSIGNED_LONG, 0, omp_get_thread_num(), MPI_COMM_WORLD,
+							          MPI_STATUS_IGNORE);
+						 }
+					 }
 
 					//MPI_Allreduce(&max_units[0], &global_units, max_size, MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
 
@@ -499,14 +510,14 @@ namespace surfingdb {
 							field.max_map_key_unit_size = global_units[index++];
 							field.max_map_value_unit_size = global_units[index++];
 						}
+						if(field.type == RowType::STRING) {
+							field.max_unit_size = global_units[index++];
+						}
 					}
 					compact_schema_ptr->updateRowSize();
 					return compact_schema_ptr;
 				}
 
-/**
- * find compact schema
- */
 				std::shared_ptr<mtable> mtable::compactTable() {
 					auto compact_schema_ptr = getCompactSchema();
 
@@ -516,11 +527,11 @@ namespace surfingdb {
 						auto r = readRow(index);
 						auto rcompact = RowBuffer(compact_schema_ptr);
 						for (auto f : schema_ptr->fields) {
-							if (f.type != RowType::LIST && f.type != RowType::MAP) continue;
+							if (f.type != RowType::LIST && f.type != RowType::MAP && f.type != RowType::STRING) continue;
 							Value v;
 							r->read(f, v);
 							for (auto f1 : compact_schema_ptr->fields) {
-								if (f1.operator==(f)) {
+								if(f1 == f){
 									rcompact.write(f1, v);
 								}
 							}
@@ -528,7 +539,7 @@ namespace surfingdb {
 						compact_table_ptr->appendRow(rcompact);
 					}
 					CHECK_LE(compact_schema_ptr->rowSize(), schema_ptr->rowSize());
-					//LOG(INFO) << compact_schema_ptr->rowSize() << "v.s" << schema_ptr->rowSize();
+					LOG(INFO) << "reduced row size " << compact_schema_ptr->rowSize() << "v.s" << schema_ptr->rowSize();
 					return compact_table_ptr;
 				}
 

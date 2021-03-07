@@ -3,8 +3,8 @@
 # it is responsible for single ingest spec or task split
 set(CONNECTOR surfconnector)
 
-execute_process(COMMAND sudo apt remove librdkafka-pin)
-execute_process(COMMAND sudo apt install librdkafka++-dev)
+#execute_process(COMMAND sudo apt remove librdkafka-pin)
+#execute_process(COMMAND sudo apt install librdkafka++-dev)
 # build nebula.ingest library
 add_library(${CONNECTOR} STATIC
         ${SURFINGDB_SRC}/connector/kafka.cpp)
