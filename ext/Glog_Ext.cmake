@@ -1,6 +1,5 @@
 find_package(Threads REQUIRED)
 
-if(APPLE)
   include(ExternalProject)
   SET(GLOG_OPTS
     -DWITH_GFLAGS:BOOL=OFF)
@@ -18,15 +17,11 @@ if(APPLE)
   # get source dir after download step
   ExternalProject_Get_Property(glogp BINARY_DIR)
   ExternalProject_Get_Property(glogp SOURCE_DIR)
-  set(GLOG_INCLUDE_DIRS ${SOURCE_DIR})
+  set(GLOG_INCLUDE_DIRS ${BINARY_DIR})
   message(STATUS "GLOG_INCLUDE_DIRS=${GLOG_INCLUDE_DIRS}")
 
   set(GLOG_LIBRARY_PATH ${BINARY_DIR}/${CMAKE_FIND_LIBRARY_PREFIXES}glog.a)
-else()
-  set(GLOG_INCLUDE_DIRS /usr/local/include)
-  set(GLOG_LIBRARY_PATH /usr/local/lib/libglog.a)
-endif()
-
+  message(STATUS "GLOG_LIBRARY_PATH=${GLOG_LIBRARY_PATH}")
 set(GLOG_LIBRARY glog)
 add_library(${GLOG_LIBRARY} UNKNOWN IMPORTED)
 set_target_properties(${GLOG_LIBRARY} PROPERTIES
