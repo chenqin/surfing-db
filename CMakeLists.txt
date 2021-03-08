@@ -188,6 +188,7 @@ else ()
 endif ()
 
 include(ext/PGQuery_Ext.cmake)
+
 # add a basic gtest dependency
 include(ext/Gtest_Ext.cmake)
 
@@ -197,10 +198,8 @@ include(ext/Gflags_Ext.cmake)
 # add a dependency of glog
 include(ext/Glog_Ext.cmake)
 
-# include google flatbuffers
+# include utils
 include(ext/Gflatbuffers_Ext.cmake)
-
-# include rapid JSON
 include(ext/Json_Ext.cmake)
 include(ext/OPENSSL_Ext.cmake)
 include(ext/Thrift_Ext.cmake)
@@ -210,6 +209,8 @@ include(ext/Arrow_Ext.cmake)
 include(ext/Sketches_Ext.cmake)
 include(ext/XGBoost_Ext.cmake)
 
+# include OLAP
+include(ext/Duckdb_ext.cmake)
 
 # set up directory to search for headers
 include_directories(include ${GTEST_INCLUDE_DIRS})

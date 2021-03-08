@@ -12,6 +12,7 @@ ExternalProject_Add(xgboost
         PREFIX xgboost
         CMAKE_ARGS ${XGB_OPTS}
         INSTALL_COMMAND "" #not install to /usr/local/include/xgboost
+        DEPENDS ${OPENSSL_LIBRARY}
         LOG_BUILD ON)
 
 # get source dir after download step
