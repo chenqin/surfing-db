@@ -41,7 +41,7 @@ else ()
         set(NCXX /usr/bin/g++)
         set(NCC /usr/bin/gcc)
         list(APPEND LNCFLAGS
-                "-Wall -Wextra -lstdc++ -lstdc++fs -lz -lrdkafka++"
+                "-Wall -Wextra -lstdc++ -lstdc++fs -lz -lrdkafka"
                 "-Wl,--no-as-needed -no-pie -ldl"
                 "-I/usr/include/ -I/usr/local/include -L/usr/local/lib -L/usr/lib")
 
@@ -211,6 +211,9 @@ include(ext/XGBoost_Ext.cmake)
 
 # include OLAP
 include(ext/Duckdb_ext.cmake)
+
+include(ext/Zookeeper_Ext.cmake)
+include(ext/Kafka_Ext.cmake)
 
 # set up directory to search for headers
 include_directories(include ${GTEST_INCLUDE_DIRS})

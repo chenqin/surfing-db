@@ -23,8 +23,7 @@
 #include <ctype.h>
 #include <vector>
 #include <chrono>
-#include <zookeeper/zookeeper.h>
-#include <librdkafka/rdkafka.h>
+#include <rdkafka.h>
 
 namespace surfingdb {
 		namespace connector {

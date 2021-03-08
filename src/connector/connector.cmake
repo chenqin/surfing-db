@@ -9,6 +9,8 @@ set(CONNECTOR surfconnector)
 add_library(${CONNECTOR} STATIC
         ${SURFINGDB_SRC}/connector/kafka.cpp)
 
+include_directories(${KC_INCLUDE_DIRS})
+
 target_link_libraries(${CONNECTOR}
         PUBLIC ${GLOG_LIBRARY}
         PUBLIC ${META}
@@ -17,8 +19,9 @@ target_link_libraries(${CONNECTOR}
         PUBLIC ${JSON_LIBRARY}
         PUBLIC ${THRIFT_LIBRARY}
         PUBLIC ${ARROW_LIBRARY}
-        PUBLIC rdkafka
-        PUBLIC rdkafka++)
+        PUBLIC ${PARQUET_LIBRARY}
+        PUBLIC ${ZOOKEEPER_LIBRARY}
+        PUBLIC rdkafka)
 
 # discover all gtests in this module
 include(GoogleTest)
