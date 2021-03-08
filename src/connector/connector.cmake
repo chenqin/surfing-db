@@ -21,7 +21,7 @@ target_link_libraries(${CONNECTOR}
         PUBLIC ${ARROW_LIBRARY}
         PUBLIC ${PARQUET_LIBRARY}
         PUBLIC ${ZOOKEEPER_LIBRARY}
-        PUBLIC rdkafka)
+        PUBLIC ${KC_LIBRARY})
 
 # discover all gtests in this module
 include(GoogleTest)

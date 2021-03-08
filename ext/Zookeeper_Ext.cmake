@@ -2,16 +2,12 @@ find_package(Threads REQUIRED)
 include(ExternalProject)
 set(ZK_LIBRARY libzookeeper)
 
-SET(ZK_OPTS
-        -DDUCKDB_BUILD_LIBRARY:BOOL=ON)
-
 ExternalProject_Add(zookeeper
         PREFIX zookeeper
         GIT_REPOSITORY git@github.com:chenqin/libzk.git
         GIT_TAG main
         UPDATE_COMMAND ""
         INSTALL_COMMAND ""
-        #CMAKE_ARGS ${DUCKDB_OPTS}
         LOG_DOWNLOAD ON
         LOG_CONFIGURE ON
         LOG_BUILD ON
