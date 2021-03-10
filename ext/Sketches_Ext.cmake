@@ -3,7 +3,7 @@ find_package(Threads REQUIRED)
 # not sure why we only add this for APPLE only.
 include(ExternalProject)
 ExternalProject_Add(
-        DataSketches
+        datasketches
         PREFIX datasketches
         GIT_REPOSITORY https://github.com/apache/datasketches-cpp.git
         UPDATE_COMMAND ""
@@ -14,8 +14,8 @@ ExternalProject_Add(
         LOG_BUILD ON)
 
 # get source dir after download step
-ExternalProject_Get_Property(DataSketches SOURCE_DIR)
-ExternalProject_Get_Property(DataSketches BINARY_DIR)
+ExternalProject_Get_Property(datasketches SOURCE_DIR)
+ExternalProject_Get_Property(datasketches BINARY_DIR)
 
 set(DATASKETCHES_INCLUDE_DIRS
         ${SOURCE_DIR}/common/include
