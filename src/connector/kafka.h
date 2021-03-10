@@ -17,7 +17,7 @@
 #ifndef SURFINGDB_KAFKA_H
 #define SURFINGDB_KAFKA_H
 
-#include <librdkafka/rdkafka.h>
+#include <rdkafka.h>
 #include <vector>
 #include <string>
 #include "table/row.h"

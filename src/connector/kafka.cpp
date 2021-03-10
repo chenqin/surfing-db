@@ -23,7 +23,6 @@
 #include <ctype.h>
 #include <vector>
 #include <chrono>
-#include <rdkafka.h>
 
 namespace surfingdb {
 		namespace connector {
@@ -44,9 +43,9 @@ namespace surfingdb {
 								*partitions) {
 							int i;
 							for (i = 0 ; i < partitions->cnt ; i++) {
-							LOG(INFO) <<
-							partitions->elems[i].topic <<
-							partitions->elems[i].partition <<
+							LOG(INFO) << "topic " <<
+							partitions->elems[i].topic << " partition " <<
+							partitions->elems[i].partition << " offset " <<
 							partitions->elems[i].offset;
 					}
 				}

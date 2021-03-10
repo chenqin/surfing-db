@@ -10,6 +10,7 @@ add_library(${CONNECTOR} STATIC
         ${SURFINGDB_SRC}/connector/kafka.cpp)
 
 include_directories(${KC_INCLUDE_DIRS})
+include_directories(${ZOOKEEPER_INCLUDE_DIR})
 
 target_link_libraries(${CONNECTOR}
         PUBLIC ${GLOG_LIBRARY}

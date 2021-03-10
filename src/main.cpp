@@ -66,7 +66,7 @@ int main(int argc, char** argv) {
 	std::string v = "xenon_metrics_prod";
 	std::string brokers = "datakafka08001:9092,datakafka08002:9092,datakafka08003:9092";
   // threaded ingest - map - shuffle - reduce
-#pragma omp parallel num_threads(CONCURRENCY) shared(results_ptr, total)
+#pragma omp parallel num_threads(1) shared(results_ptr, total)
 {
   	auto consumer = KafkaConnector(v, brokers);
     auto t1 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
@@ -137,7 +137,7 @@ int main(int argc, char** argv) {
 #pragma omp critical
       total += t3->row_count;
       if(omp_get_thread_num() == 0) {
-        LOG(INFO) << (total / (MPI_Wtime() - start)) * schema_ptr->rowSize() / (1024 * 1024) << "MB ps on " << node->rank;
+        //LOG(INFO) << (total / (MPI_Wtime() - start)) * schema_ptr->rowSize() / (1024 * 1024) << "MB ps on " << node->rank;
       }
     }
 }
