@@ -88,6 +88,9 @@ namespace surfingdb {
 							auto con = std::make_shared<duckdb::Connection>(db);
 							tpr->registerTable(con, "table1", field1);
 							t.appendDuck(con, "table1");
+							auto result = con->Query("select * from table1");
+							CHECK_EQ(result.get()->ColumnCount(), 7);
+							result->Print();
 						}
 
 						TEST(TableTest, testRowBuffer) {

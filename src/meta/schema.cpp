@@ -193,28 +193,33 @@ MPI_Datatype* TableSchema::schemaMPIType() {
   }
   return &_row_type;
 }
-		std::string getType(Field& f) {
-			if(f.type == RowType::STRING) {
-				return "VARCHAR";
+		/**
+		 * covert surfing-db schema type to duckdb schema
+		 * @param f
+		 * @return
+		 */
+		inline std::string cloumnType(Field& f) {
+			if(f.type == RowType::STRING || f.type == RowType::LIST || f.type == RowType::MAP) {
+				return fmt::format("VARCHAR({})", SchemaUtils::getFieldSize(f));
 			}
 			if(f.type == RowType::INT) {
 				return "INTEGER";
 			}
 			if(f.type == RowType::DOUBLE) {
-				return "REAL";
+				return "DOUBLE";
 			}
 			if (f.type == RowType::LONG) {
 				return "BIGINT";
 			}
-			if (f.type == RowType::LIST || f.type == RowType::MAP) {
-				return "VARCHAR";
+			if(f.type == RowType::BOOL) {
+				return "BOOLEAN";
 			}
 		}
 
 		void TableSchema::registerTable(std::shared_ptr<duckdb::Connection> connection, std::string name, Field& primary) {
 			std::string statement = fmt::format("CREATE TABLE {} (", name);
 			for(auto f : fields) {
-				statement  += fmt::format("{} {}, ", f.name, getType(f));
+				statement  += fmt::format("{} {}, ", f.name, cloumnType(f));
 			}
 			statement += fmt::format("PRIMARY KEY({}))", primary.name);
 			LOG(INFO) << statement;
