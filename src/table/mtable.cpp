@@ -18,6 +18,7 @@
 #include <unistd.h>
 #include "arrow/io/file.h"
 #include "parquet/stream_writer.h"
+#include "duckdb/main/appender.hpp"
 
 namespace surfingdb {
 		namespace table {
@@ -554,6 +555,49 @@ namespace surfingdb {
 					for (std::shared_ptr<RowBuffer> m : rows) {
 						appendRow(*m.get());
 					}
+				}
+
+				void mtable::appendDuck(std::shared_ptr<duckdb::Connection> connection, std::string name) {
+					duckdb::Appender appender(*connection.get(), name);
+					for(size_t i = 0 ; i < row_count ; i++) {
+						auto row = this->readRow(i);
+						appender.BeginRow();
+						appender.Append<int32_t>(1);
+						appender.Append<int64_t>(1);
+						appender.Append<int64_t>(1);
+						appender.Append<float>(1);
+						appender.Append<const char *>("");
+						appender.Append<const char *>("");
+						appender.Append<const char *>("");
+						/*
+						for(auto f : schema_ptr->fields) {
+							LOG(INFO) << f.name;
+							Value v;
+							row->read(f, v);
+							if(f.type == RowType::STRING) {
+								appender.Append<const char *>("");
+							}
+							if(f.type == RowType::INT) {
+								appender.Append<int32_t>(v.p_val.int_val);
+							}
+							if(f.type == RowType::DOUBLE) {
+								appender.Append<float>((float) v.p_val.double_val);
+							}
+							if (f.type == RowType::LONG) {
+								appender.Append<int64_t>(v.p_val.long_val);
+							}
+							// TODO(chenqin): fix collection to table
+							if (f.type == RowType::LIST) {
+								appender.Append<std::string>("");
+							}
+							if (f.type == RowType::MAP) {
+								appender.Append<std::string>("");
+							}
+						}
+						 */
+						appender.EndRow();
+					}
+					appender.Close();
 				}
 		} // namespace table
 } // namespace surfingdb

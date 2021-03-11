@@ -207,7 +207,7 @@ MPI_Datatype* TableSchema::schemaMPIType() {
 				return "BIGINT";
 			}
 			if (f.type == RowType::LIST || f.type == RowType::MAP) {
-				return "BLOB";
+				return "VARCHAR";
 			}
 		}
 
@@ -217,6 +217,7 @@ MPI_Datatype* TableSchema::schemaMPIType() {
 				statement  += fmt::format("{} {}, ", f.name, getType(f));
 			}
 			statement += fmt::format("PRIMARY KEY({}))", primary.name);
+			LOG(INFO) << statement;
 			connection->Query(statement);
 		}
 

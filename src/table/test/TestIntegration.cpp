@@ -83,11 +83,11 @@ namespace surfingdb {
 							mtable t(nullptr, tpr, MEM_PAGE_SIZE);
 							t.appendRow(b);
 							auto compact = t.compactTable();
-							t.release();
 							EXPECT_LT(compact->getSchema()->rowSize(), tpr->rowSize());
-							duckdb::DuckDB db;
+							duckdb::DuckDB db(nullptr);
 							auto con = std::make_shared<duckdb::Connection>(db);
-							tpr->registerTable(con, "table", field1);
+							tpr->registerTable(con, "table1", field1);
+							t.appendDuck(con, "table1");
 						}
 
 						TEST(TableTest, testRowBuffer) {

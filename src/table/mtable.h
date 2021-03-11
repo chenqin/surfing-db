@@ -86,6 +86,7 @@ public:
   void readField(const Field& field, float* data);
   void writeField(const Field& field, const float* data);
   std::shared_ptr<node> getNodePtr();
+  void appendDuck(std::shared_ptr<duckdb::Connection> connection,  std::string name);
 };
 
 } // namespace table
