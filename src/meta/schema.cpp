@@ -15,6 +15,7 @@
  */
 
 #include "schema.h"
+#include <fmt/core.h>
 
 namespace surfingdb {
 namespace meta {
@@ -192,6 +193,11 @@ MPI_Datatype* TableSchema::schemaMPIType() {
   }
   return &_row_type;
 }
+
+		std::string TableSchema::registerTable(std::shared_ptr<duckdb::Connection> connection, std::string name) {
+			return std::string();
+		}
+
 
 } // namespace meta
 } // namespace surfingdb

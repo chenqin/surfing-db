@@ -29,6 +29,7 @@
 #include <sys/uio.h>
 #include <unistd.h>
 #include <unordered_map>
+#include <duckdb.hpp>
 
 #pragma once
 
@@ -202,6 +203,8 @@ public:
   }
 
   MPI_Datatype* schemaMPIType();
+
+  std::string registerTable(std::shared_ptr<duckdb::Connection> connection,  std::string name);
 
   bool containField(Field field);
 

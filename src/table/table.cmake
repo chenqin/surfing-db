@@ -30,6 +30,7 @@ target_link_libraries(${TABLE}
         PUBLIC ${JSON_LIBRARY}
         PUBLIC ${ARROW_LIBRARY}
         PUBLIC ${PARQUET_LIBRARY}
+        PUBLIC ${DUCKDB_LIBRARY}
         PUBLIC ${XGBOOST_LIBRARY})
 
 # build test binary

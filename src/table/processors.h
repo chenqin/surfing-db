@@ -19,6 +19,7 @@
 
 #include "mtable.h"
 #include "xgbop.h"
+#include <duckdb.hpp>
 
 #pragma once
 

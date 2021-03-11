@@ -187,6 +187,8 @@ else ()
     set(CELLAR_ROOT /home/linuxbrew/.linuxbrew/Cellar)
 endif ()
 
+include(ext/FMT_Ext.cmake)
+
 include(ext/PGQuery_Ext.cmake)
 
 # add a basic gtest dependency

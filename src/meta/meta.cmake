@@ -16,6 +16,8 @@ target_link_libraries(${META}
         PUBLIC ${GLOG_LIBRARY}
         PUBLIC ${GFLAGS_LIBRARY}
         PUBLIC ${JSON_LIBRARY}
+        PUBLIC ${FMT_LIBRARY}
+        PUBLIC ${DUCKDB_LIBRARY}
         PUBLIC ${ARROW_LIBRARY})
 
 # discover all gtests in this module
