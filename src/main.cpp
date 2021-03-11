@@ -63,15 +63,15 @@ int main(int argc, char** argv) {
   srand(std::time(nullptr));
   auto start = MPI_Wtime();
   auto results_ptr = std::make_shared<std::unordered_map<Value , std::shared_ptr<RowBuffer>, ValueHasher>>();
-	std::string v = "xenon_metrics_prod";
+	std::string kafka_topic = "xenon_metrics_prod";
 	std::string brokers = "datakafka08001:9092,datakafka08002:9092,datakafka08003:9092";
 	// register a table
-	schema_ptr->registerTable(node->db_con, v, field1);
+	schema_ptr->registerTable(node->db_con, kafka_topic, field1);
 
   // threaded ingest - map - shuffle - reduce
-#pragma omp parallel num_threads(1) shared(results_ptr, total)
+#pragma omp parallel num_threads(CONCURRENCY) shared(results_ptr, total)
 {
-  	auto consumer = KafkaConnector(v, brokers);
+  	auto consumer = KafkaConnector(kafka_topic, brokers);
     auto t1 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
 
     while (true) {
@@ -128,6 +128,7 @@ int main(int argc, char** argv) {
       //shuffle
       auto t3 = processors::shuffle(t2, field3);
       t3->verify(field3);
+      t3->appendDuck(node->db_con, kafka_topic);
 
       // reduce
       processors::reduce(t3, field3, results_ptr, schema_ptr, [=](Value& key,std::vector<std::unique_ptr<RowBuffer>>& vals, std::shared_ptr<RowBuffer>& result){
@@ -140,7 +141,8 @@ int main(int argc, char** argv) {
 #pragma omp critical
       total += t3->row_count;
       if(omp_get_thread_num() == 0) {
-        //LOG(INFO) << (total / (MPI_Wtime() - start)) * schema_ptr->rowSize() / (1024 * 1024) << "MB ps on " << node->rank;
+      	// keep retrain 1 hour of data in table
+      	node->db_con->Query(fmt::format("delete * from {} where {} < {}", kafka_topic, field1.name, MPI_Wtime() * 1000 - 3600 * 1000));
       }
     }
 }

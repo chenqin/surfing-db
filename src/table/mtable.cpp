@@ -558,7 +558,7 @@ namespace surfingdb {
 				}
 
 				void mtable::appendDuck(std::shared_ptr<duckdb::Connection> connection, std::string name) {
-					duckdb::Appender appender(*connection.get(), name);
+					thread_local duckdb::Appender appender(*connection.get(), name);
 					for(size_t i = 0 ; i < row_count ; i++) {
 						auto row = this->readRow(i);
 						appender.BeginRow();
