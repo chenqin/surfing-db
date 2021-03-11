@@ -86,7 +86,7 @@ namespace surfingdb {
 							EXPECT_LT(compact->getSchema()->rowSize(), tpr->rowSize());
 							duckdb::DuckDB db(nullptr);
 							auto con = std::make_shared<duckdb::Connection>(db);
-							tpr->registerTable(con, "table1", field1);
+							tpr->registerTable(con, "table1");
 							t.appendDuck(con, "table1");
 							auto result = con->Query("select * from table1");
 							CHECK_EQ(result.get()->ColumnCount(), 7);

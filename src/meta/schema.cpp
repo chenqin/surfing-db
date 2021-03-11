@@ -216,12 +216,12 @@ MPI_Datatype* TableSchema::schemaMPIType() {
 			}
 		}
 
-		void TableSchema::registerTable(std::shared_ptr<duckdb::Connection> connection, std::string name, Field& primary) {
+		void TableSchema::registerTable(std::shared_ptr<duckdb::Connection> connection, std::string name) {
 			std::string statement = fmt::format("CREATE TABLE {} (", name);
 			for(auto f : fields) {
 				statement  += fmt::format("{} {}, ", f.name, cloumnType(f));
 			}
-			statement += fmt::format("PRIMARY KEY({}))", primary.name);
+			statement = statement.substr (0, statement.size()-2) + ")";
 			LOG(INFO) << statement;
 			connection->Query(statement);
 		}

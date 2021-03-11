@@ -16,6 +16,7 @@
 #include "mtable.h"
 #include <sys/uio.h>
 #include <unistd.h>
+#include <math.h>       /* isnan, sqrt */
 #include "arrow/io/file.h"
 #include "parquet/stream_writer.h"
 #include "duckdb/main/appender.hpp"
@@ -576,7 +577,12 @@ namespace surfingdb {
 									appender.Append<int32_t>(v.p_val.int_val);
 									break;
 								case RowType::DOUBLE:
-									appender.Append<double>(v.p_val.double_val);
+                  try {
+                    appender.Append<double>((double) v.p_val.double_val);
+                  } catch (duckdb::InvalidInputException &e) {
+                    //LOG(INFO) << (double) v.p_val.double_val;
+                    appender.Append<double>(0);
+                  }
 									break;
 								case RowType::LONG:
 									appender.Append<int64_t>(v.p_val.long_val);

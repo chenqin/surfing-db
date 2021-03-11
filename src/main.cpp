@@ -22,6 +22,7 @@
 #include "table/processors.h"
 #include "connector/kafka.h"
 #include <rapidjson/document.h>
+#include <fmt/core.h>
 
 #define FLUSH_DIR "/tmp/"
 
@@ -66,7 +67,7 @@ int main(int argc, char** argv) {
 	std::string kafka_topic = "xenon_metrics_prod";
 	std::string brokers = "datakafka08001:9092,datakafka08002:9092,datakafka08003:9092";
 	// register a table
-	schema_ptr->registerTable(node->db_con, kafka_topic, field1);
+	schema_ptr->registerTable(node->db_con, kafka_topic);
 
   // threaded ingest - map - shuffle - reduce
 #pragma omp parallel num_threads(CONCURRENCY) shared(results_ptr, total)
@@ -96,7 +97,7 @@ int main(int argc, char** argv) {
 								} else if (f.type == RowType::DOUBLE) {
 									std::string val = std::string(document[f.name.c_str()].GetString());
 									try {
-										v.p_val.double_val = std::stod(val);
+										v.p_val.double_val = (float) std::stod(val);
 									} catch (std::exception &e) {
 										v.p_val.double_val = 0;
 									}
