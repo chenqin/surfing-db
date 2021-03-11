@@ -65,6 +65,9 @@ int main(int argc, char** argv) {
   auto results_ptr = std::make_shared<std::unordered_map<Value , std::shared_ptr<RowBuffer>, ValueHasher>>();
 	std::string v = "xenon_metrics_prod";
 	std::string brokers = "datakafka08001:9092,datakafka08002:9092,datakafka08003:9092";
+	// register a table
+	schema_ptr->registerTable(node->db_con, v, field1);
+
   // threaded ingest - map - shuffle - reduce
 #pragma omp parallel num_threads(1) shared(results_ptr, total)
 {

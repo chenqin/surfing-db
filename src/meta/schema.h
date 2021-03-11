@@ -204,7 +204,7 @@ public:
 
   MPI_Datatype* schemaMPIType();
 
-  std::string registerTable(std::shared_ptr<duckdb::Connection> connection,  std::string name);
+  void registerTable(std::shared_ptr<duckdb::Connection> connection,  std::string name, Field& primary);
 
   bool containField(Field field);
 

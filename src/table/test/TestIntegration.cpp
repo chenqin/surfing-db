@@ -85,6 +85,9 @@ namespace surfingdb {
 							auto compact = t.compactTable();
 							t.release();
 							EXPECT_LT(compact->getSchema()->rowSize(), tpr->rowSize());
+							duckdb::DuckDB db;
+							auto con = std::make_shared<duckdb::Connection>(db);
+							tpr->registerTable(con, "table", field1);
 						}
 
 						TEST(TableTest, testRowBuffer) {
