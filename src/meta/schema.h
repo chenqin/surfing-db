@@ -166,6 +166,7 @@ public:
 
 class TableSchema : public RowSchema {
 private:
+	std::string name;
   size_t _size;          // fixed size of each row
   size_t _schema_sig; //schema fields hash
   bool _type_set;
@@ -181,6 +182,11 @@ public:
   size_t rowSize() {
     CHECK_GT(_size, 0);
     return _size;
+  }
+
+  std::string getName() {
+  	CHECK(!this->name.empty());
+  	return this->name;
   }
 
   size_t signature() {
@@ -204,7 +210,8 @@ public:
 
   MPI_Datatype* schemaMPIType();
 
-  void registerTable(std::shared_ptr<duckdb::Connection> connection,  std::string name);
+  void registerTable(std::shared_ptr<duckdb::Connection> connection,  const std::string name);
+  void registerIndex(std::shared_ptr<duckdb::Connection> connection,  const std::string name, const Field& f);
 
   bool containField(Field field);
 

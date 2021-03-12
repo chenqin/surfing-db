@@ -130,6 +130,7 @@ TableSchema::TableSchema(const RowSchema& schema) {
   _field_types = std::make_shared<std::unordered_map<Field, MPI_Datatype, FieldHasher>>();
   SchemaUtils::validSchema(schema);
   _schema_sig = schema_hasher.operator()(schema);
+  name = std::to_string(_schema_sig);
   _size = sizeof(size_t); // store _schema_sig
 
   // allocate primitive types first CPU cache friendly
@@ -216,13 +217,20 @@ MPI_Datatype* TableSchema::schemaMPIType() {
 			}
 		}
 
-		void TableSchema::registerTable(std::shared_ptr<duckdb::Connection> connection, std::string name) {
-			std::string statement = fmt::format("CREATE TABLE {} (", name);
+
+
+		void TableSchema::registerTable(std::shared_ptr<duckdb::Connection> connection, const std::string name) {
+			std::string statement = fmt::format("CREATE TEMPORARY TABLE {} (", name);
 			for(auto f : fields) {
 				statement  += fmt::format("{} {}, ", f.name, cloumnType(f));
 			}
 			statement = statement.substr (0, statement.size()-2) + ")";
 			LOG(INFO) << statement;
+			connection->Query(statement);
+		}
+
+		void TableSchema::registerIndex(std::shared_ptr<duckdb::Connection> connection, const std::string name, const Field &f) {
+			std::string statement = fmt::format("CREATE INDEX on {}_idx on {} ({}) ", f.name, name, f.name);
 			connection->Query(statement);
 		}
 

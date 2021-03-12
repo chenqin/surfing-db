@@ -68,7 +68,7 @@ int main(int argc, char** argv) {
 	std::string brokers = "datakafka08001:9092,datakafka08002:9092,datakafka08003:9092";
 	// register a table
 	schema_ptr->registerTable(node->db_con, kafka_topic);
-
+	schema_ptr->registerIndex(node->db_con, kafka_topic, field1);
   // threaded ingest - map - shuffle - reduce
 #pragma omp parallel num_threads(CONCURRENCY) shared(results_ptr, total)
 {
@@ -141,9 +141,11 @@ int main(int argc, char** argv) {
 
 #pragma omp critical
       total += t3->row_count;
+
       if(omp_get_thread_num() == 0) {
       	// keep retrain 1 hour of data in table
-      	node->db_con->Query(fmt::format("delete * from {} where {} < {}", kafka_topic, field1.name, MPI_Wtime() * 1000 - 3600 * 1000));
+      	auto result = node->db_con->Query(fmt::format("delete from {} where {} < {}", kafka_topic, field1.name, MPI_Wtime() * 1000 - 60 * 1000));
+      	result->Print();
       }
     }
 }
