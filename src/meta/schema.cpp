@@ -220,7 +220,7 @@ MPI_Datatype* TableSchema::schemaMPIType() {
 
 
 		void TableSchema::registerTable(std::shared_ptr<duckdb::Connection> connection, const std::string name) {
-			std::string statement = fmt::format("CREATE TEMPORARY TABLE {} (", name);
+			std::string statement = fmt::format("CREATE TABLE {} (", name);
 			for(auto f : fields) {
 				statement  += fmt::format("{} {}, ", f.name, cloumnType(f));
 			}

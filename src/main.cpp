@@ -17,6 +17,7 @@
 #include <future>
 #include <glog/logging.h>
 #include <iostream>
+#include <chrono>
 #include <omp.h>
 #include "meta/node.h"
 #include "table/processors.h"
@@ -30,6 +31,7 @@ using namespace surfingdb::table::schema;
 using surfingdb::meta::node;
 using namespace surfingdb::table;
 using namespace surfingdb::connector;
+using namespace std::chrono;
 
 /** run this program with
  * mpirun -np 12 ./MainTest
@@ -59,7 +61,7 @@ int main(int argc, char** argv) {
 
   std::shared_ptr<TableSchema> schema_ptr = std::make_shared<TableSchema>(r);
 
-  int rows = 150;
+  int rows = 1500;
   size_t total = 0;
   srand(std::time(nullptr));
   auto start = MPI_Wtime();
@@ -144,8 +146,10 @@ int main(int argc, char** argv) {
 
       if(omp_get_thread_num() == 0) {
       	// keep retrain 1 hour of data in table
-      	auto result = node->db_con->Query(fmt::format("delete from {} where {} < {}", kafka_topic, field1.name, MPI_Wtime() * 1000 - 60 * 1000));
-      	result->Print();
+        unsigned long one_hour =
+          std::chrono::system_clock::now().time_since_epoch() /
+          std::chrono::milliseconds(1) - 3600 * 1000;
+      	auto result = node->db_con->Query(fmt::format("delete from {} where {} < {}", kafka_topic, field1.name, one_hour));
       }
     }
 }
