@@ -84,11 +84,17 @@ namespace surfingdb {
 							t.appendRow(b);
 							auto compact = t.compactTable();
 							EXPECT_LT(compact->getSchema()->rowSize(), tpr->rowSize());
-							duckdb::DuckDB db(nullptr);
+							duckdb::DBConfig config;
+							config.force_checkpoint = true;
+							config.maximum_memory = 262144*1024;
+							duckdb::DuckDB db(nullptr, &config);
 							auto con = std::make_shared<duckdb::Connection>(db);
 							tpr->registerTable(con, "table1");
 							tpr->registerIndex(con, "table1", field1);
-							t.appendDuck(con, "table1");
+							for(long i = 0 ; i < 100 ; i++) {
+								t.appendDuck(con, "table1");
+								con->Query("delete from table1");
+							}
 							auto result = con->Query("select * from table1");
 							CHECK_EQ(result.get()->ColumnCount(), 7);
 							result->Print();
