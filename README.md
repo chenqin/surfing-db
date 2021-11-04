@@ -1,5 +1,5 @@
 # surfing-db
-The only data processing framework that utlize high performance computing architecture to run large scale machine learning and data processing all in one place.
+MPP architecture data processing framework that utlize high performance computing architecture to run large scale machine learning and data processing all in one place.
 
 ## data prep, ml training and serving all in one place with SQL support (ongoing).
 
