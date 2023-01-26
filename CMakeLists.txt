@@ -3,6 +3,7 @@
 cmake_minimum_required(VERSION 3.16)
 project(surfingdb LANGUAGES CXX VERSION 0.1)
 
+
 if (linux)
     project(Treads)
     #set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -std=gnu++2a -pthread" )
@@ -11,6 +12,9 @@ if (linux)
 endif ()
 
 find_package(Threads REQUIRED)
+find_package(MPI REQUIRED)
+find_package(OpenMP REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -18,6 +22,8 @@ set(CMAKE_VERBOSE_MAKEFILE ON)
 
 set(SURFINGDB_ROOT ${PROJECT_SOURCE_DIR})
 set(SURFINGDB_SRC ${SURFINGDB_ROOT}/src)
+
+SET(CMAKE_C_FLAGS ${CMAKE_C_FLAGS} -fopenmp)
 
 include_directories(include ${SURFINGDB_SRC} ${MPI_CXX_INCLUDE_PATH})
 
@@ -152,7 +158,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g -DNDBG")
 set(CMAKE_CXX_FLAGS_RELEASE ${NCFLAGS_RELEASE})
 
 # use openmp simd
-OPTION(USE_OpenMP "Use OpenMP" ON)
+OPTION(USE_OpenMP "Use OpenMP" OFF)
 
 IF (USE_OpenMP)
     message(STATUS "USE_OpenMP=${USE_OpenMP}")

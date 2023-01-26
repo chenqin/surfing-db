@@ -1,17 +1,13 @@
 # surfing-db
-MPP architecture data processing framework that utlize high performance computing architecture to run large scale machine learning and data processing all in one place.
 
-## data prep, ml training and serving all in one place with SQL support (ongoing).
+A efficient and powerful kafka messages processor using MPI and OpenMP.
 
-## AI native runtime taking advantage of hardware accleration
+# features
+
+in-memory data processor, low level memory layout optimization
+stateful local storage with sharded rocksdb
+kafka consumer sharding with MPI based distributed programming
+processor accleration with OpenMP
 
 
-pre-requesite
-- install mpich 3.x
-- https://mpitutorial.com/tutorials/installing-mpich2/
-
-How to run
-
-- mpirun -np 12 ./MainTest
-
-created @Maui, Hawaii, U.S.A
+created @Maui, Hawaii, U.S.A since 2021
