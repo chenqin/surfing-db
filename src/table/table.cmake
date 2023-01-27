@@ -25,11 +25,11 @@ target_link_libraries(${TABLE}
         PUBLIC ${OPENSSL_LIBRARY}
         PUBLIC ${CRYPTO_LIBRARY}
         PUBLIC ${THRIFT_LIBRARY}
-        PUBLIC ${GLOG_LIBRARY}
+        PUBLIC glog::glog
         PUBLIC ${GFLAGS_LIBRARY}
         PUBLIC ${JSON_LIBRARY}
-        PUBLIC ${ARROW_LIBRARY}
-        PUBLIC ${PARQUET_LIBRARY}
+        PUBLIC Arrow::arrow_shared
+        PUBLIC Parquet::parquet_shared
         PUBLIC ${DUCKDB_LIBRARY}
         PUBLIC ${XGBOOST_LIBRARY})
 
@@ -43,8 +43,8 @@ target_link_libraries(TableTest
         PRIVATE ${JSON_LIBRARY}
         PRIVATE ${GTEST_LIBRARY}
         PRIVATE ${GTEST_MAIN_LIBRARY}
-        PRIVATE ${ARROW_LIBRARY}
-        PRIVATE ${PARQUET_LIBRARY}
+        PRIVATE Arrow::arrow_shared
+        PRIVATE Parquet::parquet_shared
         PRIVATE ${XGBOOST_LIBRARY})
 
 # discover all gtests in this module

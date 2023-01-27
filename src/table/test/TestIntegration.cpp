@@ -85,8 +85,6 @@ namespace surfingdb {
 							auto compact = t.compactTable();
 							EXPECT_LT(compact->getSchema()->rowSize(), tpr->rowSize());
 							duckdb::DBConfig config;
-							config.force_checkpoint = true;
-							config.maximum_memory = 262144*1024;
 							duckdb::DuckDB db(nullptr, &config);
 							auto con = std::make_shared<duckdb::Connection>(db);
 							tpr->registerTable(con, "table1");

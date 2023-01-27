@@ -43,7 +43,7 @@ SET(ARROW_OPTS
         -DPARQUET_BUILD_ENCRYPTION=OFF
         -DPARQUET_MINIMAL_DEPENDENCY=ON
         -DPARQUET_ARROW_LINKAGE=STATIC
-        -DThrift_SOURCE=AUTO
+        -DThrift_SOURCE=BUNDLED
         -DCMAKE_BUILD_TYPE=Release)
 
 # arrow versions after 0.13.0 does not work with boost 70

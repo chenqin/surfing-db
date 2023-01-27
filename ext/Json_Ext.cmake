@@ -10,6 +10,7 @@ SET(JSON_OPTS
   -DRAPIDJSON_HAS_STDSTRING=ON)
 ExternalProject_Add(
   rapidjson
+  PREFIX rapidjson
   GIT_REPOSITORY https://github.com/Tencent/rapidjson.git
   UPDATE_COMMAND ""
   INSTALL_COMMAND ""

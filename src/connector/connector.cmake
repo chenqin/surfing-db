@@ -13,16 +13,14 @@ include_directories(${KC_INCLUDE_DIRS})
 include_directories(${ZOOKEEPER_INCLUDE_DIR})
 
 target_link_libraries(${CONNECTOR}
-        PUBLIC ${GLOG_LIBRARY}
         PUBLIC ${META}
-        PUBLIC ${GLOG_LIBRARY}
+        PUBLIC glog::glog
         PUBLIC ${GFLAGS_LIBRARY}
         PUBLIC ${JSON_LIBRARY}
         PUBLIC ${THRIFT_LIBRARY}
-        PUBLIC ${ARROW_LIBRARY}
-        PUBLIC ${PARQUET_LIBRARY}
-        PUBLIC ${ZOOKEEPER_LIBRARY}
-        PUBLIC ${KC_LIBRARY})
+        PUBLIC Arrow::arrow_shared
+        PUBLIC Parquet::parquet_shared
+        PUBLIC rdkafka)
 
 # discover all gtests in this module
 include(GoogleTest)

@@ -13,12 +13,12 @@ add_library(${META} STATIC
         ${SURFINGDB_SRC}/meta/schema.cpp)
 
 target_link_libraries(${META}
-        PUBLIC ${GLOG_LIBRARY}
+        PUBLIC glog::glog
         PUBLIC ${GFLAGS_LIBRARY}
         PUBLIC ${JSON_LIBRARY}
         PUBLIC ${FMT_LIBRARY}
         PUBLIC ${DUCKDB_LIBRARY}
-        PUBLIC ${ARROW_LIBRARY})
+        PUBLIC Arrow::arrow_shared)
 
 # discover all gtests in this module
 include(GoogleTest)

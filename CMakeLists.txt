@@ -47,7 +47,7 @@ else ()
         set(NCXX /usr/bin/g++)
         set(NCC /usr/bin/gcc)
         list(APPEND LNCFLAGS
-                "-Wall -Wextra -lstdc++ -lstdc++fs -lz -lrdkafka"
+                "-Wall -Wextra -lstdc++ -lstdc++fs"
                 "-Wl,--no-as-needed -no-pie -ldl"
                 "-I/usr/include/ -I/usr/local/include -L/usr/local/lib -L/usr/lib")
 
@@ -158,7 +158,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g -DNDBG")
 set(CMAKE_CXX_FLAGS_RELEASE ${NCFLAGS_RELEASE})
 
 # use openmp simd
-OPTION(USE_OpenMP "Use OpenMP" OFF)
+OPTION(USE_OpenMP "Use OpenMP" ON)
 
 IF (USE_OpenMP)
     message(STATUS "USE_OpenMP=${USE_OpenMP}")
@@ -204,14 +204,21 @@ include(ext/Gtest_Ext.cmake)
 include(ext/Gflags_Ext.cmake)
 
 # add a dependency of glog
-include(ext/Glog_Ext.cmake)
+find_package (glog REQUIRED)
+#include(ext/Glog_Ext.cmake)
 
 # include utils
 include(ext/Gflatbuffers_Ext.cmake)
 include(ext/Json_Ext.cmake)
 include(ext/OPENSSL_Ext.cmake)
+
+#used by thrift
+find_package(Boost REQUIRED)
 include(ext/Thrift_Ext.cmake)
-include(ext/Arrow_Ext.cmake)
+
+find_package(Arrow REQUIRED)
+find_package(Parquet REQUIRED)
+#include(ext/Arrow_Ext.cmake)
 
 # include ML libs
 include(ext/Sketches_Ext.cmake)
@@ -220,8 +227,9 @@ include(ext/XGBoost_Ext.cmake)
 # include OLAP
 include(ext/Duckdb_ext.cmake)
 
-include(ext/Zookeeper_Ext.cmake)
+#include(ext/Zookeeper_Ext.cmake)
 include(ext/Kafka_Ext.cmake)
+#find_package(rdkafka REQUIRED)
 
 # set up directory to search for headers
 include_directories(include ${GTEST_INCLUDE_DIRS})
@@ -239,7 +247,6 @@ include(src/table/table.cmake)
 
 # build table representation
 include(src/connector/connector.cmake)
-
 
 # build test binary
 add_executable(MainTest src/main.cpp)
