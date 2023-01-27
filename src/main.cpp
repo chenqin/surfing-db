@@ -68,13 +68,14 @@ int main(int argc, char** argv) {
   auto results_ptr = std::make_shared<std::unordered_map<Value , std::shared_ptr<RowBuffer>, ValueHasher>>();
 	std::string kafka_topic = "xenon_metrics_prod";
 	std::string brokers = "datakafka08001:9092,datakafka08002:9092,datakafka08003:9092";
+  std::string group_id = "surfing.test";
 	// register a table
 	schema_ptr->registerTable(node->db_con, kafka_topic);
 	schema_ptr->registerIndex(node->db_con, kafka_topic, field1);
   // threaded ingest - map - shuffle - reduce
 #pragma omp parallel num_threads(CONCURRENCY) shared(results_ptr, total)
 {
-  	auto consumer = KafkaConnector(kafka_topic, brokers);
+  	auto consumer = KafkaConnector(kafka_topic, brokers, group_id);
     auto t1 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
 
     while (true) {

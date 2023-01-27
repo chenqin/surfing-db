@@ -103,9 +103,8 @@ namespace surfingdb {
 					}
 				}
 
-				KafkaConnector::KafkaConnector(std::string topic, std::string brokers) {
+				KafkaConnector::KafkaConnector(std::string topic, std::string brokers, std::string groupid) {
 					this->brokers = (char *) brokers.c_str();
-					std::string groupid = "surfingdb.test";
 					this->groupid = (char *) groupid.c_str();
 					topics = (char *) topic.c_str();
 
