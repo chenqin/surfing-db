@@ -24,8 +24,7 @@ set(SURFINGDB_ROOT ${PROJECT_SOURCE_DIR})
 set(SURFINGDB_SRC ${SURFINGDB_ROOT}/src)
 
 SET(CMAKE_C_FLAGS ${CMAKE_C_FLAGS} -fopenmp)
-
-include_directories(include ${SURFINGDB_SRC} ${MPI_CXX_INCLUDE_PATH})
+include_directories(include ${SURFINGDB_SRC} ${MPI_CXX_INCLUDE_PATH} ${MPI_INCLUDE_PATH})
 
 # a switch to use clang or g++
 # clang or g++

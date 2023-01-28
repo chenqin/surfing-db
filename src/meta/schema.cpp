@@ -184,7 +184,7 @@ MPI_Datatype* TableSchema::schemaMPIType() {
         MPI_Aint displ;
         blocklength = SchemaUtils::getFieldSize(f);
         displ = _size - SchemaUtils::getFieldSize(f);
-        MPI_Type_hvector(1, blocklength, displ, MPI_CHAR, &type);
+        MPI_Type_vector(1, blocklength, displ, MPI_CHAR, &type);
         MPI_Type_commit(&type);
         _field_types->insert({ f, type });
       }
