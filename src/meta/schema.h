@@ -19,6 +19,7 @@
 #include "meta/gen-cpp/schema_constants.h"
 #include "meta/gen-cpp/schema_types.h"
 
+#include <duckdb.hpp>
 #include <glog/logging.h>
 #include <iostream>
 #include <mpi.h>
@@ -29,7 +30,6 @@
 #include <sys/uio.h>
 #include <unistd.h>
 #include <unordered_map>
-#include <duckdb.hpp>
 
 #pragma once
 
@@ -39,10 +39,10 @@ namespace meta {
 #define MAX_STR_LEN 2048
 #define HEADER_SIZE sizeof(long)
 #define MEM_PAGE_SIZE 1073741824 // 1GB
-#define FLUSH_SIZE 10737418240 // 10GB
+#define FLUSH_SIZE 10737418240   // 10GB
 #define FILE_IO_VECTOR 8
 #define SSD_CHUNK_SIZ 65536 // read/write ssd per 64KB chunk
-#define DOUBLE_TYPE float //thrift lack float type
+#define DOUBLE_TYPE float   // thrift lack float type
 #define FLUSH_DIR "/tmp/"
 #define CONCURRENCY 2
 /**
@@ -82,17 +82,17 @@ struct SchemaHasher {
 
 struct ValueHasher {
   std::size_t operator()(const PValue& k) const {
-	  size_t result = 0;
-  	if(!k.string_val.empty()) result = hash<string>()(k.string_val);
-    if(!k.int_val) result ^= hash<int>()(k.int_val) << 1;
-	  if(!k.long_val) result ^= hash<long>()(k.long_val) << 2;
-    if(std::abs(k.double_val) <= 1e-5) result ^= hash<double>()(k.double_val) << 3;
-    if(k.bool_val) result ^= hash<bool>()(k.bool_val) << 4;
+    size_t result = 0;
+    if (!k.string_val.empty()) result = hash<string>()(k.string_val);
+    if (!k.int_val) result ^= hash<int>()(k.int_val) << 1;
+    if (!k.long_val) result ^= hash<long>()(k.long_val) << 2;
+    if (std::abs(k.double_val) <= 1e-5) result ^= hash<double>()(k.double_val) << 3;
+    if (k.bool_val) result ^= hash<bool>()(k.bool_val) << 4;
     return result;
   }
 
   std::size_t operator()(const Value& k) const {
-	  size_t result = operator()(k.p_val);
+    size_t result = operator()(k.p_val);
     for (auto l : k.list_value) {
       result ^= operator()(l);
     }
@@ -107,9 +107,9 @@ struct ValueHasher {
 class SchemaUtils {
 public:
   /**
- * valid if schema is accepted
- * @param rowSchema
- */
+   * valid if schema is accepted
+   * @param rowSchema
+   */
   static void validSchema(const RowSchema& rowSchema);
 
   static size_t getFieldSize(const Field& f);
@@ -120,25 +120,40 @@ public:
       CHECK_LE(max_size, MAX_STR_LEN);
     }
   }
+  /// @brief adding a new list or primitive field to schema
+  /// @param r
+  /// @param name
+  /// @param type
+  /// @param max_size
+  static void addElements(RowSchema& r, const std::string& name, const RowType::type type, const uint64_t& max_element);
+
+  /// @brief adding new map field to schema
+  /// @param r
+  /// @param name
+  /// @param key_type
+  /// @param val_type
+  /// @param max_element
+  static void addPairs(RowSchema& r, const std::string& name, const RowType::type key_type, const RowType::type val_type, const uint64_t& max_element);
+
   /**
- * helper function to init a primitive field
- * @param field
- * @param name
- * @param type
- * @param max_size
- */
+   * helper function to init a primitive field
+   * @param field
+   * @param name
+   * @param type
+   * @param max_size
+   */
   static void initField(Field& field,
                         const std::string& name,
                         const RowType::type type,
                         const uint64_t& max_size);
 
   /**
- * helper function to init a list field
- * @param field
- * @param name
- * @param type
- * @param max_size
- */
+   * helper function to init a list field
+   * @param field
+   * @param name
+   * @param type
+   * @param max_size
+   */
   static void initListField(Field& field,
                             const std::string& name,
                             const RowType::type list_type,
@@ -146,15 +161,15 @@ public:
                             const uint64_t& max_element_size);
 
   /**
- * helper function to init a map field
- * @param field
- * @param name
- * @param key_type
- * @param value_type
- * @param max_map_size
- * @param max_key_size
- * @param max_value_size
- */
+   * helper function to init a map field
+   * @param field
+   * @param name
+   * @param key_type
+   * @param value_type
+   * @param max_map_size
+   * @param max_key_size
+   * @param max_value_size
+   */
   static void initMapField(Field& field,
                            const std::string& name,
                            const RowType::type key_type,
@@ -166,11 +181,11 @@ public:
 
 class TableSchema : public RowSchema {
 private:
-	std::string name;
-  size_t _size;          // fixed size of each row
-  size_t _schema_sig; //schema fields hash
+  std::string name;
+  size_t _size;       // fixed size of each row
+  size_t _schema_sig; // schema fields hash
   bool _type_set;
-  MPI_Datatype _row_type; //type of entire row
+  MPI_Datatype _row_type; // type of entire row
   FieldHasher field_hasher;
   SchemaHasher schema_hasher;
 
@@ -185,8 +200,8 @@ public:
   }
 
   std::string getName() {
-  	CHECK(!this->name.empty());
-  	return this->name;
+    CHECK(!this->name.empty());
+    return this->name;
   }
 
   size_t signature() {
@@ -200,7 +215,7 @@ public:
     _field_types = std::make_shared<std::unordered_map<Field, MPI_Datatype, FieldHasher>>();
     _size = sizeof(size_t); // store _schema_sig
     for (size_t i = 0; i < fields.size(); i++) {
-      //LOG(INFO) << fields.at(i).name;
+      // LOG(INFO) << fields.at(i).name;
       auto f = fields.at(i);
       _offsets->emplace(f, _size);
       _max_unit->emplace(f, f.max_unit_size);
@@ -210,8 +225,8 @@ public:
 
   MPI_Datatype* schemaMPIType();
 
-  void registerTable(std::shared_ptr<duckdb::Connection> connection,  const std::string name);
-  void registerIndex(std::shared_ptr<duckdb::Connection> connection,  const std::string name, const Field& f);
+  void registerTable(std::shared_ptr<duckdb::Connection> connection, const std::string name);
+  void registerIndex(std::shared_ptr<duckdb::Connection> connection, const std::string name, const Field& f);
 
   bool containField(Field field);
 
@@ -219,7 +234,6 @@ public:
     _size = 0;
     _schema_sig = 0;
     _type_set = false;
-
   }
   TableSchema(const RowSchema& schema);
 
@@ -228,4 +242,4 @@ public:
 
 } // namespace meta
 } // namespace surfingdb
-#endif //SURFINGDB_SCHEMA_H
+#endif // SURFINGDB_SCHEMA_H

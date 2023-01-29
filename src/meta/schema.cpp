@@ -86,6 +86,64 @@ size_t SchemaUtils::getFieldSize(const Field& f) {
   assert(false);
 }
 
+uint64_t getTypeSize(const RowType::type type) {
+  switch (type) {
+  case RowType::BOOL:
+    return sizeof(bool);
+  case RowType::INT:
+    return sizeof(int32_t);
+  case RowType::LONG:
+    return sizeof(int64_t);
+  case RowType::DOUBLE:
+    return sizeof(DOUBLE_TYPE);
+  case RowType::STRING:
+    return MAX_STR_LEN;
+  default:
+    CHECK(false);
+    return -1;
+  }
+}
+
+void SchemaUtils::addElements(RowSchema& r, const std::string& name, const RowType::type type, const uint64_t& max_element) {
+  if (r.fields.size() == 0) {
+    r.fields = std::vector<Field>();
+  }
+
+  // avoid duplicated name
+  for (size_t i = 0; i < r.fields.size(); i++) {
+    Field field = r.fields.at(i);
+    CHECK(field.name != name);
+  }
+
+  uint64_t element_max = getTypeSize(type);
+
+  Field f;
+  // more than one element as list
+  if (max_element > 1) {
+    initListField(f, name, type, max_element, element_max);
+  } else {
+    initField(f, name, type, element_max);
+  }
+  r.fields.push_back(f);
+}
+
+void SchemaUtils::addPairs(RowSchema& r, const std::string& name, const RowType::type key_type, const RowType::type val_type, const uint64_t& max_element) {
+  if (r.fields.size() == 0) {
+    r.fields = std::vector<Field>();
+  }
+  // avoid duplicated name
+  for (size_t i = 0; i < r.fields.size(); i++) {
+    Field field = r.fields.at(i);
+    CHECK(field.name != name);
+  }
+
+  uint64_t key_element_max = getTypeSize(key_type);
+  uint64_t val_element_max = getTypeSize(val_type);
+  Field f;
+  initMapField(f, name, key_type, val_type, key_element_max, val_element_max, max_element);
+  r.fields.push_back(f);
+}
+
 void SchemaUtils::initField(Field& field, const std::string& name, const RowType::type type, const uint64_t& max_size) {
   field.name = name;
   field.type = type;
@@ -194,46 +252,43 @@ MPI_Datatype* TableSchema::schemaMPIType() {
   }
   return &_row_type;
 }
-		/**
-		 * covert surfing-db schema type to duckdb schema
-		 * @param f
-		 * @return
-		 */
-		inline std::string cloumnType(Field& f) {
-			if(f.type == RowType::STRING || f.type == RowType::LIST || f.type == RowType::MAP) {
-				return fmt::format("VARCHAR({})", SchemaUtils::getFieldSize(f));
-			}
-			if(f.type == RowType::INT) {
-				return "INTEGER";
-			}
-			if(f.type == RowType::DOUBLE) {
-				return "DOUBLE";
-			}
-			if (f.type == RowType::LONG) {
-				return "BIGINT";
-			}
-			if(f.type == RowType::BOOL) {
-				return "BOOLEAN";
-			}
-		}
+/**
+ * covert surfing-db schema type to duckdb schema
+ * @param f
+ * @return
+ */
+inline std::string cloumnType(Field& f) {
+  if (f.type == RowType::STRING || f.type == RowType::LIST || f.type == RowType::MAP) {
+    return fmt::format("VARCHAR({})", SchemaUtils::getFieldSize(f));
+  }
+  if (f.type == RowType::INT) {
+    return "INTEGER";
+  }
+  if (f.type == RowType::DOUBLE) {
+    return "DOUBLE";
+  }
+  if (f.type == RowType::LONG) {
+    return "BIGINT";
+  }
+  if (f.type == RowType::BOOL) {
+    return "BOOLEAN";
+  }
+}
 
+void TableSchema::registerTable(std::shared_ptr<duckdb::Connection> connection, const std::string name) {
+  std::string statement = fmt::format("CREATE TABLE {} (", name);
+  for (auto f : fields) {
+    statement += fmt::format("{} {}, ", f.name, cloumnType(f));
+  }
+  statement = statement.substr(0, statement.size() - 2) + ")";
+  LOG(INFO) << statement;
+  connection->Query(statement);
+}
 
-
-		void TableSchema::registerTable(std::shared_ptr<duckdb::Connection> connection, const std::string name) {
-			std::string statement = fmt::format("CREATE TABLE {} (", name);
-			for(auto f : fields) {
-				statement  += fmt::format("{} {}, ", f.name, cloumnType(f));
-			}
-			statement = statement.substr (0, statement.size()-2) + ")";
-			LOG(INFO) << statement;
-			connection->Query(statement);
-		}
-
-		void TableSchema::registerIndex(std::shared_ptr<duckdb::Connection> connection, const std::string name, const Field &f) {
-			std::string statement = fmt::format("CREATE INDEX on {}_idx on {} ({}) ", f.name, name, f.name);
-			connection->Query(statement);
-		}
-
+void TableSchema::registerIndex(std::shared_ptr<duckdb::Connection> connection, const std::string name, const Field& f) {
+  std::string statement = fmt::format("CREATE INDEX on {}_idx on {} ({}) ", f.name, name, f.name);
+  connection->Query(statement);
+}
 
 } // namespace meta
 } // namespace surfingdb

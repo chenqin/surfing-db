@@ -249,14 +249,20 @@ include(src/connector/connector.cmake)
 
 # build test binary
 add_executable(MainTest src/main.cpp)
+add_executable(Test src/TestIntegration.cpp)
 
 target_link_libraries(MainTest
         PRIVATE ${META}
         PRIVATE ${TABLE}
         PRIVATE ${CONNECTOR})
 
+target_link_libraries(Test
+        PRIVATE ${META}
+        PRIVATE ${TABLE}
+        PRIVATE ${CONNECTOR})
+
 # install it into local bin folder
-install(TARGETS MainTest DESTINATION bin)
+install(TARGETS MainTest Test DESTINATION bin)
 
 # enable testing so that we can run "make test"
 enable_testing()
