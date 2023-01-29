@@ -45,14 +45,14 @@ int main(int argc, char** argv) {
 
   RowSchema r;
 
-  SchemaUtils::addElements(r, "timestamp", RowType::LONG, 1);
-  SchemaUtils::addElements(r, "host", RowType::STRING, 1);
-  SchemaUtils::addElements(r, "metricName", RowType::STRING, 1);
-  SchemaUtils::addElements(r, "metricValues", RowType::DOUBLE, 2);
-  SchemaUtils::addPairs(r, "meta", RowType::STRING, RowType::STRING, 16);
+  SchemaUtils::appendElements(r, "timestamp", RowType::LONG, 1);
+  SchemaUtils::appendElements(r, "host", RowType::STRING, 1);
+  SchemaUtils::appendElements(r, "metricName", RowType::STRING, 1);
+  // min, max, p50, p95, p99 of metricValue
+  SchemaUtils::appendElements(r, "metricValues", RowType::DOUBLE, 5);
+  // user defined meta data pair 
+  SchemaUtils::appendPairs(r, "meta", RowType::STRING, RowType::STRING, 16);
   std::shared_ptr<TableSchema> schema_ptr = std::make_shared<TableSchema>(r);
-
-    
 
   return 0;
 }

@@ -120,20 +120,22 @@ public:
       CHECK_LE(max_size, MAX_STR_LEN);
     }
   }
-  /// @brief adding a new list or primitive field to schema
+  /// @brief public API, append 1 or N primitive typed data as last column in schema 
   /// @param r
   /// @param name
   /// @param type
   /// @param max_size
-  static void addElements(RowSchema& r, const std::string& name, const RowType::type type, const uint64_t& max_element);
+  /// @return size of columns in schema
+  static int16_t appendElements(RowSchema& r, const std::string& name, const RowType::type type, const uint64_t& max_element);
 
-  /// @brief adding new map field to schema
+  /// @brief public API, append 1 or N primitive typed data pair as last column in schema 
   /// @param r
   /// @param name
   /// @param key_type
   /// @param val_type
   /// @param max_element
-  static void addPairs(RowSchema& r, const std::string& name, const RowType::type key_type, const RowType::type val_type, const uint64_t& max_element);
+  /// @return size of columns in schema
+  static int16_t appendPairs(RowSchema& r, const std::string& name, const RowType::type key_type, const RowType::type val_type, const uint64_t& max_element);
 
   /**
    * helper function to init a primitive field

@@ -104,7 +104,7 @@ uint64_t getTypeSize(const RowType::type type) {
   }
 }
 
-void SchemaUtils::addElements(RowSchema& r, const std::string& name, const RowType::type type, const uint64_t& max_element) {
+int16_t SchemaUtils::appendElements(RowSchema& r, const std::string& name, const RowType::type type, const uint64_t& max_element) {
   if (r.fields.size() == 0) {
     r.fields = std::vector<Field>();
   }
@@ -125,9 +125,10 @@ void SchemaUtils::addElements(RowSchema& r, const std::string& name, const RowTy
     initField(f, name, type, element_max);
   }
   r.fields.push_back(f);
+  return r.fields.size();
 }
 
-void SchemaUtils::addPairs(RowSchema& r, const std::string& name, const RowType::type key_type, const RowType::type val_type, const uint64_t& max_element) {
+int16_t SchemaUtils::appendPairs(RowSchema& r, const std::string& name, const RowType::type key_type, const RowType::type val_type, const uint64_t& max_element) {
   if (r.fields.size() == 0) {
     r.fields = std::vector<Field>();
   }
@@ -142,6 +143,7 @@ void SchemaUtils::addPairs(RowSchema& r, const std::string& name, const RowType:
   Field f;
   initMapField(f, name, key_type, val_type, key_element_max, val_element_max, max_element);
   r.fields.push_back(f);
+  return r.fields.size();
 }
 
 void SchemaUtils::initField(Field& field, const std::string& name, const RowType::type type, const uint64_t& max_size) {
