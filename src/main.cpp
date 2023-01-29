@@ -62,7 +62,7 @@ int main(int argc, char** argv) {
   std::string group_id = "surfing.test";
   // register a table
   schema_ptr->registerTable(node->db_con, kafka_topic);
-  schema_ptr->registerIndex(node->db_con, kafka_topic, field1);
+  schema_ptr->registerIndex(node->db_con, kafka_topic, schema_ptr->fields.at(0));
   // threaded ingest - map - shuffle - reduce
 #pragma omp parallel num_threads(CONCURRENCY) shared(results_ptr, total)
   {
@@ -121,16 +121,16 @@ int main(int argc, char** argv) {
       t1->release();
 
       // shuffle
-      auto t3 = processors::shuffle(t2, field3);
-      t3->verify(field3);
+      auto t3 = processors::shuffle(t2, schema_ptr->fields.at(2));
+      t3->verify(schema_ptr->fields.at(2));
       t3->appendDuck(node->db_con, kafka_topic);
 
       // reduce
-      processors::reduce(t3, field3, results_ptr, schema_ptr, [=](Value& key, std::vector<std::unique_ptr<RowBuffer>>& vals, std::shared_ptr<RowBuffer>& result) {
+      processors::reduce(t3, schema_ptr->fields.at(2), results_ptr, schema_ptr, [=](Value& key, std::vector<std::unique_ptr<RowBuffer>>& vals, std::shared_ptr<RowBuffer>& result) {
         Value v;
-        result->read(field1, v);
+        result->read(schema_ptr->fields.at(0), v);
         v.p_val.long_val += vals.size();
-        result->write(field1, v);
+        result->write(schema_ptr->fields.at(0), v);
       });
 
 #pragma omp critical
@@ -139,7 +139,7 @@ int main(int argc, char** argv) {
       if (omp_get_thread_num() == 0) {
         // keep retrain 1 hour of data in table
         unsigned long one_hour = std::chrono::system_clock::now().time_since_epoch() / std::chrono::milliseconds(1) - 3600 * 1000;
-        auto result = node->db_con->Query(fmt::format("delete from {} where {} < {}", kafka_topic, field1.name, one_hour));
+        auto result = node->db_con->Query(fmt::format("delete from {} where {} < {}", kafka_topic, schema_ptr->fields.at(0).name, one_hour));
       }
     }
   }
