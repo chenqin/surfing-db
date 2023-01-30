@@ -43,7 +43,7 @@ using namespace surfingdb::meta;
  * mtable is foundation data management unit.
  * by default, it served as continous memory in row based layout during map, shuffle time
  * after shuffle, table is stored in columnar vectorized processing
-*/
+ */
 class mtable {
 private:
   ValueHasher value_hasher;
@@ -101,10 +101,10 @@ public:
   /**
    * convert row based table into columnar table in arrow format
    */
-  void toColumnar();
+  std::shared_ptr<arrow::Table> toColumnar();
   /**
    * dump entire table into duck db for olap query sql interface
-  */
+   */
   void appendDuck(std::shared_ptr<duckdb::Connection> connection, std::string name);
 };
 

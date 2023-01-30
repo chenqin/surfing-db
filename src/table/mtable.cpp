@@ -486,7 +486,7 @@ arrow::Status append(arrow::ArrayBuilder* builder, const Field& field, const PVa
   return arrow::Status::OK();
 }
 
-void mtable::toColumnar() {
+std::shared_ptr<arrow::Table> mtable::toColumnar() {
   /**
    * Build list of builders to append
    */
@@ -530,6 +530,7 @@ void mtable::toColumnar() {
     arrays.push_back(_array);
   }
   this->table_ptr = arrow::Table::Make(this->getArrowSchema(), arrays);
+  return this->table_ptr;
 }
 
 std::shared_ptr<TableSchema> mtable::getCompactSchema() {
