@@ -41,14 +41,7 @@ void processors::reduce(std::shared_ptr<mtable> in_ptr,
                         std::function<void(Value&, std::vector<std::unique_ptr<RowBuffer>>&, std::shared_ptr<RowBuffer>&)> reducer) {
   // shuffle based on partition key
   auto shuffle_ptr = shuffle(in_ptr, field);
-
-  /**
-   * TODO: convert vector to arrow columns after shuffle, release vector memory
-  */
-  for(auto i = 0 ; i < shuffle_ptr->getSchema()->fields.size(); i++) {
-    auto field = shuffle_ptr->getSchema()->fields.at(i);
-  }
-
+  shuffle_ptr->toColumnar();
 
   shuffle_ptr->group(field, true);
   for (auto g : *shuffle_ptr->key_groups) {

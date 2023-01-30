@@ -18,6 +18,7 @@
 #define SURFINGDB_MTABLE_H
 #pragma once
 
+#include <arrow/api.h>
 #include <cstdarg>
 #include <fcntl.h>
 #include <future>
@@ -38,6 +39,11 @@ namespace table {
 using surfingdb::meta::node;
 using namespace surfingdb::meta;
 
+/**
+ * mtable is foundation data management unit.
+ * by default, it served as continous memory in row based layout during map, shuffle time
+ * after shuffle, table is stored in columnar vectorized processing
+*/
 class mtable {
 private:
   ValueHasher value_hasher;
@@ -48,12 +54,17 @@ private:
   // defines the node row table bind to
   std::shared_ptr<node> node_ptr;
   std::shared_ptr<TableSchema> schema_ptr;
+  /**
+   * define columnar table ptr
+   */
+  std::shared_ptr<arrow::Table> table_ptr;
+
 public:
   MPI_Win win;
   uint8_t* schedule;
-  size_t row_count = 0;     // number of rows in table
-  size_t offset = 0;        //current offset position
-  //partition field
+  size_t row_count = 0; // number of rows in table
+  size_t offset = 0;    // current offset position
+  // partition field
   std::unique_ptr<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>> key_dist; // key hash and per node counts
   std::unique_ptr<std::map<size_t, std::vector<size_t>, std::less<size_t>>> key_groups;               // local key, offsets map
   std::unique_ptr<std::map<int, size_t>> placement_index;                                             // placement , start index of rows
@@ -62,19 +73,20 @@ public:
   mtable(const std::shared_ptr<node>, const std::shared_ptr<TableSchema>, size_t capacity);
   ~mtable();
   void release();
-  void group(const Field& f, bool );
+  void group(const Field& f, bool);
   std::shared_ptr<TableSchema> getCompactSchema();
   std::shared_ptr<mtable> compactTable();
   void placement_sort(const Field& f);
   uint8_t* range_ptr(int dest);
   void flush_rma_memory(size_t rows);
-  void copy_rma_memory(size_t rows); //deprecated
+  void copy_rma_memory(size_t rows); // deprecated
   void reserve_rma_memory(size_t rows);
   size_t range_row_size(int dest);
   uint8_t* payload_ptr();
   size_t placement(size_t key);
   size_t row_size();
   std::shared_ptr<TableSchema> getSchema();
+  std::shared_ptr<arrow::Schema> getArrowSchema();
   std::unique_ptr<RowBuffer> readRow(int index);
   void appendRow(RowBuffer& row);
   void appendRows(std::vector<std::shared_ptr<RowBuffer>>& rows);
@@ -86,9 +98,16 @@ public:
   void readField(const Field& field, float* data);
   void writeField(const Field& field, const float* data);
   std::shared_ptr<node> getNodePtr();
-  void appendDuck(std::shared_ptr<duckdb::Connection> connection,  std::string name);
+  /**
+   * convert row based table into columnar table in arrow format
+   */
+  void toColumnar();
+  /**
+   * dump entire table into duck db for olap query sql interface
+  */
+  void appendDuck(std::shared_ptr<duckdb::Connection> connection, std::string name);
 };
 
 } // namespace table
 } // namespace surfingdb
-#endif //SURFINGDB_MTABLE_H
+#endif // SURFINGDB_MTABLE_H
