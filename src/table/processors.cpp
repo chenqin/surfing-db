@@ -70,7 +70,7 @@ void processors::xgb(std::shared_ptr<mtable> in, std::vector<Field> features, Fi
   if (op.parameters.isTraining) {
     in->readField(op.labelField, &label_matrix[0]);
     size_t total_row_count = in->row_size();
-    op.gather(&features_matrix[0], &label_matrix[0], total_row_count, op.features()); //gather training dataset to root
+    op.gather(&features_matrix[0], &label_matrix[0], total_row_count, op.features()); // gather training dataset to root
     op.train(&features_matrix[0], &label_matrix[0], total_row_count, op.features());
     op.syncModel(); // send model to all processes from root
   } else {
@@ -93,7 +93,7 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f
   size_t recv_lens[node_ptr->world];
 
   for (int j = 0; j < node_ptr->world; j++) {
-    int i = (j + (omp_get_thread_num() << 1))%node_ptr->world;
+    int i = (j + (omp_get_thread_num() << 1)) % node_ptr->world;
     if (node_ptr->rank == i) {
       size_t send_to_i = in->range_row_size(i);
       MPI_Request request;
@@ -123,13 +123,13 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f
   for (int i = 0; i < node_ptr->world; i++) {
     int send_rank_offset = i;
     if (in->range_row_size(send_rank_offset) > 0) {
-      //LOG(INFO) << node_ptr->rank << "-> " << i << " size " << in->range_row_size(i);
+      // LOG(INFO) << node_ptr->rank << "-> " << i << " size " << in->range_row_size(i);
       MPI_Isend(in->range_ptr(send_rank_offset), in->range_row_size(send_rank_offset), row_type, send_rank_offset, omp_get_thread_num(), MPI_COMM_WORLD, &sends[send_count++]);
     }
     int recv_rank_offset = i;
     if (recv_lens[recv_rank_offset] > 0) {
       CHECK_LE(start_index[recv_rank_offset], buffer_len);
-      //LOG(INFO) << node_ptr->rank << " <- " << i << " size " << recv_lens[i];
+      // LOG(INFO) << node_ptr->rank << " <- " << i << " size " << recv_lens[i];
       MPI_Recv(&buffer[start_index[recv_rank_offset] * schema_ptr->rowSize()], recv_lens[recv_rank_offset], row_type, recv_rank_offset, omp_get_thread_num(), MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
   }
@@ -157,7 +157,7 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f
 }
 
 std::shared_ptr<mtable> processors::shuffleRMA(std::shared_ptr<mtable> in, Field& f) {
-  //#pragma omp critical
+  // #pragma omp critical
   in->group(f, false);
   in->placement_sort(f);
   CHECK(!in->placement_index->empty());

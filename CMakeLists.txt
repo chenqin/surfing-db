@@ -157,7 +157,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g -DNDBG")
 set(CMAKE_CXX_FLAGS_RELEASE ${NCFLAGS_RELEASE})
 
 # use openmp simd
-OPTION(USE_OpenMP "Use OpenMP" ON)
+OPTION(USE_OpenMP "Use OpenMP" OFF)
 
 IF (USE_OpenMP)
     message(STATUS "USE_OpenMP=${USE_OpenMP}")
@@ -204,7 +204,6 @@ include(ext/Gflags_Ext.cmake)
 
 # add a dependency of glog
 find_package (glog REQUIRED)
-#include(ext/Glog_Ext.cmake)
 
 # include utils
 include(ext/Gflatbuffers_Ext.cmake)
@@ -217,7 +216,6 @@ include(ext/Thrift_Ext.cmake)
 
 find_package(Arrow REQUIRED)
 find_package(Parquet REQUIRED)
-#include(ext/Arrow_Ext.cmake)
 
 # include ML libs
 include(ext/Sketches_Ext.cmake)
@@ -226,9 +224,7 @@ include(ext/XGBoost_Ext.cmake)
 # include OLAP
 include(ext/Duckdb_ext.cmake)
 
-#include(ext/Zookeeper_Ext.cmake)
 include(ext/Kafka_Ext.cmake)
-#find_package(rdkafka REQUIRED)
 
 # set up directory to search for headers
 include_directories(include ${GTEST_INCLUDE_DIRS})
@@ -266,5 +262,3 @@ install(TARGETS MainTest Test DESTINATION bin)
 
 # enable testing so that we can run "make test"
 enable_testing()
-
-#file(COPY ${SURFINGDB_ROOT}/test DESTINATION ${CMAKE_CURRENT_BINARY_DIR})

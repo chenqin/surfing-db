@@ -31,7 +31,7 @@ using namespace surfingdb::table::schema;
 using surfingdb::meta::node;
 using namespace surfingdb::table;
 using namespace surfingdb::connector;
-using namespace std::chrono;
+using namespace std;
 
 /** run this program with
  * mpirun -np 12 ./Test
@@ -55,7 +55,7 @@ int main(int argc, char** argv) {
   SchemaUtils::appendPairs(r, "meta", RowType::STRING, RowType::STRING, 6);
 
   // define max number of rows to ingest onetime per worker (total = np * batch_num)
-  auto batch_num = 512;
+  auto batch_num = 48;
   auto ptr = std::make_shared<TableSchema>(r);
 
   // allocate large memory with fixed layout per column, row and fields
@@ -72,7 +72,7 @@ int main(int argc, char** argv) {
     p.p_val.string_val = "hello_host";
     row->write(ptr->fields.at(1), p);
 
-    p.p_val.string_val = "metric name";
+    p.p_val.string_val = std::to_string(node->rank);
     row->write(ptr->fields.at(2), p);
 
     p.p_val.double_val = 0.1;
@@ -119,6 +119,11 @@ int main(int argc, char** argv) {
     v.p_val.long_val += vals.size();
     result->write(ptr->fields.at(0), v);
   });
+
+  cout << "rank: " << node->rank << " world: " << node->world << " result size :" << results_ptr->size() << endl;
+  if (node->rank == 0) {
+    cout << "all rank result size sum expect to equal number of ranks due to unqiue shuffle key (metric name)" << endl;
+  }
   t3->release();
 
   return 0;

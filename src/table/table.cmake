@@ -45,6 +45,7 @@ target_link_libraries(TableTest
         PRIVATE ${GTEST_MAIN_LIBRARY}
         PRIVATE Arrow::arrow_shared
         PRIVATE Parquet::parquet_shared
+        PUBLIC ${DUCKDB_LIBRARY}
         PRIVATE ${XGBOOST_LIBRARY})
 
 # discover all gtests in this module

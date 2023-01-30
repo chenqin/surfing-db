@@ -6,7 +6,7 @@ SET(DUCKDB_OPTS
 
 ExternalProject_Add(duckdb
         PREFIX duckdb
-        GIT_REPOSITORY https://github.com/chenqin/duckdb
+        GIT_REPOSITORY https://github.com/duckdb/duckdb
         UPDATE_COMMAND ""
         INSTALL_COMMAND ""
         CMAKE_ARGS ${DUCKDB_OPTS}
