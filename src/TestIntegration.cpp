@@ -106,12 +106,9 @@ int main(int argc, char** argv) {
     }
   });
 
-  // MPI - shuffle metrics with same name to same worker
-  auto t3 = processors::shuffle(t2, ptr->fields.at(2));
-
-  // reduce , dummy ops
+  // shuffle - reduce , dummy ops
   auto results_ptr = std::make_shared<std::unordered_map<Value, std::shared_ptr<RowBuffer>, ValueHasher>>();
-  processors::reduce(t3, ptr->fields.at(2), results_ptr, ptr, [=](Value& key, std::vector<std::unique_ptr<RowBuffer>>& vals, std::shared_ptr<RowBuffer>& result) {
+  processors::reduce(t2, ptr->fields.at(2), results_ptr, ptr, [=](Value& key, std::vector<std::unique_ptr<RowBuffer>>& vals, std::shared_ptr<RowBuffer>& result) {
     Value v;
     result->read(ptr->fields.at(0), v);
     v.p_val.long_val += vals.size();

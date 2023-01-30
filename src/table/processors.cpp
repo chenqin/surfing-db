@@ -33,18 +33,30 @@ std::shared_ptr<mtable> processors::map(std::shared_ptr<mtable> in, std::shared_
   return out;
 }
 
+
 void processors::reduce(std::shared_ptr<mtable> in_ptr,
                         Field& field,
                         std::shared_ptr<std::unordered_map<Value, std::shared_ptr<RowBuffer>, ValueHasher>> result_ptr,
                         std::shared_ptr<TableSchema> result_schema_ptr,
                         std::function<void(Value&, std::vector<std::unique_ptr<RowBuffer>>&, std::shared_ptr<RowBuffer>&)> reducer) {
-  in_ptr->group(field, true);
-  for (auto g : *in_ptr->key_groups) {
+  // shuffle based on partition key
+  auto shuffle_ptr = shuffle(in_ptr, field);
+
+  /**
+   * TODO: convert vector to arrow columns after shuffle, release vector memory
+  */
+  for(auto i = 0 ; i < shuffle_ptr->getSchema()->fields.size(); i++) {
+    auto field = shuffle_ptr->getSchema()->fields.at(i);
+  }
+
+
+  shuffle_ptr->group(field, true);
+  for (auto g : *shuffle_ptr->key_groups) {
     auto vals = g.second;
     std::vector<std::unique_ptr<RowBuffer>> val_list;
     Value key;
     for (auto index : vals) {
-      auto r = in_ptr->readRow(index);
+      auto r = shuffle_ptr->readRow(index);
       r->read(field, key);
       val_list.push_back(std::move(r));
     }
@@ -57,7 +69,7 @@ void processors::reduce(std::shared_ptr<mtable> in_ptr,
       reducer(key, val_list, row);
     }
   }
-  in_ptr->release();
+  shuffle_ptr->release();
 }
 
 void processors::xgb(std::shared_ptr<mtable> in, std::vector<Field> features, Field& label, const XGBParameters& parameters) {

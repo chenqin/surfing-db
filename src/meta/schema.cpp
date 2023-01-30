@@ -256,6 +256,11 @@ TableSchema::TableSchema(const RowSchema& schema) {
   CHECK(arrowSchema->num_fields() == schema.fields.size());
 }
 
+std::shared_ptr<arrow::Schema> TableSchema::getArrowSchema() {
+  CHECK(this->arrowSchema->fields().size() > 0);
+  return this->arrowSchema;
+}
+
 TableSchema::~TableSchema() {
   if (_type_set) {
     MPI_Type_free(&_row_type);

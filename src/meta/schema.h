@@ -244,6 +244,8 @@ public:
   }
   TableSchema(const RowSchema& schema);
 
+  std::shared_ptr<arrow::Schema> getArrowSchema();
+
   ~TableSchema();
 };
 
