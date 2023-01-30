@@ -26,6 +26,7 @@
 #include "table/processors.h"
 
 #define FLUSH_DIR "/tmp/"
+#define BATCH_SIZE 256000
 
 using namespace surfingdb::table::schema;
 using surfingdb::meta::node;
@@ -55,14 +56,13 @@ int main(int argc, char** argv) {
   SchemaUtils::appendPairs(r, "meta", RowType::STRING, RowType::STRING, 6);
 
   // define max number of rows to ingest onetime per worker (total = np * batch_num)
-  auto batch_num = 48;
   auto ptr = std::make_shared<TableSchema>(r);
 
   // allocate large memory with fixed layout per column, row and fields
-  auto t1 = std::make_shared<mtable>(node, ptr, batch_num * ptr->rowSize());
+  auto t1 = std::make_shared<mtable>(node, ptr, BATCH_SIZE * ptr->rowSize());
 
   // ingest, copy rows to local table memory with fixed offsets
-  for (int i = 0; i < batch_num; i++) {
+  for (int i = 0; i < BATCH_SIZE; i++) {
     auto row = std::make_unique<RowBuffer>(ptr);
     Value p;
 
@@ -105,11 +105,9 @@ int main(int argc, char** argv) {
       out.write(f, v);
     }
   });
-  t1->release();
 
   // MPI - shuffle metrics with same name to same worker
   auto t3 = processors::shuffle(t2, ptr->fields.at(2));
-  t2->release();
 
   // reduce , dummy ops
   auto results_ptr = std::make_shared<std::unordered_map<Value, std::shared_ptr<RowBuffer>, ValueHasher>>();
@@ -117,6 +115,7 @@ int main(int argc, char** argv) {
     Value v;
     result->read(ptr->fields.at(0), v);
     v.p_val.long_val += vals.size();
+  
     result->write(ptr->fields.at(0), v);
   });
 
@@ -124,7 +123,5 @@ int main(int argc, char** argv) {
   if (node->rank == 0) {
     cout << "all rank result size sum expect to equal number of ranks due to unqiue shuffle key (metric name)" << endl;
   }
-  t3->release();
-
   return 0;
 }

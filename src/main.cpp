@@ -118,7 +118,6 @@ int main(int argc, char** argv) {
           out.write(f, v);
         }
       });
-      t1->release();
 
       // shuffle
       auto t3 = processors::shuffle(t2, schema_ptr->fields.at(2));

@@ -29,13 +29,14 @@ std::shared_ptr<mtable> processors::map(std::shared_ptr<mtable> in, std::shared_
     CHECK_EQ(out_row.schema_sig(), out->getSchema()->signature());
     out->appendRow(out_row);
   }
+  in->release();
   return out;
 }
 
 void processors::reduce(std::shared_ptr<mtable> in_ptr,
                         Field& field,
                         std::shared_ptr<std::unordered_map<Value, std::shared_ptr<RowBuffer>, ValueHasher>> result_ptr,
-                        std::shared_ptr<TableSchema> reduce_schema_ptr,
+                        std::shared_ptr<TableSchema> result_schema_ptr,
                         std::function<void(Value&, std::vector<std::unique_ptr<RowBuffer>>&, std::shared_ptr<RowBuffer>&)> reducer) {
   in_ptr->group(field, true);
   for (auto g : *in_ptr->key_groups) {
@@ -50,12 +51,13 @@ void processors::reduce(std::shared_ptr<mtable> in_ptr,
 #pragma omp critical
     {
       if (result_ptr->find(key) == result_ptr->end()) {
-        result_ptr->insert({ key, std::make_shared<RowBuffer>(reduce_schema_ptr) });
+        result_ptr->insert({ key, std::make_shared<RowBuffer>(result_schema_ptr) });
       }
       std::shared_ptr<RowBuffer> row = result_ptr->at(key);
       reducer(key, val_list, row);
     }
   }
+  in_ptr->release();
 }
 
 void processors::xgb(std::shared_ptr<mtable> in, std::vector<Field> features, Field& label, const XGBParameters& parameters) {
@@ -135,6 +137,7 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f
   }
   MPI_Status statuses[node_ptr->world];
   MPI_Waitall(send_count, sends, statuses);
+  in->release();
   /*
   for (int i = 0; i < node_ptr->world; i++) {
     if (statuses[i].MPI_ERROR != 0 && statuses[i].MPI_SOURCE < node_ptr->world && statuses[i].MPI_SOURCE >= 0) {

@@ -98,7 +98,7 @@ else ()
                     "-lunwind"
                     "-fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free"
                     "-DPPROF")
-        elseif (PPROF STREQUAL "2")
+        elseif (PPROF STREQUAL "2")#include <arrow.hpp>
             # or using gperftools, ask each target to depends on perftools_library for linking
             # unwind is needed by gperftools
             list(APPEND LNCFLAGS

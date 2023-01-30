@@ -19,6 +19,7 @@
 #include "meta/gen-cpp/schema_constants.h"
 #include "meta/gen-cpp/schema_types.h"
 
+#include <arrow/type.h>
 #include <duckdb.hpp>
 #include <glog/logging.h>
 #include <iostream>
@@ -36,7 +37,7 @@
 namespace surfingdb {
 namespace meta {
 
-#define MAX_STR_LEN 2048
+#define MAX_STR_LEN 64
 #define HEADER_SIZE sizeof(long)
 #define MEM_PAGE_SIZE 1073741824 // 1GB
 #define FLUSH_SIZE 10737418240   // 10GB
@@ -120,7 +121,7 @@ public:
       CHECK_LE(max_size, MAX_STR_LEN);
     }
   }
-  /// @brief public API, append 1 or N primitive typed data as last column in schema 
+  /// @brief public API, append 1 or N schema;imitive typed data as last column in schema
   /// @param r
   /// @param name
   /// @param type
@@ -128,7 +129,7 @@ public:
   /// @return size of columns in schema
   static int16_t appendElements(RowSchema& r, const std::string& name, const RowType::type type, const uint64_t& max_element);
 
-  /// @brief public API, append 1 or N primitive typed data pair as last column in schema 
+  /// @brief public API, append 1 or N primitive typed data pair as last column in schema
   /// @param r
   /// @param name
   /// @param key_type
@@ -190,6 +191,10 @@ private:
   MPI_Datatype _row_type; // type of entire row
   FieldHasher field_hasher;
   SchemaHasher schema_hasher;
+  /**
+   * arrow schema
+   */
+  std::shared_ptr<arrow::Schema> arrowSchema;
 
 public:
   std::shared_ptr<std::unordered_map<Field, uint64_t, FieldHasher>> _offsets;
