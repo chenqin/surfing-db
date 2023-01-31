@@ -221,9 +221,6 @@ find_package(Parquet REQUIRED)
 include(ext/Sketches_Ext.cmake)
 include(ext/XGBoost_Ext.cmake)
 
-# include OLAP
-include(ext/Duckdb_ext.cmake)
-
 include(ext/Kafka_Ext.cmake)
 
 # set up directory to search for headers

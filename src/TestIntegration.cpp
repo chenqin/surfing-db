@@ -26,7 +26,7 @@
 #include "table/processors.h"
 
 #define FLUSH_DIR "/tmp/"
-#define BATCH_SIZE 256000
+#define BATCH_SIZE 2560
 
 using namespace surfingdb::table::schema;
 using surfingdb::meta::node;
@@ -106,9 +106,11 @@ int main(int argc, char** argv) {
     }
   });
 
+  auto t3 = processors::shuffle(t2, ptr->fields.at(2));
+
   // shuffle - reduce , dummy ops
   auto results_ptr = std::make_shared<std::unordered_map<Value, std::shared_ptr<RowBuffer>, ValueHasher>>();
-  processors::reduce(t2, ptr->fields.at(2), results_ptr, ptr, [=](Value& key, std::vector<std::unique_ptr<RowBuffer>>& vals, std::shared_ptr<RowBuffer>& result) {
+  processors::reduce(t3, ptr->fields.at(2), results_ptr, ptr, [=](Value& key, std::vector<std::unique_ptr<RowBuffer>>& vals, std::shared_ptr<RowBuffer>& result) {
     Value v;
     result->read(ptr->fields.at(0), v);
     v.p_val.long_val += vals.size();

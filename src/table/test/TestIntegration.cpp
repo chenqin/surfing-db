@@ -85,24 +85,10 @@ TEST(TableTest, testCompact) {
   auto compact = t.compactTable();
   EXPECT_LT(compact->getSchema()->rowSize(), tpr->rowSize());
 
-  auto q = t.toColumnar();
+  t.toColumnar();
+  auto q = t.getArrowTable();
   CHECK_EQ(q->num_rows(), 1);
   CHECK_EQ(q->num_columns(), r.fields.size());
-
-  duckdb::DBConfig config;
-  duckdb::DuckDB db(nullptr, &config);
-  auto con = std::make_shared<duckdb::Connection>(db);
-  tpr->registerTable(con, "table1");
-  tpr->registerIndex(con, "table1", field1);
-  for (long i = 0; i < 100; i++) {
-    t.appendDuck(con, "table1");
-    con->Query("delete from table1");
-  }
-  auto result = con->Query("select * from table1");
-  CHECK_EQ(result.get()->ColumnCount(), 7);
-  result->Print();
-  result = con->Query("delete from table1");
-  result->Print();
 }
 
 TEST(TableTest, testRowBuffer) {

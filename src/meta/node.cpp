@@ -35,9 +35,6 @@ node::node(int* argc, char ***argv) {
   processor = std::string(processor_name);
   stage = 0;
   outstanding_requests.clear();
-	duckdb::DBConfig config;
-	db_ptr = std::make_shared<duckdb::DuckDB>(nullptr, &config);
-	this->db_con = std::make_shared<duckdb::Connection>(*db_ptr.get());
   LOG(INFO) << "cluster size " << world << " node rank " << rank << " alias " << processor;
 }
 

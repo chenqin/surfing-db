@@ -18,7 +18,6 @@
 #include <sys/uio.h>
 #include <unistd.h>
 #include "arrow/io/file.h"
-#include "duckdb/main/appender.hpp"
 #include "parquet/stream_writer.h"
 
 namespace surfingdb {
@@ -486,7 +485,11 @@ arrow::Status append(arrow::ArrayBuilder* builder, const Field& field, const PVa
   return arrow::Status::OK();
 }
 
-std::shared_ptr<arrow::Table> mtable::toColumnar() {
+std::shared_ptr<arrow::Table> mtable::getArrowTable() {
+  return this->table_ptr;
+}
+
+void mtable::toColumnar() {
   /**
    * Build list of builders to append
    */
@@ -530,7 +533,6 @@ std::shared_ptr<arrow::Table> mtable::toColumnar() {
     arrays.push_back(_array);
   }
   this->table_ptr = arrow::Table::Make(this->getArrowSchema(), arrays);
-  return this->table_ptr;
 }
 
 std::shared_ptr<TableSchema> mtable::getCompactSchema() {
@@ -669,48 +671,6 @@ void mtable::appendRows(std::vector<std::shared_ptr<RowBuffer>>& rows) {
   for (std::shared_ptr<RowBuffer> m : rows) {
     appendRow(*m.get());
   }
-}
-
-void mtable::appendDuck(std::shared_ptr<duckdb::Connection> connection, std::string name) {
-  thread_local duckdb::Appender appender(*connection.get(), name);
-  for (size_t i = 0; i < row_count; i++) {
-    auto row = this->readRow(i);
-    appender.BeginRow();
-    for (auto f : schema_ptr->fields) {
-      Value v;
-      row->read(f, v);
-      switch (f.type) {
-      case RowType::BOOL:
-        appender.Append<bool>(v.p_val.bool_val);
-        break;
-      case RowType::STRING:
-        appender.Append<const char*>(v.p_val.string_val.c_str());
-        break;
-      case RowType::INT:
-        appender.Append<int32_t>(v.p_val.int_val);
-        break;
-      case RowType::DOUBLE:
-        try {
-          appender.Append<double>((double)v.p_val.double_val);
-        } catch (duckdb::InvalidInputException& e) {
-          // LOG(INFO) << (double) v.p_val.double_val;
-          appender.Append<double>(0);
-        }
-        break;
-      case RowType::LONG:
-        appender.Append<int64_t>(v.p_val.long_val);
-        break;
-      case RowType::MAP:
-      case RowType::LIST:
-        appender.Append<const char*>("not supported yet");
-        break;
-      default:
-        CHECK(false);
-      }
-    }
-    appender.EndRow();
-  }
-  appender.Close();
 }
 } // namespace table
 } // namespace surfingdb

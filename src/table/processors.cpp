@@ -39,8 +39,7 @@ void processors::reduce(std::shared_ptr<mtable> in_ptr,
                         std::shared_ptr<std::unordered_map<Value, std::shared_ptr<RowBuffer>, ValueHasher>> result_ptr,
                         std::shared_ptr<TableSchema> result_schema_ptr,
                         std::function<void(Value&, std::vector<std::unique_ptr<RowBuffer>>&, std::shared_ptr<RowBuffer>&)> reducer) {
-  // shuffle based on partition key
-  auto shuffle_ptr = shuffle(in_ptr, field);
+  auto shuffle_ptr = in_ptr;
   shuffle_ptr->toColumnar();
 
   shuffle_ptr->group(field, true);

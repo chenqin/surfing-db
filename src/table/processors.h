@@ -19,7 +19,6 @@
 
 #include "mtable.h"
 #include "xgbop.h"
-#include <duckdb.hpp>
 #include <arrow/api.h>
 
 #pragma once

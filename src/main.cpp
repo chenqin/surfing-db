@@ -60,9 +60,7 @@ int main(int argc, char** argv) {
   std::string kafka_topic = "xenon_metrics_prod";
   std::string brokers = "datakafka08001:9092,datakafka08002:9092,datakafka08003:9092";
   std::string group_id = "surfing.test";
-  // register a table
-  schema_ptr->registerTable(node->db_con, kafka_topic);
-  schema_ptr->registerIndex(node->db_con, kafka_topic, schema_ptr->fields.at(0));
+
   // threaded ingest - map - shuffle - reduce
 #pragma omp parallel num_threads(CONCURRENCY) shared(results_ptr, total)
   {
@@ -122,7 +120,6 @@ int main(int argc, char** argv) {
       // shuffle
       auto t3 = processors::shuffle(t2, schema_ptr->fields.at(2));
       t3->verify(schema_ptr->fields.at(2));
-      t3->appendDuck(node->db_con, kafka_topic);
 
       // reduce
       processors::reduce(t3, schema_ptr->fields.at(2), results_ptr, schema_ptr, [=](Value& key, std::vector<std::unique_ptr<RowBuffer>>& vals, std::shared_ptr<RowBuffer>& result) {
@@ -134,12 +131,6 @@ int main(int argc, char** argv) {
 
 #pragma omp critical
       total += t3->row_count;
-
-      if (omp_get_thread_num() == 0) {
-        // keep retrain 1 hour of data in table
-        unsigned long one_hour = std::chrono::system_clock::now().time_since_epoch() / std::chrono::milliseconds(1) - 3600 * 1000;
-        auto result = node->db_con->Query(fmt::format("delete from {} where {} < {}", kafka_topic, schema_ptr->fields.at(0).name, one_hour));
-      }
     }
   }
 }

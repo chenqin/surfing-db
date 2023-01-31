@@ -17,7 +17,6 @@
 #include <vector>
 #include <memory>
 #include <mpi.h>
-#include <duckdb.hpp>
 
 #ifndef SURFINGDB_NODE_H
 #define SURFINGDB_NODE_H
@@ -35,8 +34,6 @@ public:
   int world;
   int rank;
   long stage;
-  std::shared_ptr<duckdb::DuckDB> db_ptr;
-  std::shared_ptr<duckdb::Connection> db_con;
   std::vector<std::unique_ptr<MPI_Request>> outstanding_requests;
   std::string processor;
 };

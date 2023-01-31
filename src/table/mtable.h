@@ -86,7 +86,6 @@ public:
   size_t placement(size_t key);
   size_t row_size();
   std::shared_ptr<TableSchema> getSchema();
-  std::shared_ptr<arrow::Schema> getArrowSchema();
   std::unique_ptr<RowBuffer> readRow(int index);
   void appendRow(RowBuffer& row);
   void appendRows(std::vector<std::shared_ptr<RowBuffer>>& rows);
@@ -101,11 +100,9 @@ public:
   /**
    * convert row based table into columnar table in arrow format
    */
-  std::shared_ptr<arrow::Table> toColumnar();
-  /**
-   * dump entire table into duck db for olap query sql interface
-   */
-  void appendDuck(std::shared_ptr<duckdb::Connection> connection, std::string name);
+  std::shared_ptr<arrow::Table> getArrowTable();
+  void toColumnar();
+  std::shared_ptr<arrow::Schema> getArrowSchema();
 };
 
 } // namespace table

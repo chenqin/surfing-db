@@ -20,7 +20,6 @@
 #include "meta/gen-cpp/schema_types.h"
 
 #include <arrow/type.h>
-#include <duckdb.hpp>
 #include <glog/logging.h>
 #include <iostream>
 #include <mpi.h>
@@ -231,10 +230,6 @@ public:
   }
 
   MPI_Datatype* schemaMPIType();
-
-  void registerTable(std::shared_ptr<duckdb::Connection> connection, const std::string name);
-  void registerIndex(std::shared_ptr<duckdb::Connection> connection, const std::string name, const Field& f);
-
   bool containField(Field field);
 
   TableSchema() {

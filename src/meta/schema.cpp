@@ -324,20 +324,5 @@ inline std::string cloumnType(Field& f) {
   }
 }
 
-void TableSchema::registerTable(std::shared_ptr<duckdb::Connection> connection, const std::string name) {
-  std::string statement = fmt::format("CREATE TABLE {} (", name);
-  for (auto f : fields) {
-    statement += fmt::format("{} {}, ", f.name, cloumnType(f));
-  }
-  statement = statement.substr(0, statement.size() - 2) + ")";
-  LOG(INFO) << statement;
-  connection->Query(statement);
-}
-
-void TableSchema::registerIndex(std::shared_ptr<duckdb::Connection> connection, const std::string name, const Field& f) {
-  std::string statement = fmt::format("CREATE INDEX on {}_idx on {} ({}) ", f.name, name, f.name);
-  connection->Query(statement);
-}
-
 } // namespace meta
 } // namespace surfingdb
