@@ -34,6 +34,26 @@ using namespace surfingdb::table;
 using namespace surfingdb::connector;
 using namespace std;
 
+/**
+ * https://stackoverflow.com/questions/440133/how-do-i-create-a-random-alpha-numeric-string-in-c
+*/
+std::string random_string( size_t length )
+{
+    auto randchar = []() -> char
+    {
+        const char charset[] =
+        "0123456789"
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz";
+        const size_t max_index = (sizeof(charset) - 1);
+        return charset[ rand() % max_index ];
+    };
+    std::string str(length,0);
+    std::generate_n( str.begin(), length, randchar );
+    return str;
+}
+
+
 /** run this program with
  * mpirun -np 12 ./Test
  * @return
@@ -75,7 +95,7 @@ int main(int argc, char** argv) {
       p.p_val.string_val = "hello_host";
       row->write(ptr->fields.at(1), p);
 
-      p.p_val.string_val = std::to_string(node->rank);
+      p.p_val.string_val = random_string(16);
       row->write(ptr->fields.at(2), p);
 
       p.p_val.double_val = 0.1;
@@ -86,8 +106,8 @@ int main(int argc, char** argv) {
       row->write(ptr->fields.at(3), p);
 
       PValue key, value;
-      key.string_val = "hello";
-      value.string_val = "world";
+      key.string_val = random_string(16);
+      value.string_val = random_string(16);
       std::pair<PValue, PValue> pair;
       pair.first = key;
       pair.second = value;
@@ -114,7 +134,7 @@ int main(int argc, char** argv) {
      * MPI based shuffle based on hash value of a field
      * release t2 mtable in the end
      */
-    auto t3 = processors::shuffle(t2, ptr->fields.at(2));
+    auto t3 = processors::shuffle(t2, ptr->fields.at(2), false);
     /**
      * verify shuffle row placement to right worker (aka MPI rank)
      */
@@ -128,21 +148,7 @@ int main(int argc, char** argv) {
       total += node->world * BATCH_SIZE;
       cout <<  "total rows processed " << total << endl;
     }
-  }
-
-  /*
-  auto results_ptr = std::make_shared<std::unordered_map<Value, std::shared_ptr<RowBuffer>, ValueHasher>>();
-  processors::reduce(t3, ptr->fields.at(2), results_ptr, ptr, [=](Value& key, std::vector<std::unique_ptr<RowBuffer>>& vals, std::shared_ptr<RowBuffer>& result) {
-    Value v;
-    result->read(ptr->fields.at(0), v);
-    v.p_val.long_val += vals.size();
-
-    result->write(ptr->fields.at(0), v);
-  });
-  */
-
-  if (node->rank == 0) {
-    cout << "all rank result size sum expect to equal number of ranks due to unqiue shuffle key (metric name)" << endl;
+    t3->release();
   }
   return 0;
 }

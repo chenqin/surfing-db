@@ -119,7 +119,7 @@ int main(int argc, char** argv) {
       });
 
       // shuffle
-      auto t3 = processors::shuffle(t2, schema_ptr->fields.at(2));
+      auto t3 = processors::shuffle(t2, schema_ptr->fields.at(2), false);
       t3->verifyShuffle(schema_ptr->fields.at(2));
 
       // reduce

@@ -34,7 +34,6 @@ node::node(int* argc, char ***argv) {
 
   processor = std::string(processor_name);
   stage = 0;
-  outstanding_requests.clear();
   LOG(INFO) << "cluster size " << world << " node rank " << rank << " alias " << processor;
 }
 
@@ -49,19 +48,10 @@ node::~node() {
  * @return
  */
 long node::forward() {
-  for(auto& r : outstanding_requests) {
-    MPI_Status status;
-    MPI_Wait(r.get(), &status);
-  }
-  outstanding_requests.clear();
-
   long max_stage = 0;
   MPI_Allreduce(&stage, &max_stage, 1, MPI_LONG, MPI_MAX, MPI_COMM_WORLD);
   CHECK_EQ(max_stage, stage);
   return ++stage;
-}
-void node::keep(std::unique_ptr<MPI_Request> req) {
-  outstanding_requests.push_back(std::move(req));
 }
 /**
  * for testing use
@@ -74,7 +64,6 @@ node::node(int rank, int world, std::string processor) {
   this->world = world;
   this->processor = processor;
   stage = 0;
-  outstanding_requests.clear();
 }
 } // namespace node
 } // namespace surfingdb
