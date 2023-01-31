@@ -10,4 +10,9 @@ A efficient and powerful in memory kafka messages processor using MPI and Apache
 # how to run
 - run install.sh for dependencies
 
+# configuration
+- src/meta/schema.h 
+-- MAX_STR_LEN defines max size of string before truncate (lower is better for perf)
+-- MEM_PAGE_SIZE defines mtable pre allocated memory
+
 created @Maui, Hawaii, U.S.A since 2021

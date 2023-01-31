@@ -89,7 +89,7 @@ public:
   std::unique_ptr<RowBuffer> readRow(int index);
   void appendRow(RowBuffer& row);
   void appendRows(std::vector<std::shared_ptr<RowBuffer>>& rows);
-  void verify(const Field& field);
+  void verifyShuffle(const Field& field);
   void reserveRow(size_t rows);
   void load(const string& path);
   void flush(const string&, uint8_t*, size_t, size_t);
@@ -101,8 +101,13 @@ public:
    * convert row based table into columnar table in arrow format
    */
   std::shared_ptr<arrow::Table> getArrowTable();
-  void toColumnar();
+  /**
+   * convert mtable to arrow columar format
+  */
+  arrow::Status toColumnar();
   std::shared_ptr<arrow::Schema> getArrowSchema();
+
+  void print();
 };
 
 } // namespace table

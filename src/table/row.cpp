@@ -129,7 +129,7 @@ void RowBuffer::write(const Field& f, const Value& v, const uint64_t& offset) {
     listField.type = f.list_type;
     listField.max_unit_size = f.max_list_unit_size;
     for (auto pv : v.list_value) {
-      //hard code
+      // hard code
       Value item;
       item.p_val = pv;
       write(listField, item, list_offset);
@@ -314,9 +314,9 @@ size_t RowBuffer::_pread(const Field& f, void* dataptr, const uint64_t& offset) 
     // TODO(chenqin): use header
     int64_t* len = (int64_t*)(_payload + offset);
     char* char_ptr = (char*)(_payload + offset + sizeof(int64_t));
-    //avoid truncation
+    // avoid truncation
     CHECK_EQ(*len, (int64_t)strlen(char_ptr));
-    size_t resid = f.max_unit_size - strlen(char_ptr) - 1; //leave extra byte'\0'
+    size_t resid = f.max_unit_size - strlen(char_ptr) - 1; // leave extra byte'\0'
     CHECK_GE(resid, 0);
     memcpy(dataptr, char_ptr, strlen(char_ptr));
     return *len;
@@ -378,7 +378,7 @@ std::vector<size_t> RowBuffer::readLen(const Field& f, size_t offset) {
     for (size_t i = 0; i < len; i++) {
       Value listVal;
       std::vector<size_t> l1 = readLen(listField, _offset);
-      if(list_len < l1.at(0) ) {
+      if (list_len < l1.at(0)) {
         list_len = l1.at(0);
       }
       _offset += listField.max_unit_size;
@@ -405,14 +405,14 @@ std::vector<size_t> RowBuffer::readLen(const Field& f, size_t offset) {
     for (size_t i = 0; i < len; i++) {
       Value keyVal, valueVal;
       read(keyField, keyVal, offset);
-      std::vector<size_t> m1= readLen(keyField, _offset);
-      if(key_len < m1.at(0) ) {
+      std::vector<size_t> m1 = readLen(keyField, _offset);
+      if (key_len < m1.at(0)) {
         key_len = m1.at(0);
       }
       _offset += keyField.max_unit_size;
 
       std::vector<size_t> m2 = readLen(valueField, _offset);
-      if(value_len < m2.at(0) ) {
+      if (value_len < m2.at(0)) {
         value_len = m2.at(0);
       }
       _offset += valueField.max_unit_size;

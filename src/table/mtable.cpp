@@ -126,8 +126,8 @@ void mtable::appendRow(RowBuffer& row) {
   CHECK_LE(offset, payload.capacity());
 }
 
-void mtable::verify(const Field& field) {
-  // LOG(INFO) << "verify " << row_count << " rows" << omp_get_thread_num() << " " << node_ptr->rank;
+void mtable::verifyShuffle(const Field& field) {
+  LOG(INFO) << "verify " << row_count << " rows" << omp_get_thread_num() << " " << node_ptr->rank;
   for (size_t i = 0; i < row_count; i++) {
     auto r = this->readRow(i);
     Value v;
@@ -369,6 +369,15 @@ std::shared_ptr<arrow::Schema> mtable::getArrowSchema() {
   return this->schema_ptr->getArrowSchema();
 }
 
+void mtable::print() {
+  if (this->row_count == 0) return;
+  CHECK(this->row_count > 0);
+  CHECK(this->schema_ptr->fields.size() > 0);
+  auto r = this->readRow(0);
+  Value v;
+  r->read(schema_ptr->fields.at(0), v);
+}
+
 /**
  * for xgboost, we need to extract list of numerical fields and pass as array map float
  * @param fields features
@@ -465,7 +474,7 @@ arrow::Status append(arrow::ArrayBuilder* builder, const Field& field, const PVa
     Field lfield;
     lfield.type = field.list_type;
     for (auto m : v.list_value) {
-      append(e_builder, lfield, m, v);
+      ARROW_RETURN_NOT_OK(append(e_builder, lfield, m, v));
     }
   }
   if (field.type == RowType::MAP) {
@@ -478,8 +487,8 @@ arrow::Status append(arrow::ArrayBuilder* builder, const Field& field, const PVa
     kfield.type = field.map_key_type;
     vfield.type = field.map_value_type;
     for (auto n : v.map_value) {
-      append(k_builder, kfield, n.first, v);
-      append(v_builder, vfield, n.second, v);
+      ARROW_RETURN_NOT_OK(append(k_builder, kfield, n.first, v));
+      ARROW_RETURN_NOT_OK(append(v_builder, vfield, n.second, v));
     }
   }
   return arrow::Status::OK();
@@ -489,7 +498,7 @@ std::shared_ptr<arrow::Table> mtable::getArrowTable() {
   return this->table_ptr;
 }
 
-void mtable::toColumnar() {
+arrow::Status mtable::toColumnar() {
   /**
    * Build list of builders to append
    */
@@ -513,26 +522,31 @@ void mtable::toColumnar() {
   }
 
   /**
-   * read each row and field value, append to corresponding builder
+   * read each row and field value, append to corresponding builder, release mtable vector<RowBuffer>
    */
-  for (auto j = 0; j < this->row_count; j++) {
-    auto r = this->readRow(j);
-    CHECK(this->getSchema()->fields.size() == builders.size());
-    for (auto k = 0; k < this->getSchema()->fields.size(); k++) {
-      auto field = this->getSchema()->fields.at(k);
+  for (auto j = 0; j < row_count; j++) {
+    auto r = readRow(j);
+    CHECK(getSchema()->fields.size() == builders.size());
+    for (auto k = 0; k < getSchema()->fields.size(); k++) {
+      auto field = getSchema()->fields.at(k);
       auto builder_ptr = builders.at(k);
       Value v;
       r->read(field, v);
-      append(builder_ptr.get(), field, v.p_val, v);
+      ARROW_RETURN_NOT_OK(append(builder_ptr.get(), field, v.p_val, v));
     }
   }
 
   for (auto b : builders) {
     std::shared_ptr<arrow::Array> _array;
-    b->Finish(&_array);
+    ARROW_RETURN_NOT_OK(b->Finish(&_array));
     arrays.push_back(_array);
   }
   this->table_ptr = arrow::Table::Make(this->getArrowSchema(), arrays);
+  /**
+   * release mtable vector
+  */
+  release();
+  return arrow::Status::OK();
 }
 
 std::shared_ptr<TableSchema> mtable::getCompactSchema() {

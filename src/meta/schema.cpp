@@ -141,7 +141,7 @@ int16_t SchemaUtils::appendPairs(RowSchema& r, const std::string& name, const Ro
   uint64_t key_element_max = getTypeSize(key_type);
   uint64_t val_element_max = getTypeSize(val_type);
   Field f;
-  initMapField(f, name, key_type, val_type, key_element_max, val_element_max, max_element);
+  initMapField(f, name, key_type, val_type, max_element, key_element_max, val_element_max);
   r.fields.push_back(f);
   return r.fields.size();
 }

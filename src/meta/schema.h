@@ -36,9 +36,9 @@
 namespace surfingdb {
 namespace meta {
 
-#define MAX_STR_LEN 256
+#define MAX_STR_LEN 64
 #define HEADER_SIZE sizeof(long)
-#define MEM_PAGE_SIZE 1073741824 // 1GB
+#define MEM_PAGE_SIZE 134217728 // 1/8GB
 #define FLUSH_SIZE 10737418240   // 10GB
 #define FILE_IO_VECTOR 8
 #define SSD_CHUNK_SIZ 65536 // read/write ssd per 64KB chunk

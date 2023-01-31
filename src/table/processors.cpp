@@ -20,35 +20,32 @@
 namespace surfingdb {
 namespace table {
 
-std::shared_ptr<mtable> processors::map(std::shared_ptr<mtable> in, std::shared_ptr<TableSchema> out_schema_ptr, std::function<void(const RowBuffer&, RowBuffer&)> transform) {
+std::shared_ptr<mtable> processors::map(std::shared_ptr<mtable> in, std::shared_ptr<TableSchema> out_schema_ptr, std::function<bool(const RowBuffer&, RowBuffer&)> transform) {
   auto out = std::make_shared<mtable>(in->getNodePtr(), out_schema_ptr, in->row_count * out_schema_ptr->rowSize());
   for (size_t i = 0; i < in->row_size(); i++) {
     auto in_row = in->readRow(i);
     RowBuffer out_row(out->getSchema());
-    transform(*in_row.get(), out_row);
+    bool append = transform(*in_row.get(), out_row);
     CHECK_EQ(out_row.schema_sig(), out->getSchema()->signature());
-    out->appendRow(out_row);
+
+    if (append) { out->appendRow(out_row); }
   }
   in->release();
   return out;
 }
-
 
 void processors::reduce(std::shared_ptr<mtable> in_ptr,
                         Field& field,
                         std::shared_ptr<std::unordered_map<Value, std::shared_ptr<RowBuffer>, ValueHasher>> result_ptr,
                         std::shared_ptr<TableSchema> result_schema_ptr,
                         std::function<void(Value&, std::vector<std::unique_ptr<RowBuffer>>&, std::shared_ptr<RowBuffer>&)> reducer) {
-  auto shuffle_ptr = in_ptr;
-  shuffle_ptr->toColumnar();
-
-  shuffle_ptr->group(field, true);
-  for (auto g : *shuffle_ptr->key_groups) {
+  in_ptr->group(field, true);
+  for (auto g : *in_ptr->key_groups) {
     auto vals = g.second;
     std::vector<std::unique_ptr<RowBuffer>> val_list;
     Value key;
     for (auto index : vals) {
-      auto r = shuffle_ptr->readRow(index);
+      auto r = in_ptr->readRow(index);
       r->read(field, key);
       val_list.push_back(std::move(r));
     }
@@ -61,7 +58,7 @@ void processors::reduce(std::shared_ptr<mtable> in_ptr,
       reducer(key, val_list, row);
     }
   }
-  shuffle_ptr->release();
+  in_ptr->release();
 }
 
 void processors::xgb(std::shared_ptr<mtable> in, std::vector<Field> features, Field& label, const XGBParameters& parameters) {

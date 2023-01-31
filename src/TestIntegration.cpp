@@ -26,7 +26,7 @@
 #include "table/processors.h"
 
 #define FLUSH_DIR "/tmp/"
-#define BATCH_SIZE 2560
+#define BATCH_SIZE 25600
 
 using namespace surfingdb::table::schema;
 using surfingdb::meta::node;
@@ -50,75 +50,97 @@ int main(int argc, char** argv) {
   SchemaUtils::appendElements(r, "timestamp", RowType::LONG, 1);
   SchemaUtils::appendElements(r, "host", RowType::STRING, 1);
   SchemaUtils::appendElements(r, "metricName", RowType::STRING, 1);
-  // min, max, p50, p95, p99 of metricValue
-  SchemaUtils::appendElements(r, "metricValues", RowType::DOUBLE, 5);
+  // min, max of metricValue
+  SchemaUtils::appendElements(r, "metricValues", RowType::DOUBLE, 2);
   // user defined meta data pair
-  SchemaUtils::appendPairs(r, "meta", RowType::STRING, RowType::STRING, 6);
+  SchemaUtils::appendPairs(r, "meta", RowType::STRING, RowType::STRING, 1);
 
   // define max number of rows to ingest onetime per worker (total = np * batch_num)
   auto ptr = std::make_shared<TableSchema>(r);
+  long total = 0;
 
-  // allocate large memory with fixed layout per column, row and fields
-  auto t1 = std::make_shared<mtable>(node, ptr, BATCH_SIZE * ptr->rowSize());
+  while (true) {
 
-  // ingest, copy rows to local table memory with fixed offsets
-  for (int i = 0; i < BATCH_SIZE; i++) {
-    auto row = std::make_unique<RowBuffer>(ptr);
-    Value p;
+    // allocate large memory with fixed layout per column, row and fields
+    auto t1 = std::make_shared<mtable>(node, ptr, BATCH_SIZE * ptr->rowSize());
 
-    p.p_val.long_val = 1;
-    row->write(ptr->fields.at(0), p);
+    // ingest, copy rows to local table memory with fixed offsets
+    for (int i = 0; i < BATCH_SIZE; i++) {
+      auto row = std::make_unique<RowBuffer>(ptr);
+      Value p;
 
-    p.p_val.string_val = "hello_host";
-    row->write(ptr->fields.at(1), p);
+      p.p_val.long_val = 1;
+      row->write(ptr->fields.at(0), p);
 
-    p.p_val.string_val = std::to_string(node->rank);
-    row->write(ptr->fields.at(2), p);
+      p.p_val.string_val = "hello_host";
+      row->write(ptr->fields.at(1), p);
 
-    p.p_val.double_val = 0.1;
-    std::vector<PValue> lval;
-    lval.push_back(p.p_val);
-    lval.push_back(p.p_val);
-    lval.push_back(p.p_val);
-    lval.push_back(p.p_val);
-    lval.push_back(p.p_val);
-    p.list_value = lval;
-    row->write(ptr->fields.at(3), p);
+      p.p_val.string_val = std::to_string(node->rank);
+      row->write(ptr->fields.at(2), p);
 
-    PValue key, value;
-    key.string_val = "hello";
-    value.string_val = "world";
-    std::pair<PValue, PValue> pair;
-    pair.first = key;
-    pair.second = value;
-    p.map_value.insert(pair);
-    row->write(ptr->fields.at(4), p);
+      p.p_val.double_val = 0.1;
+      std::vector<PValue> lval;
+      lval.push_back(p.p_val);
+      lval.push_back(p.p_val);
+      p.list_value = lval;
+      row->write(ptr->fields.at(3), p);
 
-    t1->appendRow(*row.get());
+      PValue key, value;
+      key.string_val = "hello";
+      value.string_val = "world";
+      std::pair<PValue, PValue> pair;
+      pair.first = key;
+      pair.second = value;
+      p.map_value.insert(pair);
+      row->write(ptr->fields.at(4), p);
+
+      t1->appendRow(*row.get());
+    }
+
+    /**
+     * pass each row in mtable, if return true, add to new table with schema ptr
+     * release t1 mtable in the end
+     */
+    auto t2 = processors::map(t1, ptr, [&](RowBuffer in, RowBuffer out) -> bool {
+      for (auto f : ptr->fields) {
+        Value v;
+        in.read(f, v);
+        out.write(f, v);
+      }
+      return true;
+    });
+
+    /**
+     * MPI based shuffle based on hash value of a field
+     * release t2 mtable in the end
+     */
+    auto t3 = processors::shuffle(t2, ptr->fields.at(2));
+    /**
+     * verify shuffle row placement to right worker (aka MPI rank)
+     */
+    t3->verifyShuffle(ptr->fields.at(2));
+    /**
+     * convert t3 mtable to columnar table
+     * release t3 mtable vector memory
+     */
+    t3->toColumnar();
+    if (node->rank == 0) {
+      total += node->world * BATCH_SIZE;
+      cout <<  "total rows processed " << total << endl;
+    }
   }
 
-  // map, prefilter and transform data on fixed memory offsets
-  auto t2 = processors::map(t1, ptr, [&](RowBuffer in, RowBuffer out) {
-    for (auto f : ptr->fields) {
-      Value v;
-      in.read(f, v);
-      out.write(f, v);
-    }
-  });
-
-  auto t3 = processors::shuffle(t2, ptr->fields.at(2));
-
-  // shuffle - reduce , dummy ops
+  /*
   auto results_ptr = std::make_shared<std::unordered_map<Value, std::shared_ptr<RowBuffer>, ValueHasher>>();
   processors::reduce(t3, ptr->fields.at(2), results_ptr, ptr, [=](Value& key, std::vector<std::unique_ptr<RowBuffer>>& vals, std::shared_ptr<RowBuffer>& result) {
     Value v;
     result->read(ptr->fields.at(0), v);
     v.p_val.long_val += vals.size();
-  
+
     result->write(ptr->fields.at(0), v);
   });
+  */
 
-  cout << "rank: " << node->rank << " world: " << node->world << " result size :" << results_ptr->size() << endl;
   if (node->rank == 0) {
     cout << "all rank result size sum expect to equal number of ranks due to unqiue shuffle key (metric name)" << endl;
   }

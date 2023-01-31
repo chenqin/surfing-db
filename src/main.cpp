@@ -66,8 +66,8 @@ int main(int argc, char** argv) {
   {
     auto consumer = KafkaConnector(kafka_topic, brokers, group_id);
     auto t1 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
-
-    while (true) {
+    int i = 0;
+    while (i++ < 10) {
 
       // simulate a delay to decode and handle kafka batch
       std::this_thread::sleep_for(std::chrono::microseconds(rand() % 10));
@@ -109,17 +109,18 @@ int main(int argc, char** argv) {
       messages.clear();
 
       // map
-      auto t2 = processors::map(t1, schema_ptr, [&](RowBuffer in, RowBuffer out) {
+      auto t2 = processors::map(t1, schema_ptr, [&](RowBuffer in, RowBuffer out) -> bool {
         for (auto f : schema_ptr->fields) {
           Value v;
           in.read(f, v);
           out.write(f, v);
         }
+        return true;
       });
 
       // shuffle
       auto t3 = processors::shuffle(t2, schema_ptr->fields.at(2));
-      t3->verify(schema_ptr->fields.at(2));
+      t3->verifyShuffle(schema_ptr->fields.at(2));
 
       // reduce
       processors::reduce(t3, schema_ptr->fields.at(2), results_ptr, schema_ptr, [=](Value& key, std::vector<std::unique_ptr<RowBuffer>>& vals, std::shared_ptr<RowBuffer>& result) {
