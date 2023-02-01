@@ -24,6 +24,7 @@ namespace surfingdb {
 namespace table {
 
 mtable::~mtable() {
+  CHECK(payload.size() >= 0);
   payload.clear();
   payload.shrink_to_fit();
   key_dist->clear();

@@ -157,7 +157,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g -DNDBG")
 set(CMAKE_CXX_FLAGS_RELEASE ${NCFLAGS_RELEASE})
 
 # use openmp simd
-OPTION(USE_OpenMP "Use OpenMP" OFF)
+OPTION(USE_OpenMP "Use OpenMP" ON)
 
 IF (USE_OpenMP)
     message(STATUS "USE_OpenMP=${USE_OpenMP}")

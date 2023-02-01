@@ -78,6 +78,7 @@ int main(int argc, char** argv) {
   // define max number of rows to ingest onetime per worker (total = np * batch_num)
   auto ptr = std::make_shared<TableSchema>(r);
   long total = 0;
+  std::vector<std::shared_ptr<arrow::Table>> tables;
 
   while (true) {
 
@@ -144,6 +145,11 @@ int main(int argc, char** argv) {
      * release t3 mtable vector memory
      */
     t3->toColumnar();
+    /**
+     * store post paritioned columnar table 
+    */
+    //tables.push_back(t3->getArrowTable());
+
     if (node->rank == 0) {
       total += node->world * BATCH_SIZE;
       cout <<  "total rows processed " << total << endl;

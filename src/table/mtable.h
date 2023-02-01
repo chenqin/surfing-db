@@ -48,7 +48,6 @@ class mtable {
 private:
   ValueHasher value_hasher;
 
-  std::vector<uint8_t> payload;
   size_t schedule_size = 0; // RMA memory size
 
   // defines the node row table bind to
@@ -60,6 +59,7 @@ private:
   std::shared_ptr<arrow::Table> table_ptr;
 
 public:
+  std::vector<uint8_t> payload;
   MPI_Win win;
   uint8_t* schedule;
   size_t row_count = 0; // number of rows in table
@@ -103,7 +103,7 @@ public:
   std::shared_ptr<arrow::Table> getArrowTable();
   /**
    * convert mtable to arrow columar format
-  */
+   */
   arrow::Status toColumnar();
   std::shared_ptr<arrow::Schema> getArrowSchema();
 

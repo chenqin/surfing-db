@@ -103,7 +103,8 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f
   in->placement_sort(f);
   mtable recv(in->getNodePtr(), in->getSchema(), in->row_size() * in->getSchema()->rowSize());
   MPI_Request sends[node_ptr->world];
-  size_t recv_lens[node_ptr->world];
+  MPI_Request recvs[node_ptr->world];
+  size_t tranfer_row_counts[node_ptr->world];
   if (all) {
     /**
      * send_ct_per_rank - number of rows will be send from index rank
@@ -167,7 +168,7 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f
         MPI_Status status;
         MPI_Isend(&send_to_i, 1, MPI_UNSIGNED_LONG, i, omp_get_thread_num(), MPI_COMM_WORLD, &request);
         for (int j = 0; j < node_ptr->world; j++) {
-          MPI_Recv(&recv_lens[j], 1, MPI_UNSIGNED_LONG, j, omp_get_thread_num(), MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+          MPI_Recv(&tranfer_row_counts[j], 1, MPI_UNSIGNED_LONG, j, omp_get_thread_num(), MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         }
         MPI_Wait(&request, &status);
       } else {
@@ -176,16 +177,20 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f
       }
     }
 
-    size_t buffer_len = 0;
-    size_t start_index[node_ptr->world];
+    size_t recv_row_count = 0;
+    size_t transfered_row_index_rank[node_ptr->world];
 
     for (int i = 0; i < node_ptr->world; i++) {
-      buffer_len += recv_lens[i];
-      start_index[i] = (i == 0) ? 0 : recv_lens[i - 1] + start_index[i - 1];
+      recv_row_count += tranfer_row_counts[i];
+      transfered_row_index_rank[i] = (i == 0) ? 0 : tranfer_row_counts[i - 1] + transfered_row_index_rank[i - 1];
     }
-    std::vector<uint8_t> buffer;
-    buffer.resize(buffer_len * schema_ptr->rowSize());
-    int send_count = 0;
+    MPI_Barrier(MPI_COMM_WORLD);
+    auto table = std::make_shared<mtable>(node_ptr, schema_ptr, recv_row_count * schema_ptr->rowSize());
+    int mpi_buffer_size = (int) (recv_row_count * schema_ptr->rowSize());
+    
+    CHECK(mpi_buffer_size < MEM_PAGE_SIZE); //no more than given table size
+
+    int send_count = 0, recv_count = 0;
 
     for (int i = 0; i < node_ptr->world; i++) {
       int send_rank_offset = i;
@@ -194,23 +199,19 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f
         MPI_Isend(in->range_ptr(send_rank_offset), in->range_row_size(send_rank_offset), row_type, send_rank_offset, omp_get_thread_num(), MPI_COMM_WORLD, &sends[send_count++]);
       }
       int recv_rank_offset = i;
-      if (recv_lens[recv_rank_offset] > 0) {
-        CHECK_LE(start_index[recv_rank_offset], buffer_len);
+      if (tranfer_row_counts[recv_rank_offset] > 0) {
+        CHECK_LE(transfered_row_index_rank[recv_rank_offset], recv_row_count);
         // LOG(INFO) << node_ptr->rank << " <- " << i << " size " << recv_lens[i];
-        MPI_Recv(&buffer[start_index[recv_rank_offset] * schema_ptr->rowSize()], recv_lens[recv_rank_offset], row_type, recv_rank_offset, omp_get_thread_num(), MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Irecv(&table->payload[transfered_row_index_rank[recv_rank_offset] * schema_ptr->rowSize()], tranfer_row_counts[recv_rank_offset], row_type, recv_rank_offset, omp_get_thread_num(), MPI_COMM_WORLD, &recvs[recv_count++]);
       }
     }
     MPI_Status statuses[node_ptr->world];
     MPI_Waitall(send_count, sends, statuses);
+    MPI_Waitall(recv_count, recvs, statuses);
+    table->offset = recv_row_count * schema_ptr->rowSize();
+    table->row_count = recv_row_count;
 
     in->release();
-
-    auto table = std::make_shared<mtable>(node_ptr, schema_ptr, buffer_len * schema_ptr->rowSize());
-    memcpy(table->payload_ptr(), &buffer[0], buffer_len * schema_ptr->rowSize());
-    table->offset = buffer_len * schema_ptr->rowSize();
-    table->row_count = buffer_len;
-    buffer.clear();
-    buffer.shrink_to_fit();
     MPI_Type_free(&row_type);
     return table;
   }

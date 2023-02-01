@@ -26,8 +26,8 @@ node::node(int* argc, char ***argv) {
   // Get the name of the processor
   char processor_name[MPI_MAX_PROCESSOR_NAME];
   int name_len;
-  MPI_Init_thread(argc, argv, MPI_THREAD_MULTIPLE, &supported);
-  CHECK_EQ(supported, MPI_THREAD_MULTIPLE);
+  MPI_Init_thread(argc, argv, MPI_THREAD_FUNNELED, &supported);
+  CHECK_EQ(supported, MPI_THREAD_FUNNELED);
   MPI_Comm_size(MPI_COMM_WORLD, &this->world);
   MPI_Comm_rank(MPI_COMM_WORLD, &this->rank);
   MPI_Get_processor_name(processor_name, &name_len);
