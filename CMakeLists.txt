@@ -15,6 +15,8 @@ find_package(Threads REQUIRED)
 find_package(MPI REQUIRED)
 find_package(OpenMP REQUIRED)
 find_package(OpenSSL REQUIRED)
+#https://pybind11.readthedocs.io/en/stable/advanced/embedding.html
+find_package(pybind11 REQUIRED)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -48,7 +50,7 @@ else ()
         list(APPEND LNCFLAGS
                 "-Wall -Wextra -lstdc++ -lstdc++fs"
                 "-Wl,--no-as-needed -no-pie -ldl"
-                "-I/usr/include/ -I/usr/local/include -L/usr/local/lib -L/usr/lib")
+                "-I/usr/include/ -I/usr/local/include -L/usr/local/lib -L/usr/lib -I/usr/include/python3.10")
 
         # in my testing with aggregation func, tcmalloc performs better than jemalloc
         # turn it on as default for now
@@ -213,7 +215,6 @@ include(ext/OPENSSL_Ext.cmake)
 #used by thrift
 find_package(Boost REQUIRED)
 include(ext/Thrift_Ext.cmake)
-
 find_package(Arrow REQUIRED)
 find_package(Parquet REQUIRED)
 
@@ -247,12 +248,14 @@ add_executable(Test src/TestIntegration.cpp)
 target_link_libraries(MainTest
         PRIVATE ${META}
         PRIVATE ${TABLE}
-        PRIVATE ${CONNECTOR})
+        PRIVATE ${CONNECTOR}
+        PRIVATE pybind11::embed)
 
 target_link_libraries(Test
         PRIVATE ${META}
         PRIVATE ${TABLE}
-        PRIVATE ${CONNECTOR})
+        PRIVATE ${CONNECTOR}
+        PRIVATE pybind11::embed)
 
 # install it into local bin folder
 install(TARGETS MainTest Test DESTINATION bin)

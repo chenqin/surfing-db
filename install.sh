@@ -28,5 +28,7 @@ sudo apt install -y -V libparquet-dev # For Apache Parquet C++
 sudo apt install -y -V libparquet-glib-dev # For Apache Parquet GLib (C)
 
 
+pip install "pybind11[global]"
+
 # cleanup
 sudo apt autoremove

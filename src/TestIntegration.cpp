@@ -20,10 +20,13 @@
 #include <glog/logging.h>
 #include <iostream>
 #include <omp.h>
+#include <pybind11/embed.h>
 #include <rapidjson/document.h>
 #include "connector/kafka.h"
 #include "meta/node.h"
 #include "table/processors.h"
+namespace py = pybind11;
+using namespace py::literals;
 
 #define FLUSH_DIR "/tmp/"
 #define BATCH_SIZE 25600
@@ -36,23 +39,20 @@ using namespace std;
 
 /**
  * https://stackoverflow.com/questions/440133/how-do-i-create-a-random-alpha-numeric-string-in-c
-*/
-std::string random_string( size_t length )
-{
-    auto randchar = []() -> char
-    {
-        const char charset[] =
-        "0123456789"
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        "abcdefghijklmnopqrstuvwxyz";
-        const size_t max_index = (sizeof(charset) - 1);
-        return charset[ rand() % max_index ];
-    };
-    std::string str(length,0);
-    std::generate_n( str.begin(), length, randchar );
-    return str;
+ */
+std::string random_string(size_t length) {
+  auto randchar = []() -> char {
+    const char charset[] =
+      "0123456789"
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+      "abcdefghijklmnopqrstuvwxyz";
+    const size_t max_index = (sizeof(charset) - 1);
+    return charset[rand() % max_index];
+  };
+  std::string str(length, 0);
+  std::generate_n(str.begin(), length, randchar);
+  return str;
 }
-
 
 /** run this program with
  * mpirun -np 12 ./Test
@@ -79,6 +79,8 @@ int main(int argc, char** argv) {
   auto ptr = std::make_shared<TableSchema>(r);
   long total = 0;
   std::vector<std::shared_ptr<arrow::Table>> tables;
+
+  py::scoped_interpreter guard{};
 
   while (true) {
 
@@ -127,6 +129,9 @@ int main(int argc, char** argv) {
         Value v;
         in.read(f, v);
         out.write(f, v);
+        auto kwargs = py::dict("name"_a = "World", "number"_a = 42);
+        auto message = "Hello, {name}! The answer is {number}"_s.format(**kwargs);
+        //py::print(message);
       }
       return true;
     });
@@ -146,13 +151,13 @@ int main(int argc, char** argv) {
      */
     t3->toColumnar();
     /**
-     * store post paritioned columnar table 
-    */
-    //tables.push_back(t3->getArrowTable());
+     * store post paritioned columnar table
+     */
+    // tables.push_back(t3->getArrowTable());
 
     if (node->rank == 0) {
       total += node->world * BATCH_SIZE;
-      cout <<  "total rows processed " << total << endl;
+      cout << "total rows processed " << total << endl;
     }
     t3->release();
   }

@@ -18,8 +18,11 @@
 #define SURFINGDB_PROCESSORS_H
 
 #include <arrow/api.h>
+#include <pybind11/pybind11.h>
 #include "mtable.h"
 #include "xgbop.h"
+
+namespace py = pybind11;
 
 #pragma once
 
