@@ -20,13 +20,10 @@
 #include <glog/logging.h>
 #include <iostream>
 #include <omp.h>
-#include <pybind11/embed.h>
 #include <rapidjson/document.h>
 #include "connector/kafka.h"
 #include "meta/node.h"
 #include "table/processors.h"
-namespace py = pybind11;
-using namespace py::literals;
 
 #define FLUSH_DIR "/tmp/"
 #define BATCH_SIZE 25600
@@ -80,7 +77,10 @@ int main(int argc, char** argv) {
   long total = 0;
   std::vector<std::shared_ptr<arrow::Table>> tables;
 
-  py::scoped_interpreter guard{};
+  /**
+   * @brief import pyarrow
+   */
+  arrow::py::import_pyarrow();
 
   while (true) {
 
@@ -129,9 +129,6 @@ int main(int argc, char** argv) {
         Value v;
         in.read(f, v);
         out.write(f, v);
-        auto kwargs = py::dict("name"_a = "World", "number"_a = 42);
-        auto message = "Hello, {name}! The answer is {number}"_s.format(**kwargs);
-        //py::print(message);
       }
       return true;
     });
@@ -150,6 +147,7 @@ int main(int argc, char** argv) {
      * release t3 mtable vector memory
      */
     t3->toColumnar();
+    auto pytable = arrow::py::wrap_table(t3->getArrowTable());
     /**
      * store post paritioned columnar table
      */

@@ -212,11 +212,16 @@ include(ext/Gflatbuffers_Ext.cmake)
 include(ext/Json_Ext.cmake)
 include(ext/OPENSSL_Ext.cmake)
 
+set(PYTHON_INCLUDE_DIRS ${PYTHON_INCLUDE_DIRS} /home/chen/.local/lib/python3.10/site-packages/numpy/core/include)
+include_directories(${PYTHON_INCLUDE_DIRS})
+
 #used by thrift
 find_package(Boost REQUIRED)
 include(ext/Thrift_Ext.cmake)
 find_package(Arrow REQUIRED)
 find_package(Parquet REQUIRED)
+
+find_package(Python3 COMPONENTS Interpreter Development)
 
 # include ML libs
 include(ext/Sketches_Ext.cmake)
@@ -249,16 +254,14 @@ target_link_libraries(MainTest
         PRIVATE ${META}
         PRIVATE ${TABLE}
         PRIVATE ${CONNECTOR}
-        PRIVATE pybind11::embed)
+        PRIVATE Arrow::arrow_shared
+        PRIVATE /usr/local/libarrow_python.so
+        PRIVATE ${Python3_LIBRARIES})
 
 target_link_libraries(Test
         PRIVATE ${META}
         PRIVATE ${TABLE}
         PRIVATE ${CONNECTOR}
-        PRIVATE pybind11::embed)
-
-# install it into local bin folder
-install(TARGETS MainTest Test DESTINATION bin)
-
-# enable testing so that we can run "make test"
-enable_testing()
+        PRIVATE Arrow::arrow_shared
+        PRIVATE /usr/local/libarrow_python.so
+        PRIVATE ${Python3_LIBRARIES})
