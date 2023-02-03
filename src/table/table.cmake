@@ -30,7 +30,6 @@ target_link_libraries(${TABLE}
         PUBLIC ${JSON_LIBRARY}
         PUBLIC Arrow::arrow_shared
         PUBLIC Parquet::parquet_shared
-        PUBLIC ${DUCKDB_LIBRARY}
         PUBLIC ${XGBOOST_LIBRARY})
 
 # build test binary
@@ -45,7 +44,6 @@ target_link_libraries(TableTest
         PRIVATE ${GTEST_MAIN_LIBRARY}
         PRIVATE Arrow::arrow_shared
         PRIVATE Parquet::parquet_shared
-        PUBLIC ${DUCKDB_LIBRARY}
         PRIVATE ${XGBOOST_LIBRARY})
 
 # discover all gtests in this module

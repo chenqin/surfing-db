@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
   /**
    * @brief import pyarrow
    */
-  arrow::py::import_pyarrow();
+  // arrow::py::import_pyarrow();
 
   while (true) {
 
@@ -137,17 +137,18 @@ int main(int argc, char** argv) {
      * MPI based shuffle based on hash value of a field
      * release t2 mtable in the end
      */
-    auto t3 = processors::shuffle(t2, ptr->fields.at(2), false);
+    // auto t3 = processors::shuffle(t2, ptr->fields.at(2), false);
     /**
      * verify shuffle row placement to right worker (aka MPI rank)
      */
-    t3->verifyShuffle(ptr->fields.at(2));
+    t2->verifyShuffle(ptr->fields.at(2));
     /**
      * convert t3 mtable to columnar table
      * release t3 mtable vector memory
      */
-    t3->toColumnar();
-    auto pytable = arrow::py::wrap_table(t3->getArrowTable());
+    t2->toColumnar();
+    // Write it using Datasets
+    // auto pytable = arrow::py::wrap_table(t3->getArrowTable());
     /**
      * store post paritioned columnar table
      */
@@ -157,7 +158,7 @@ int main(int argc, char** argv) {
       total += node->world * BATCH_SIZE;
       cout << "total rows processed " << total << endl;
     }
-    t3->release();
+    t2->release();
   }
   return 0;
 }

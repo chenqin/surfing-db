@@ -245,7 +245,6 @@ include(src/table/table.cmake)
 
 # build table representation
 include(src/connector/connector.cmake)
-
 # build test binary
 add_executable(MainTest src/main.cpp)
 add_executable(Test src/TestIntegration.cpp)
@@ -255,7 +254,6 @@ target_link_libraries(MainTest
         PRIVATE ${TABLE}
         PRIVATE ${CONNECTOR}
         PRIVATE Arrow::arrow_shared
-        PRIVATE /usr/local/libarrow_python.so
         PRIVATE ${Python3_LIBRARIES})
 
 target_link_libraries(Test
@@ -263,5 +261,4 @@ target_link_libraries(Test
         PRIVATE ${TABLE}
         PRIVATE ${CONNECTOR}
         PRIVATE Arrow::arrow_shared
-        PRIVATE /usr/local/libarrow_python.so
         PRIVATE ${Python3_LIBRARIES})
