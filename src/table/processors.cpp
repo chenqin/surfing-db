@@ -97,10 +97,6 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f
   MPI_Type_contiguous(schema_ptr->rowSize(), MPI_CHAR, &row_type);
   MPI_Type_commit(&row_type);
 
-  /**
-   * sort mtable based on hash f value and it's placement over all workers
-   */
-  in->placement_sort(f);
   mtable recv(in->getNodePtr(), in->getSchema(), in->row_size() * in->getSchema()->rowSize());
   MPI_Request sends[node_ptr->world];
   MPI_Request recvs[node_ptr->world];

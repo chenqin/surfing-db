@@ -26,7 +26,7 @@
 #include "table/processors.h"
 
 #define FLUSH_DIR "/tmp/"
-#define BATCH_SIZE 25600
+#define BATCH_SIZE 125600
 
 using namespace surfingdb::table::schema;
 using surfingdb::meta::node;
@@ -87,6 +87,7 @@ int main(int argc, char** argv) {
     // allocate large memory with fixed layout per column, row and fields
     auto t1 = std::make_shared<mtable>(node, ptr, BATCH_SIZE * ptr->rowSize());
 
+    double start = MPI_Wtime();
     // ingest, copy rows to local table memory with fixed offsets
     for (int i = 0; i < BATCH_SIZE; i++) {
       auto row = std::make_unique<RowBuffer>(ptr);
@@ -119,7 +120,9 @@ int main(int argc, char** argv) {
 
       t1->appendRow(*row.get());
     }
-
+    double end = MPI_Wtime();
+    std::cout << (end - start) << " gen:";
+    start = MPI_Wtime();
     /**
      * pass each row in mtable, if return true, add to new table with schema ptr
      * release t1 mtable in the end
@@ -132,21 +135,32 @@ int main(int argc, char** argv) {
       }
       return true;
     });
-
+    end = MPI_Wtime();
+    std::cout << (end - start) << " map:";
+    start = MPI_Wtime();
     /**
      * MPI based shuffle based on hash value of a field
      * release t2 mtable in the end
      */
-    // auto t3 = processors::shuffle(t2, ptr->fields.at(2), false);
+    start = MPI_Wtime();
+    t2->placement_sort(ptr->fields.at(2));
+    end = MPI_Wtime();
+    std::cout << (end - start) << " sort:";
+    
+    start = MPI_Wtime();
+    auto t3 = processors::shuffle(t2, ptr->fields.at(2), false);
+    end = MPI_Wtime();
+    std::cout << (end - start) << " shuffle:";
+    start = MPI_Wtime();
     /**
      * verify shuffle row placement to right worker (aka MPI rank)
      */
-    t2->verifyShuffle(ptr->fields.at(2));
+    t3->verifyShuffle(ptr->fields.at(2));
     /**
      * convert t3 mtable to columnar table
      * release t3 mtable vector memory
      */
-    t2->toColumnar();
+    t3->toColumnar();
     // Write it using Datasets
     // auto pytable = arrow::py::wrap_table(t3->getArrowTable());
     /**
@@ -158,7 +172,7 @@ int main(int argc, char** argv) {
       total += node->world * BATCH_SIZE;
       cout << "total rows processed " << total << endl;
     }
-    t2->release();
+    t3->release();
   }
   return 0;
 }
