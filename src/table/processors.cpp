@@ -192,13 +192,23 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f
       int send_rank_offset = i;
       if (in->range_row_size(send_rank_offset) > 0) {
         // LOG(INFO) << node_ptr->rank << "-> " << i << " size " << in->range_row_size(i);
-        MPI_Isend(in->range_ptr(send_rank_offset), in->range_row_size(send_rank_offset), row_type, send_rank_offset, omp_get_thread_num(), MPI_COMM_WORLD, &sends[send_count++]);
+        /**
+         * @brief tag is unqiue value from sender to reciever with two dim array
+         * 
+         */
+        int tag = node_ptr->rank * (node_ptr->world) + send_rank_offset; 
+        MPI_Isend(in->range_ptr(send_rank_offset), in->range_row_size(send_rank_offset), row_type, send_rank_offset, tag, MPI_COMM_WORLD, &sends[send_count++]);
       }
       int recv_rank_offset = i;
       if (tranfer_row_counts[recv_rank_offset] > 0) {
         CHECK_LE(transfered_row_index_rank[recv_rank_offset], recv_row_count);
         // LOG(INFO) << node_ptr->rank << " <- " << i << " size " << recv_lens[i];
-        MPI_Irecv(&table->payload[transfered_row_index_rank[recv_rank_offset] * schema_ptr->rowSize()], tranfer_row_counts[recv_rank_offset], row_type, recv_rank_offset, omp_get_thread_num(), MPI_COMM_WORLD, &recvs[recv_count++]);
+         /**
+         * @brief tag is unqiue value from sender to reciever with two dim array
+         * matching sender side
+         */
+        int tag = recv_rank_offset * (node_ptr->world) + node_ptr->rank; 
+        MPI_Irecv(&table->payload[transfered_row_index_rank[recv_rank_offset] * schema_ptr->rowSize()], tranfer_row_counts[recv_rank_offset], row_type, recv_rank_offset, tag, MPI_COMM_WORLD, &recvs[recv_count++]);
       }
     }
     MPI_Status statuses[node_ptr->world];
