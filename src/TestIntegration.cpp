@@ -26,7 +26,7 @@
 #include "table/processors.h"
 
 #define FLUSH_DIR "/tmp/"
-#define BATCH_SIZE 225600
+#define BATCH_SIZE 22560
 
 using namespace surfingdb::table::schema;
 using surfingdb::meta::node;
@@ -89,7 +89,7 @@ int main(int argc, char** argv) {
 
     double start = MPI_Wtime();
     // ingest, copy rows to local table memory with fixed offsets
-    for (int i = 0; i < BATCH_SIZE; i++) {
+    for (int i = 0; i < node->rank * BATCH_SIZE; i++) {
       auto row = std::make_unique<RowBuffer>(ptr);
       Value p;
 

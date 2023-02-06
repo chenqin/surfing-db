@@ -18,43 +18,48 @@
 #define SURFINGDB_KAFKA_H
 
 #include <rdkafka.h>
-#include <vector>
 #include <string>
+#include <vector>
+#include "meta/node.h"
+#include "meta/schema.h"
+#include "table/mtable.h"
 #include "table/row.h"
 
 namespace surfingdb {
-		namespace connector {
-				using namespace surfingdb::table;
+namespace connector {
+using namespace surfingdb::meta;
+using namespace surfingdb::table;
 
-				/**
-				 * thin kafka client wrapper
-				 * https://docs.confluent.io/5.5.1/clients/librdkafka/md_CONFIGURATION.html
-				 */
-				class KafkaConnector {
-				public:
-						KafkaConnector(std::string, std::string, std::string);
+/**
+ * thin kafka client wrapper
+ * https://docs.confluent.io/5.5.1/clients/librdkafka/md_CONFIGURATION.html
+ */
+class KafkaConnector {
+public:
+  KafkaConnector(std::shared_ptr<node>, std::string, std::string, std::string);
 
-						std::vector<std::shared_ptr<RowBuffer>>
-						consume_batch(size_t max_batch_size, int timeout, std::shared_ptr<surfingdb::meta::TableSchema> schema_ptr,
-						              std::function<std::shared_ptr<RowBuffer>(const char *payload,
-						                                                       std::shared_ptr<surfingdb::meta::TableSchema> schema_ptr)>);
+  std::shared_ptr<arrow::Table>
+    consume_batch(size_t max_batch_size, int timeout, std::shared_ptr<TableSchema> schema_ptr,
+                  std::function<std::shared_ptr<RowBuffer>(const char* payload,
+                                                           std::shared_ptr<TableSchema> schema_ptr)>);
 
-						~KafkaConnector();
+  ~KafkaConnector();
 
-				private:
-						rd_kafka_t *rk;          /* Consumer instance handle */
-						rd_kafka_topic_conf_t *topic_conf;
-						rd_kafka_conf_t *conf;   /* Temporary configuration object */
-						rd_kafka_resp_err_t err; /* librdkafka API error code */
-						char errstr[512];        /* librdkafka API error reporting buffer */
-						const char *brokers;     /* Argument: broker list */
-						const char *groupid;     /* Argument: Consumer group id */
-						char *topics;           /* Argument: list of topics to subscribe to */
-						int topic_cnt;           /* Number of topics to subscribe to */
-						rd_kafka_topic_partition_list_t *subscription; /* Subscribed topics */
-						int i;
-				};
-		} // namespace surfingdb
+private:
+  std::shared_ptr<node> node_ptr;
+  rd_kafka_t* rk; /* Consumer instance handle */
+  rd_kafka_topic_conf_t* topic_conf;
+  rd_kafka_conf_t* conf;                         /* Temporary configuration object */
+  rd_kafka_resp_err_t err;                       /* librdkafka API error code */
+  char errstr[512];                              /* librdkafka API error reporting buffer */
+  const char* brokers;                           /* Argument: broker list */
+  const char* groupid;                           /* Argument: Consumer group id */
+  char* topics;                                  /* Argument: list of topics to subscribe to */
+  int topic_cnt;                                 /* Number of topics to subscribe to */
+  rd_kafka_topic_partition_list_t* subscription; /* Subscribed topics */
+  int i;
+};
+} // namespace connector
 
-}
-#endif //SURFINGDB_KAFKA_H
+} // namespace surfingdb
+#endif // SURFINGDB_KAFKA_H

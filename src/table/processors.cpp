@@ -22,7 +22,7 @@ namespace table {
 
 std::shared_ptr<mtable> processors::map(std::shared_ptr<mtable> in, std::shared_ptr<TableSchema> out_schema_ptr, std::function<bool(const RowBuffer&, RowBuffer&)> transform) {
   auto out = std::make_shared<mtable>(in->getNodePtr(), out_schema_ptr, in->row_count * out_schema_ptr->rowSize());
-  for (size_t i = 0; i < in->row_size(); i++) {
+  for (size_t i = 0; i < in->row_count; i++) {
     auto in_row = in->readRow(i);
     RowBuffer out_row(out->getSchema());
     bool append = transform(*in_row.get(), out_row);

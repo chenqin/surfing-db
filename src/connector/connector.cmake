@@ -14,6 +14,7 @@ include_directories(${ZOOKEEPER_INCLUDE_DIR})
 
 target_link_libraries(${CONNECTOR}
         PUBLIC ${META}
+        PRIVATE ${TABLE}
         PUBLIC glog::glog
         PUBLIC ${GFLAGS_LIBRARY}
         PUBLIC ${JSON_LIBRARY}
