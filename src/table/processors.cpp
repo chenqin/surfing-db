@@ -85,146 +85,90 @@ void processors::xgb(std::shared_ptr<mtable> in, std::vector<Field> features, Fi
 std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f, bool all) {
   auto schema_ptr = in->getSchema();
   auto node_ptr = in->getNodePtr();
+  int rank = node_ptr->rank;
+  int world = node_ptr->world;
+  size_t rowsize = schema_ptr->rowSize();
   /**
    * verify all workers in same stage
    */
   node_ptr->forward();
-
   /**
    * register and commit schema row size unit to all workers
    */
   MPI_Datatype row_type;
-  MPI_Type_contiguous(schema_ptr->rowSize(), MPI_CHAR, &row_type);
+  MPI_Type_contiguous(rowsize, MPI_CHAR, &row_type);
   MPI_Type_commit(&row_type);
 
-  mtable recv(in->getNodePtr(), in->getSchema(), in->row_size() * in->getSchema()->rowSize());
   MPI_Request sends[node_ptr->world];
   MPI_Request recvs[node_ptr->world];
-  size_t tranfer_row_counts[node_ptr->world];
-  if (all) {
-    /**
-     * send_ct_per_rank - number of rows will be send from index rank
-     * rev_ct_per_rank - number of rows will be recieved from index rank
-     */
-    std::vector<int> send_ct_per_rank(node_ptr->world), rev_ct_per_rank(node_ptr->world);
-    for (int i = 0; i < node_ptr->world; i++) {
-      send_ct_per_rank.push_back(in->range_row_size(i));
-    }
-    MPI_Alltoall(send_ct_per_rank.data(), 1, MPI_INT, rev_ct_per_rank.data(), 1, MPI_INT, MPI_COMM_WORLD);
-    CHECK(send_ct_per_rank.at(node_ptr->rank) == 0);
-    CHECK(rev_ct_per_rank.at(node_ptr->rank) == 0);
+  MPI_Status statuses[node_ptr->world];
 
-    /**
-     * calculate displment of send and recv
-     */
-    std::vector<int> send_ct_disp(node_ptr->world);
-    std::partial_sum(send_ct_per_rank.begin(), send_ct_per_rank.end(),
-                     send_ct_disp.begin());
-    std::vector<int> send_ct_dispment(node_ptr->world);
-    send_ct_dispment[0] = 0;
-    std::copy(send_ct_disp.begin(), send_ct_disp.end() - 1,
-              send_ct_dispment.begin() + 1);
+  size_t send_to_vec[world], recv_from_vec[world];
 
-    std::vector<int> recv_ct_disp(node_ptr->world);
-    std::partial_sum(rev_ct_per_rank.begin(), rev_ct_per_rank.end(),
-                     recv_ct_disp.begin());
-    std::vector<int> recv_ct_dispment(node_ptr->world);
-    recv_ct_dispment[0] = 0;
-    std::copy(recv_ct_disp.begin(), recv_ct_disp.end() - 1,
-              recv_ct_dispment.begin() + 1);
-
-    int recv_size = 0;
-    recv_size = std::accumulate(rev_ct_per_rank.begin(), rev_ct_per_rank.end(), recv_size);
-
-    std::vector<uint8_t> recv_buffer;
-    recv_buffer.resize(recv_size * schema_ptr->rowSize());
-    MPI_Request request;
-    MPI_Status status;
-    MPI_Ialltoallv(in->payload_ptr(), &send_ct_per_rank[0], &send_ct_dispment[0], row_type, &recv_buffer[0], &rev_ct_per_rank[0], &recv_ct_dispment[0], row_type, MPI_COMM_WORLD, &request);
-    MPI_Wait(&request, &status);
-    in->release();
-
-    /**
-     * copy buffer to new table
-     */
-    auto table = std::make_shared<mtable>(node_ptr, schema_ptr, recv_size * schema_ptr->rowSize());
-    memcpy(table->payload_ptr(), &recv_buffer[0], recv_size * schema_ptr->rowSize());
-    table->offset = recv_size * schema_ptr->rowSize();
-    table->row_count = recv_size;
-    recv_buffer.clear();
-    recv_buffer.shrink_to_fit();
-    MPI_Type_free(&row_type);
-    return table;
-  } else {
-    for (int j = 0; j < node_ptr->world; j++) {
-      int i = (j + (omp_get_thread_num() << 1)) % node_ptr->world;
-      if (node_ptr->rank == i) {
-        size_t send_to_i = in->range_row_size(i);
-        MPI_Request request;
-        MPI_Status status;
-        int tag = node_ptr->rank * node_ptr->world + i;
-        MPI_Isend(&send_to_i, 1, MPI_UNSIGNED_LONG, i, tag, MPI_COMM_WORLD, &request);
-        for (int j = 0; j < node_ptr->world; j++) {
-          tag = j * node_ptr->world + i;
-          MPI_Recv(&tranfer_row_counts[j], 1, MPI_UNSIGNED_LONG, j, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        }
-        MPI_Wait(&request, &status);
-      } else {
-        int tag = node_ptr->rank * node_ptr->world + i;
-        size_t send_to_i = in->range_row_size(i);
-        MPI_Send(&send_to_i, 1, MPI_UNSIGNED_LONG, i, tag, MPI_COMM_WORLD);
-      }
-    }
-
-    size_t recv_row_count = 0;
-    size_t transfered_row_index_rank[node_ptr->world];
-
-    for (int i = 0; i < node_ptr->world; i++) {
-      recv_row_count += tranfer_row_counts[i];
-      transfered_row_index_rank[i] = (i == 0) ? 0 : tranfer_row_counts[i - 1] + transfered_row_index_rank[i - 1];
-    }
-
-    MPI_Barrier(MPI_COMM_WORLD);
-    auto table = std::make_shared<mtable>(node_ptr, schema_ptr, recv_row_count * schema_ptr->rowSize());
-    int mpi_buffer_size = (int)(recv_row_count * schema_ptr->rowSize());
-
-    CHECK(mpi_buffer_size < MEM_PAGE_SIZE); // no more than given table size
-
-    int send_count = 0, recv_count = 0;
-
-    for (int i = 0; i < node_ptr->world; i++) {
-      int send_rank_offset = i;
-      if (in->range_row_size(send_rank_offset) > 0) {
-        // LOG(INFO) << node_ptr->rank << "-> " << i << " size " << in->range_row_size(i);
-        /**
-         * @brief tag is unqiue value from sender to reciever with two dim array
-         *
-         */
-        int tag = node_ptr->rank * (node_ptr->world) + send_rank_offset;
-        MPI_Isend(in->range_ptr(send_rank_offset), in->range_row_size(send_rank_offset), row_type, send_rank_offset, tag, MPI_COMM_WORLD, &sends[send_count++]);
-      }
-      int recv_rank_offset = i;
-      if (tranfer_row_counts[recv_rank_offset] > 0) {
-        CHECK_LE(transfered_row_index_rank[recv_rank_offset], recv_row_count);
-        // LOG(INFO) << node_ptr->rank << " <- " << i << " size " << recv_lens[i];
-        /**
-         * @brief tag is unqiue value from sender to reciever with two dim array
-         * matching sender side
-         */
-        int tag = recv_rank_offset * (node_ptr->world) + node_ptr->rank;
-        MPI_Irecv(&table->payload[transfered_row_index_rank[recv_rank_offset] * schema_ptr->rowSize()], tranfer_row_counts[recv_rank_offset], row_type, recv_rank_offset, tag, MPI_COMM_WORLD, &recvs[recv_count++]);
-      }
-    }
-    MPI_Status statuses[node_ptr->world];
-    MPI_Waitall(send_count, sends, statuses);
-    MPI_Waitall(recv_count, recvs, statuses);
-    table->offset = recv_row_count * schema_ptr->rowSize();
-    table->row_count = recv_row_count;
-
-    in->release();
-    MPI_Type_free(&row_type);
-    return table;
+  for (int j = 0; j < world; j++) {
+    size_t send_to_i = in->range_row_size(j);
+    send_to_vec[j] = send_to_i;
   }
+
+  MPI_Alltoall(&send_to_vec, 1, MPI_UNSIGNED_LONG, recv_from_vec, 1, MPI_UNSIGNED_LONG, MPI_COMM_WORLD);
+
+  size_t recv_row_count = 0;
+  size_t transfered_row_index_rank[world];
+  /**
+   * @brief transfered_row_index_rank determins placement of newly transfered row
+   * we don't differentiate local move v.s remote as MPI
+   *
+   */
+  for (int i = 0; i < world; i++) {
+    recv_row_count += recv_from_vec[i];
+    transfered_row_index_rank[i] = (i == 0) ? 0 : recv_from_vec[i - 1] + transfered_row_index_rank[i - 1];
+  }
+  auto table = std::make_shared<mtable>(node_ptr, schema_ptr, recv_row_count * rowsize);
+  int mpi_buffer_size = (int)(recv_row_count * rowsize);
+
+  CHECK(mpi_buffer_size < MEM_PAGE_SIZE); // no more than given table size
+
+  int send_count = 0, recv_count = 0;
+
+  for (int i = 0; i < node_ptr->world; i++) {
+    int send_rank_offset = i;
+    /**
+     * @brief current rank has data sending to send_rank_offset
+     *
+     */
+    if (send_to_vec[send_rank_offset] > 0) {
+      // LOG(INFO) << node_ptr->rank << "-> " << i << " size " << in->range_row_size(i);
+      /**
+       * @brief tag is unqiue value from sender to reciever with two dim array
+       *
+       */
+      int tag = rank * world + send_rank_offset;
+      MPI_Isend(in->range_ptr(send_rank_offset), send_to_vec[send_rank_offset], row_type, send_rank_offset, tag, MPI_COMM_WORLD, &sends[send_count++]);
+    }
+    int recv_rank_offset = i;
+    /**
+     * @brief current rank has data recieveing form recv_rank_offset
+     *
+     */
+    if (recv_from_vec[recv_rank_offset] > 0) {
+      CHECK_LE(transfered_row_index_rank[recv_rank_offset], recv_row_count);
+      // LOG(INFO) << node_ptr->rank << " <- " << i << " size " << recv_lens[i];
+      /**
+       * @brief tag is unqiue value from sender to reciever with two dim array
+       * matching sender side
+       */
+      int tag = recv_rank_offset * world + rank;
+      MPI_Irecv(&table->payload[transfered_row_index_rank[recv_rank_offset] * rowsize], recv_from_vec[recv_rank_offset], row_type, recv_rank_offset, tag, MPI_COMM_WORLD, &recvs[recv_count++]);
+    }
+  }
+  MPI_Waitall(send_count, sends, statuses);
+  MPI_Waitall(recv_count, recvs, statuses);
+  table->offset = recv_row_count * rowsize;
+  table->row_count = recv_row_count;
+
+  in->release();
+  MPI_Type_free(&row_type);
+  return table;
 }
 
 std::shared_ptr<mtable> processors::shuffleRMA(std::shared_ptr<mtable> in, Field& f) {

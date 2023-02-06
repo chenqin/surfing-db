@@ -26,7 +26,7 @@
 #include "table/processors.h"
 
 #define FLUSH_DIR "/tmp/"
-#define BATCH_SIZE 125600
+#define BATCH_SIZE 225600
 
 using namespace surfingdb::table::schema;
 using surfingdb::meta::node;
@@ -121,7 +121,7 @@ int main(int argc, char** argv) {
       t1->appendRow(*row.get());
     }
     double end = MPI_Wtime();
-    std::cout << (end - start) << " gen:";
+    //std::cout << (end - start) << " gen:";
     start = MPI_Wtime();
     /**
      * pass each row in mtable, if return true, add to new table with schema ptr
@@ -136,7 +136,7 @@ int main(int argc, char** argv) {
       return true;
     });
     end = MPI_Wtime();
-    std::cout << (end - start) << " map:";
+    //std::cout << (end - start) << " map:";
     start = MPI_Wtime();
     /**
      * MPI based shuffle based on hash value of a field
@@ -145,12 +145,12 @@ int main(int argc, char** argv) {
     start = MPI_Wtime();
     t2->placement_sort(ptr->fields.at(2));
     end = MPI_Wtime();
-    std::cout << (end - start) << " sort:";
+    //std::cout << (end - start) << " sort:";
     
     start = MPI_Wtime();
     auto t3 = processors::shuffle(t2, ptr->fields.at(2), false);
     end = MPI_Wtime();
-    std::cout << (end - start) << " shuffle:";
+    //std::cout << (end - start) << " shuffle:";
     start = MPI_Wtime();
     /**
      * verify shuffle row placement to right worker (aka MPI rank)
