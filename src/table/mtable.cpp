@@ -249,7 +249,7 @@ size_t mtable::range_row_size(int dest) {
 /**
  * sort rows based on destination process and update _start_index map
  */
-void mtable::placement_sort(const Field& f) {
+std::shared_ptr<mtable> mtable::placement_sort(const Field& f) {
   // auto start = MPI_Wtime();
   placement_index->clear();
   key_groups->clear();
@@ -266,23 +266,37 @@ void mtable::placement_sort(const Field& f) {
     key_groups->at(key).emplace_back(i);
   }
 
-  mtable sender(node_ptr, schema_ptr, row_count * schema_ptr->rowSize());
+  /***
+   * build another table and sort rows based on field key placement to rank
+   */
+  auto sender = std::make_shared<mtable>(node_ptr, schema_ptr, row_count * schema_ptr->rowSize());
   int index = 0;
   for (int i = 0; i < node_ptr->world; i++) {
-    placement_index->insert({ i, index });
+    sender->placement_index->insert({ i, index });
     for (auto g : *key_groups) {
-      size_t placement = sender.placement(g.first);
-      if (placement == (size_t)i) {
+      size_t rank = sender->placement(g.first);
+      /**
+       * @brief if placment of a key equals to a specific rank i
+       * 
+       */
+      if (rank == (size_t)i) {
         for (auto item : g.second) {
           auto row = this->readRow(item);
-          sender.appendRow(*row.get());
+          Value v;
+          row->read(f, v);
+          size_t key = value_hasher.operator()(v);
+          if (sender->key_groups->find(key) == sender->key_groups->end()) {
+            std::vector<size_t> arr;
+            sender->key_groups->insert({ key, arr });
+          }
+          sender->key_groups->at(key).emplace_back(index);
+          sender->appendRow(*row.get());
           index++;
         }
       }
     }
   }
-  memcpy(&payload[0], sender.payload_ptr(), row_count * schema_ptr->rowSize());
-  // LOG(INFO) << "in place sort costs " << MPI_Wtime() - start << " on " << node_ptr->rank;
+  return sender;
 }
 
 /**
@@ -545,7 +559,7 @@ arrow::Status mtable::toColumnar() {
   this->table_ptr = arrow::Table::Make(this->getArrowSchema(), arrays);
   /**
    * release mtable vector
-  */
+   */
   release();
   return arrow::Status::OK();
 }

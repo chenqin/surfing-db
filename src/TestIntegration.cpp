@@ -140,31 +140,32 @@ int main(int argc, char** argv) {
      * release t2 mtable in the end
      */
     auto start = MPI_Wtime();
-    t2->placement_sort(ptr->fields.at(2));
+    auto t3 = t2->placement_sort(ptr->fields.at(2));
+    t2->release();
     auto end = MPI_Wtime();
     std::cout << "sort :" << (end - start);
 
     start = MPI_Wtime();
-    auto t3 = processors::shuffle(t2, ptr->fields.at(2));
+    auto t4 = processors::shuffle(t3, ptr->fields.at(2));
     end = MPI_Wtime();
     std::cout << " shuffle :" << (end - start) << " rank = " << node->rank << std::endl;
     start = MPI_Wtime();
     /**
      * verify shuffle row placement to right worker (aka MPI rank)
      */
-    t3->verifyShuffle(ptr->fields.at(2));
+    t4->verifyShuffle(ptr->fields.at(2));
     /**
      * convert t3 mtable to columnar table
      * release t3 mtable vector memory
      */
-    t3->toColumnar();
+    t4->toColumnar();
     // Write it using Datasets
     // auto pytable = arrow::py::wrap_table(t3->getArrowTable());
     /**
      * store post paritioned columnar table
      */
     // tables.push_back(t3->getArrowTable());
-    size_t r_row_count = t3->getArrowTable()->num_rows();
+    size_t r_row_count = t4->getArrowTable()->num_rows();
 
     size_t g_init_total_count = 0, g_post_total_count = 0;
     MPI_Allreduce(&total_row_count, &g_init_total_count, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
@@ -173,7 +174,7 @@ int main(int argc, char** argv) {
       CHECK_EQ(g_init_total_count, g_post_total_count);
       cout << "total rows = " << g_init_total_count << endl;
     }
-    t3->release();
+    t4->release();
   }
   return 0;
 }
