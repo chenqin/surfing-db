@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
   SchemaUtils::appendElements(r, "host", RowType::STRING, 1);
   SchemaUtils::appendElements(r, "metricName", RowType::STRING, 1);
   SchemaUtils::appendElements(r, "metricValues", RowType::DOUBLE, 1);
-  std::shared_ptr<TableSchema> schema_ptr = std::make_shared<TableSchema>(r);
+  const std::shared_ptr<TableSchema> schema_ptr = std::make_shared<TableSchema>(r);
 
   int rows = 1500;
   size_t total = 0;

@@ -48,7 +48,7 @@ public:
 
   static std::shared_ptr<mtable> shuffleRMA(std::shared_ptr<mtable>, Field&);
 
-  static std::shared_ptr<mtable> shuffle(std::shared_ptr<mtable>, Field&, bool);
+  static std::shared_ptr<mtable> shuffle(std::shared_ptr<mtable>, Field&);
 
   static void xgb(std::shared_ptr<mtable>, std::vector<Field>, Field&, const XGBParameters&);
 };

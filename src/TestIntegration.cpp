@@ -82,47 +82,47 @@ int main(int argc, char** argv) {
    */
   // arrow::py::import_pyarrow();
 
+  size_t total_row_count = 0;
+  const size_t intial_row_count = node->rank * BATCH_SIZE;
+  // allocate large memory with fixed layout per column, row and fields
+  auto t1 = std::make_shared<mtable>(node, ptr, intial_row_count * ptr->rowSize());
+
+  double start = MPI_Wtime();
+  // ingest, copy rows to local table memory with fixed offsets
+  for (int i = 0; i < intial_row_count; i++) {
+    total_row_count++;
+    auto row = std::make_unique<RowBuffer>(ptr);
+    Value p;
+
+    p.p_val.long_val = 1;
+    row->write(ptr->fields.at(0), p);
+
+    p.p_val.string_val = "hello_host";
+    row->write(ptr->fields.at(1), p);
+
+    p.p_val.string_val = random_string(16);
+    row->write(ptr->fields.at(2), p);
+
+    p.p_val.double_val = 0.1;
+    std::vector<PValue> lval;
+    lval.push_back(p.p_val);
+    lval.push_back(p.p_val);
+    p.list_value = lval;
+    row->write(ptr->fields.at(3), p);
+
+    PValue key, value;
+    key.string_val = random_string(16);
+    value.string_val = random_string(16);
+    std::pair<PValue, PValue> pair;
+    pair.first = key;
+    pair.second = value;
+    p.map_value.insert(pair);
+    row->write(ptr->fields.at(4), p);
+
+    t1->appendRow(*row.get());
+  }
+
   while (true) {
-
-    // allocate large memory with fixed layout per column, row and fields
-    auto t1 = std::make_shared<mtable>(node, ptr, BATCH_SIZE * ptr->rowSize());
-
-    double start = MPI_Wtime();
-    // ingest, copy rows to local table memory with fixed offsets
-    for (int i = 0; i < node->rank * BATCH_SIZE; i++) {
-      auto row = std::make_unique<RowBuffer>(ptr);
-      Value p;
-
-      p.p_val.long_val = 1;
-      row->write(ptr->fields.at(0), p);
-
-      p.p_val.string_val = "hello_host";
-      row->write(ptr->fields.at(1), p);
-
-      p.p_val.string_val = random_string(16);
-      row->write(ptr->fields.at(2), p);
-
-      p.p_val.double_val = 0.1;
-      std::vector<PValue> lval;
-      lval.push_back(p.p_val);
-      lval.push_back(p.p_val);
-      p.list_value = lval;
-      row->write(ptr->fields.at(3), p);
-
-      PValue key, value;
-      key.string_val = random_string(16);
-      value.string_val = random_string(16);
-      std::pair<PValue, PValue> pair;
-      pair.first = key;
-      pair.second = value;
-      p.map_value.insert(pair);
-      row->write(ptr->fields.at(4), p);
-
-      t1->appendRow(*row.get());
-    }
-    double end = MPI_Wtime();
-    //std::cout << (end - start) << " gen:";
-    start = MPI_Wtime();
     /**
      * pass each row in mtable, if return true, add to new table with schema ptr
      * release t1 mtable in the end
@@ -135,22 +135,19 @@ int main(int argc, char** argv) {
       }
       return true;
     });
-    end = MPI_Wtime();
-    //std::cout << (end - start) << " map:";
-    start = MPI_Wtime();
     /**
      * MPI based shuffle based on hash value of a field
      * release t2 mtable in the end
      */
-    start = MPI_Wtime();
+    auto start = MPI_Wtime();
     t2->placement_sort(ptr->fields.at(2));
-    end = MPI_Wtime();
-    //std::cout << (end - start) << " sort:";
-    
+    auto end = MPI_Wtime();
+    std::cout << "sort :" << (end - start);
+
     start = MPI_Wtime();
-    auto t3 = processors::shuffle(t2, ptr->fields.at(2), false);
+    auto t3 = processors::shuffle(t2, ptr->fields.at(2));
     end = MPI_Wtime();
-    //std::cout << (end - start) << " shuffle:";
+    std::cout << " shuffle :" << (end - start) << " rank = " << node->rank << std::endl;
     start = MPI_Wtime();
     /**
      * verify shuffle row placement to right worker (aka MPI rank)
@@ -167,10 +164,14 @@ int main(int argc, char** argv) {
      * store post paritioned columnar table
      */
     // tables.push_back(t3->getArrowTable());
+    size_t r_row_count = t3->getArrowTable()->num_rows();
 
+    size_t g_init_total_count = 0, g_post_total_count = 0;
+    MPI_Allreduce(&total_row_count, &g_init_total_count, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(&r_row_count, &g_post_total_count, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
     if (node->rank == 0) {
-      total += node->world * BATCH_SIZE;
-      cout << "total rows processed " << total << endl;
+      CHECK_EQ(g_init_total_count, g_post_total_count);
+      cout << "total rows = " << g_init_total_count << endl;
     }
     t3->release();
   }

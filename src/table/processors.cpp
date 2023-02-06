@@ -30,7 +30,6 @@ std::shared_ptr<mtable> processors::map(std::shared_ptr<mtable> in, std::shared_
 
     if (append) { out->appendRow(out_row); }
   }
-  in->release();
   return out;
 }
 
@@ -82,7 +81,7 @@ void processors::xgb(std::shared_ptr<mtable> in, std::vector<Field> features, Fi
   }
 }
 
-std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f, bool all) {
+std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f) {
   auto schema_ptr = in->getSchema();
   auto node_ptr = in->getNodePtr();
   int rank = node_ptr->rank;
