@@ -158,7 +158,10 @@ int main(int argc, char** argv) {
      * convert t3 mtable to columnar table
      * release t3 mtable vector memory
      */
-    t4->toColumnar();
+    processors::compute(t4, [](std::shared_ptr<mtable> m) {
+        m->toColumnar();
+        return arrow::compute::Sum({m->getArrowTable()->GetColumnByName("timestamp")});
+    });
     // Write it using Datasets
     // auto pytable = arrow::py::wrap_table(t3->getArrowTable());
     /**

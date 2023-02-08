@@ -30,7 +30,6 @@ else()
     ExternalProject_Add(thrift
             PREFIX thrift
             GIT_REPOSITORY https://github.com/apache/thrift.git
-            GIT_TAG 0.9.3
             CMAKE_ARGS ${THRIFT_OPTS}
             UPDATE_COMMAND ""
             INSTALL_COMMAND ""

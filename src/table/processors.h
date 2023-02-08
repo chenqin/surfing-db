@@ -19,15 +19,18 @@
 
 #include <Python.h>
 #include <arrow/api.h>
-//#include <arrow/python/api.h>
+#include <arrow/compute/api.h>
+
+#include <iostream>
+// #include <arrow/python/api.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-//#include <arrow/python/pyarrow.h>
-// we might get duplicate decl error if we also include this
-// #include <arrow/array/array_primitive.h>
-// #include <arrow/type_fwd.h>
-//#include <arrow/array/builder_primitive.h>
+// #include <arrow/python/pyarrow.h>
+//  we might get duplicate decl error if we also include this
+//  #include <arrow/array/array_primitive.h>
+//  #include <arrow/type_fwd.h>
+// #include <arrow/array/builder_primitive.h>
 #include "mtable.h"
 #include "xgbop.h"
 
@@ -49,6 +52,8 @@ public:
   static std::shared_ptr<mtable> shuffleRMA(std::shared_ptr<mtable>, Field&);
 
   static std::shared_ptr<mtable> shuffle(std::shared_ptr<mtable>, Field&);
+
+  const static arrow::Datum compute(std::shared_ptr<mtable>, std::function<arrow::Result<arrow::Datum>(std::shared_ptr<mtable>)>);
 
   static void xgb(std::shared_ptr<mtable>, std::vector<Field>, Field&, const XGBParameters&);
 };

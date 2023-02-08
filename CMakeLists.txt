@@ -218,8 +218,12 @@ include_directories(${PYTHON_INCLUDE_DIRS})
 #used by thrift
 find_package(Boost REQUIRED)
 include(ext/Thrift_Ext.cmake)
-find_package(Arrow REQUIRED)
-find_package(Parquet REQUIRED)
+find_package(Thrift REQUIRED)
+#include(ext/Arrow_Ext.cmake)
+include(ext/Arrow.cmake)
+build_arrow()
+#find_package(Arrow 12.0 REQUIRED)
+#find_package(Parquet REQUIRED)
 
 find_package(Python3 COMPONENTS Interpreter Development)
 
@@ -253,12 +257,12 @@ target_link_libraries(MainTest
         PRIVATE ${META}
         PRIVATE ${TABLE}
         PRIVATE ${CONNECTOR}
-        PRIVATE Arrow::arrow_shared
+        PRIVATE ${ARROW_LIBRARY_TARGET}
         PRIVATE ${Python3_LIBRARIES})
 
 target_link_libraries(Test
         PRIVATE ${META}
         PRIVATE ${TABLE}
         PRIVATE ${CONNECTOR}
-        PRIVATE Arrow::arrow_shared
+        PRIVATE ${ARROW_LIBRARY_TARGET}
         PRIVATE ${Python3_LIBRARIES})

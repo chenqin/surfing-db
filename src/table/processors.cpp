@@ -170,6 +170,11 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f
   return table;
 }
 
+const arrow::Datum processors::compute(std::shared_ptr<mtable> m, std::function<arrow::Result<arrow::Datum>(std::shared_ptr<mtable>)> compute) {
+  arrow::Result<arrow::Datum> result = compute(m);
+  return result.ValueOrDie();
+}
+
 std::shared_ptr<mtable> processors::shuffleRMA(std::shared_ptr<mtable> in, Field& f) {
   // #pragma omp critical
   in->group(f, false);

@@ -19,8 +19,8 @@ target_link_libraries(${CONNECTOR}
         PUBLIC ${GFLAGS_LIBRARY}
         PUBLIC ${JSON_LIBRARY}
         PUBLIC ${THRIFT_LIBRARY}
-        PUBLIC Arrow::arrow_shared
-        PUBLIC Parquet::parquet_shared
+        PUBLIC ${ARROW_LIBRARY}
+        PUBLIC ${PARQUET_LIBRARY}
         PUBLIC rdkafka)
 
 # discover all gtests in this module

@@ -30,10 +30,10 @@ SET(ARROW_OPTS
         -DPARQUET_BUILD_EXAMPLES:BOOL=OFF
         -DARROW_ORC:BOOL=OFF
         -DARROW_NO_DEPRECATED_API:BOOL=ON
-        -DARROW_JEMALLOC:BOOL=OFF
+        -DARROW_JEMALLOC:BOOL=ON
         -DARROW_IPC=ON
         -DARROW_JSON=ON
-        -DARROW_COMPUTE=OFF
+        -DARROW_COMPUTE=ON
         -DARROW_HDFS=OFF
         -DARROW_WITH_BROTLI=OFF
         -DARROW_S3=OFF
@@ -50,7 +50,7 @@ SET(ARROW_OPTS
 ExternalProject_Add(arrow
         PREFIX arrow
         GIT_REPOSITORY https://github.com/apache/arrow.git
-        #GIT_TAG apache-arrow-0.14.0
+        GIT_TAG apache-arrow-11.0.0
         SOURCE_SUBDIR cpp
         CMAKE_ARGS ${ARROW_OPTS}
         UPDATE_COMMAND ""

@@ -14,11 +14,12 @@ add_library(${META} STATIC
 
 target_link_libraries(${META}
         PUBLIC glog::glog
+        PUBLIC ${THRIFT_LIBRARY}
         PUBLIC ${GFLAGS_LIBRARY}
         PUBLIC ${JSON_LIBRARY}
         PUBLIC ${FMT_LIBRARY}
         PUBLIC ${DUCKDB_LIBRARY}
-        PUBLIC Arrow::arrow_shared)
+        PUBLIC ${ARROW_LIBRARY_TARGET})
 
 # discover all gtests in this module
 include(GoogleTest)
