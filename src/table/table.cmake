@@ -28,8 +28,8 @@ target_link_libraries(${TABLE}
         PUBLIC glog::glog
         PUBLIC ${GFLAGS_LIBRARY}
         PUBLIC ${JSON_LIBRARY}
-        PUBLIC ${ARROW_LIBRARY_TARGET}
-        PUBLIC ${PARQUET_LIBRARY_TARGET}
+        PUBLIC ${ARROW_LIBRARY}
+        PUBLIC ${PARQUET_LIBRARY}
         PUBLIC ${XGBOOST_LIBRARY})
 
 # build test binary
@@ -42,8 +42,8 @@ target_link_libraries(TableTest
         PRIVATE ${JSON_LIBRARY}
         PRIVATE ${GTEST_LIBRARY}
         PRIVATE ${GTEST_MAIN_LIBRARY}
-        PRIVATE ${ARROW_LIBRARY_TARGET}
-        PRIVATE ${PARQUET_LIBRARY_TARGET}
+        PRIVATE ${ARROW_LIBRARY}
+        PRIVATE ${PARQUET_LIBRARY}
         PRIVATE ${XGBOOST_LIBRARY})
 
 # discover all gtests in this module

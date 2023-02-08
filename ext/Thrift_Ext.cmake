@@ -21,10 +21,15 @@ else()
             -DBUILD_TUTORIALS=OFF
             -DBUILD_AS3=OFF
             -DBUILD_C_GLIB=OFF
+            -DBUILD_KOTLIN=OFF
             -DBUILD_JAVA=OFF
+            -DBUILD_COMPILER=ON
             -DBUILD_PYTHON=OFF
             -DBUILD_HASKELL=OFF
+            -DBUILD_JAVASCRIPT=OFF
+            -DBUILD_NODEJS=OFF
             -DWITH_OPENSSL=OFF
+            -DBUILD_PYTHON=OFF
             -DCMAKE_BUILD_TYPE=Release)
 
     ExternalProject_Add(thrift
@@ -41,10 +46,11 @@ else()
     # get source dir after download step
     ExternalProject_Get_Property(thrift SOURCE_DIR)
     ExternalProject_Get_Property(thrift BINARY_DIR)
-    set(THRIFT_INCLUDE_DIR ${SOURCE_DIR}/lib/cpp/src ${BINARY_DIR})
+    set(THRIFT_ROOT ${SOURCE_DIR})
+    set(THRIFT_INCLUDE_DIR ${SOURCE_DIR}/lib/cpp/src)
     file(MAKE_DIRECTORY ${THRIFT_INCLUDE_DIR})
     set(THRIFT_LIBRARY_PATH ${BINARY_DIR}/lib/${CMAKE_FIND_LIBRARY_PREFIXES}thrift.a)
-
+    include_directories(include ${THRIFT_INCLUDE_DIR})
 endif()
 message(STATUS "THRIFT_INCLUDE_DIR=${THRIFT_INCLUDE_DIR}")
 

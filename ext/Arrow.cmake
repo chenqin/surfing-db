@@ -28,7 +28,7 @@ function(build_arrow)
     set(ARROW_CMAKE_ARGS "-DCMAKE_INSTALL_PREFIX=${ARROW_PREFIX}"
             "-DCMAKE_INSTALL_LIBDIR=lib" "-Dxsimd_SOURCE=BUNDLED"
             "-DARROW_BUILD_STATIC=OFF" "-DARROW_PARQUET=ON" "-DARROW_COMPUTE=ON"
-            "-DARROW_WITH_UTF8PROC=OFF" "-DARROW_WITH_RE2=OFF"
+            "-DARROW_WITH_UTF8PROC=OFF" "-DARROW_WITH_RE2=OFF" "-DThrift_SOURCE=BUNDLED"
             "-DARROW_FILESYSTEM=ON" "-DARROW_CSV=ON" "-DARROW_PYTHON=ON")
     set(ARROW_INCLUDE_DIR "${ARROW_PREFIX}/include")
 
@@ -58,4 +58,7 @@ function(build_arrow)
             IMPORTED_LOCATION ${PARQUET_SHARED_LIB})
 
     add_dependencies(${ARROW_LIBRARY_TARGET} arrow_ep)
+
+    message(STATUS "arrow_include=${ARROW_INCLUDE_DIR}")
+    include_directories(include ${ARROW_INCLUDE_DIR})
 endfunction()

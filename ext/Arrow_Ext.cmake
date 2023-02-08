@@ -30,20 +30,22 @@ SET(ARROW_OPTS
         -DPARQUET_BUILD_EXAMPLES:BOOL=OFF
         -DARROW_ORC:BOOL=OFF
         -DARROW_NO_DEPRECATED_API:BOOL=ON
-        -DARROW_JEMALLOC:BOOL=ON
+        -DARROW_JEMALLOC:BOOL=OFF
         -DARROW_IPC=ON
         -DARROW_JSON=ON
         -DARROW_COMPUTE=ON
         -DARROW_HDFS=OFF
         -DARROW_WITH_BROTLI=OFF
         -DARROW_S3=OFF
+        -DARROW_WITH_RE2=ON
+        -DARROW_WITH_UTF8PROC=ON
         -DARROW_WITH_LZ4=OFF
         -DARROW_WITH_ZSTD=OFF
         -DARROW_WITH_UTF8PROC=OFF
         -DPARQUET_BUILD_ENCRYPTION=OFF
         -DPARQUET_MINIMAL_DEPENDENCY=ON
-        -DPARQUET_ARROW_LINKAGE=STATIC
-        -DThrift_SOURCE=BUNDLED
+        -DPARQUET_ARROW_LINKAGE=DYNAMIC
+        -DARROW_DEPENDENCY_SOURCE=BUNDLED
         -DCMAKE_BUILD_TYPE=Release)
 
 # arrow versions after 0.13.0 does not work with boost 70
@@ -63,6 +65,8 @@ ExternalProject_Add(arrow
 ExternalProject_Get_Property(arrow SOURCE_DIR)
 ExternalProject_Get_Property(arrow BINARY_DIR)
 set(ARROW_INCLUDE_DIRS ${SOURCE_DIR}/cpp/src)
+include_directories(include ${ARROW_INCLUDE_DIRS})
+message(STATUS "arrow_include=${ARROW_INCLUDE_DIRS}")
 file(MAKE_DIRECTORY ${ARROW_INCLUDE_DIRS})
 set(ARROW_LIBRARY_PATH ${BINARY_DIR}/release/${CMAKE_FIND_LIBRARY_PREFIXES}arrow.a)
 set(ARROW_LIBRARY libarrow)

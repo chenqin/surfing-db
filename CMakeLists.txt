@@ -26,6 +26,7 @@ set(SURFINGDB_ROOT ${PROJECT_SOURCE_DIR})
 set(SURFINGDB_SRC ${SURFINGDB_ROOT}/src)
 
 SET(CMAKE_C_FLAGS ${CMAKE_C_FLAGS} -fopenmp)
+
 include_directories(include ${SURFINGDB_SRC} ${MPI_CXX_INCLUDE_PATH} ${MPI_INCLUDE_PATH})
 
 # a switch to use clang or g++
@@ -213,17 +214,19 @@ include(ext/Json_Ext.cmake)
 include(ext/OPENSSL_Ext.cmake)
 
 set(PYTHON_INCLUDE_DIRS ${PYTHON_INCLUDE_DIRS} /home/chen/.local/lib/python3.10/site-packages/numpy/core/include)
-include_directories(${PYTHON_INCLUDE_DIRS})
+include_directories(include ${PYTHON_INCLUDE_DIRS})
 
 #used by thrift
 find_package(Boost REQUIRED)
 include(ext/Thrift_Ext.cmake)
-find_package(Thrift REQUIRED)
+#find_package(Thrift REQUIRED)
 #include(ext/Arrow_Ext.cmake)
-include(ext/Arrow.cmake)
-build_arrow()
-#find_package(Arrow 12.0 REQUIRED)
-#find_package(Parquet REQUIRED)
+#include(ext/Arrow.cmake)
+#build_arrow()
+find_package(Arrow REQUIRED)
+set(ARROW_LIBRARY Arrow::arrow_shared)
+find_package(Parquet REQUIRED)
+set(PARQUET_LIBRARY Parquet::parquet_shared)
 
 find_package(Python3 COMPONENTS Interpreter Development)
 
@@ -257,12 +260,12 @@ target_link_libraries(MainTest
         PRIVATE ${META}
         PRIVATE ${TABLE}
         PRIVATE ${CONNECTOR}
-        PRIVATE ${ARROW_LIBRARY_TARGET}
+        PRIVATE ${ARROW_LIBRARY}
         PRIVATE ${Python3_LIBRARIES})
 
 target_link_libraries(Test
         PRIVATE ${META}
         PRIVATE ${TABLE}
         PRIVATE ${CONNECTOR}
-        PRIVATE ${ARROW_LIBRARY_TARGET}
+        PRIVATE ${ARROW_LIBRARY}
         PRIVATE ${Python3_LIBRARIES})
