@@ -26,7 +26,7 @@
 #include "table/processors.h"
 
 #define FLUSH_DIR "/tmp/"
-#define BATCH_SIZE 22560
+#define BATCH_SIZE 225
 
 using namespace surfingdb::table::schema;
 using surfingdb::meta::node;
@@ -75,54 +75,53 @@ int main(int argc, char** argv) {
   // define max number of rows to ingest onetime per worker (total = np * batch_num)
   auto ptr = std::make_shared<TableSchema>(r);
   long total = 0;
-  std::vector<std::shared_ptr<arrow::Table>> tables;
-
-  /**
-   * @brief import pyarrow
-   */
-  // arrow::py::import_pyarrow();
-
-  size_t total_row_count = 0;
-  const size_t intial_row_count = node->rank * BATCH_SIZE;
-  // allocate large memory with fixed layout per column, row and fields
-  auto t1 = std::make_shared<mtable>(node, ptr, intial_row_count * ptr->rowSize());
-
-  double start = MPI_Wtime();
-  // ingest, copy rows to local table memory with fixed offsets
-  for (int i = 0; i < intial_row_count; i++) {
-    total_row_count++;
-    auto row = std::make_unique<RowBuffer>(ptr);
-    Value p;
-
-    p.p_val.long_val = 1;
-    row->write(ptr->fields.at(0), p);
-
-    p.p_val.string_val = "hello_host";
-    row->write(ptr->fields.at(1), p);
-
-    p.p_val.string_val = random_string(16);
-    row->write(ptr->fields.at(2), p);
-
-    p.p_val.double_val = 0.1;
-    std::vector<PValue> lval;
-    lval.push_back(p.p_val);
-    lval.push_back(p.p_val);
-    p.list_value = lval;
-    row->write(ptr->fields.at(3), p);
-
-    PValue key, value;
-    key.string_val = random_string(16);
-    value.string_val = random_string(16);
-    std::pair<PValue, PValue> pair;
-    pair.first = key;
-    pair.second = value;
-    p.map_value.insert(pair);
-    row->write(ptr->fields.at(4), p);
-
-    t1->appendRow(*row.get());
-  }
-
   while (true) {
+
+    /**
+     * @brief import pyarrow
+     */
+    // arrow::py::import_pyarrow();
+
+    size_t total_row_count = 0;
+    const size_t intial_row_count = node->rank * BATCH_SIZE;
+    // allocate large memory with fixed layout per column, row and fields
+    auto t1 = std::make_shared<mtable>(node, ptr, intial_row_count * ptr->rowSize());
+
+    double start = MPI_Wtime();
+    // ingest, copy rows to local table memory with fixed offsets
+    for (int i = 0; i < intial_row_count; i++) {
+      total_row_count++;
+      auto row = std::make_unique<RowBuffer>(ptr);
+      Value p;
+
+      p.p_val.long_val = 1;
+      row->write(ptr->fields.at(0), p);
+
+      p.p_val.string_val = "hello_host";
+      row->write(ptr->fields.at(1), p);
+
+      p.p_val.string_val = random_string(16);
+      row->write(ptr->fields.at(2), p);
+
+      p.p_val.double_val = 0.1;
+      std::vector<PValue> lval;
+      lval.push_back(p.p_val);
+      lval.push_back(p.p_val);
+      p.list_value = lval;
+      row->write(ptr->fields.at(3), p);
+
+      PValue key, value;
+      key.string_val = random_string(16);
+      value.string_val = random_string(16);
+      std::pair<PValue, PValue> pair;
+      pair.first = key;
+      pair.second = value;
+      p.map_value.insert(pair);
+      row->write(ptr->fields.at(4), p);
+
+      t1->appendRow(*row.get());
+    }
+
     /**
      * pass each row in mtable, if return true, add to new table with schema ptr
      * release t1 mtable in the end
@@ -139,9 +138,8 @@ int main(int argc, char** argv) {
      * MPI based shuffle based on hash value of a field
      * release t2 mtable in the end
      */
-    auto start = MPI_Wtime();
+    start = MPI_Wtime();
     auto t3 = t2->placement_sort(ptr->fields.at(2));
-    t2->release();
     auto end = MPI_Wtime();
     std::cout << "sort :" << (end - start);
 
@@ -154,21 +152,13 @@ int main(int argc, char** argv) {
      * verify shuffle row placement to right worker (aka MPI rank)
      */
     t4->verifyShuffle(ptr->fields.at(2));
-    /**
-     * convert t3 mtable to columnar table
-     * release t3 mtable vector memory
-     */
-    processors::compute(t4, [](std::shared_ptr<mtable> m) {
-        m->toColumnar();
-        return arrow::compute::Sum({m->getArrowTable()->GetColumnByName("timestamp")});
-    });
     // Write it using Datasets
     // auto pytable = arrow::py::wrap_table(t3->getArrowTable());
     /**
      * store post paritioned columnar table
      */
     // tables.push_back(t3->getArrowTable());
-    size_t r_row_count = t4->getArrowTable()->num_rows();
+    size_t r_row_count = t4->row_count;
 
     size_t g_init_total_count = 0, g_post_total_count = 0;
     MPI_Allreduce(&total_row_count, &g_init_total_count, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
