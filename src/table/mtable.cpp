@@ -37,7 +37,7 @@ mtable::mtable(const std::shared_ptr<node> node_ptr, const std::shared_ptr<Table
   this->capacity = capacity;
   this->schema_ptr = schema_ptr;
   this->node_ptr = node_ptr;
-  payload = (uint8_t*)malloc(capacity);
+  payload = (uint8_t*)aligned_alloc(64, capacity);
   CHECK(payload != NULL);
   schedule_size = -1;
   key_dist = std::make_unique<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>>();

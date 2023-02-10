@@ -26,7 +26,7 @@
 #include "table/processors.h"
 
 #define FLUSH_DIR "/tmp/"
-#define BATCH_SIZE 2250
+#define BATCH_SIZE 22500
 
 using namespace surfingdb::table::schema;
 using surfingdb::meta::node;
