@@ -18,18 +18,6 @@
 namespace surfingdb {
 namespace table {
 
-inline void sign(uint8_t* _payload, size_t _schema_sig) {
-  CHECK_NOTNULL(_payload);
-  memcpy(_payload, &_schema_sig, sizeof(size_t));
-}
-
-inline size_t readSig(uint8_t* _payload) {
-  CHECK_NOTNULL(_payload);
-  size_t result = 0;
-  memcpy(&result, _payload, sizeof(size_t));
-  return result;
-}
-
 RowBuffer::RowBuffer(std::shared_ptr<meta::TableSchema> schemaptr) {
   _header.type = RowType::LONG;
   _header.max_unit_size = meta::SchemaUtils::getFieldSize(_header);
@@ -39,7 +27,6 @@ RowBuffer::RowBuffer(std::shared_ptr<meta::TableSchema> schemaptr) {
   CHECK_GT(schemaptr->rowSize(), 0);
   _vpayload.resize(schemaptr->rowSize());
   _payload = (uint8_t*)&_vpayload[0];
-  sign(_payload, _schema_sig);
 }
 
 RowBuffer::RowBuffer(std::shared_ptr<meta::TableSchema> schemaptr, uint8_t* payloadptr) {
@@ -50,7 +37,6 @@ RowBuffer::RowBuffer(std::shared_ptr<meta::TableSchema> schemaptr, uint8_t* payl
   _schema_sig = schemaptr->signature();
   CHECK_GT(schemaptr->rowSize(), 0);
   CHECK_NE(payloadptr, _payload);
-  CHECK_EQ(_schema_sig, readSig(payloadptr));
   _vpayload.clear();
   _vpayload.shrink_to_fit();
   _payload = payloadptr;

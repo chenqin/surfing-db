@@ -37,10 +37,18 @@ using std::string;
  */
 class RowBuffer {
 private:
+  /**
+   * @brief used by container datatype
+   *
+   */
   Field _header;
   std::shared_ptr<meta::TableSchema> schema_ptr;
   size_t _schema_sig;
-  uint8_t* _payload; // consider using vector std::vector<uint8_t>
+  /**
+   * @brief use duo pointer to avoid double free when random fetch a rowbuffer in mtable
+   * 
+   */
+  uint8_t* _payload;
   std::vector<char> _vpayload;
 
   void _pwrite(const Field& f, const void* data, const uint64_t& offset);
@@ -66,12 +74,12 @@ public:
   uint8_t* payload_ptr();
 
   /**
-  * copy readRow RowBuffer map given field
-  * @param f
-  * @param v
-  */
+   * copy readRow RowBuffer map given field
+   * @param f
+   * @param v
+   */
   size_t read(const Field& f, Value& v);
-  std::vector<size_t> readLen(const Field&f, size_t offset);
+  std::vector<size_t> readLen(const Field& f, size_t offset);
   /**
    * copy value into row buffer
    * @param f
@@ -91,4 +99,4 @@ public:
 };
 } // namespace table
 } // namespace surfingdb
-#endif //SURFINGDB_ROW_H
+#endif // SURFINGDB_ROW_H
