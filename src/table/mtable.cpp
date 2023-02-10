@@ -24,9 +24,8 @@ namespace surfingdb {
 namespace table {
 
 mtable::~mtable() {
-  CHECK(payload.size() >= 0);
-  payload.clear();
-  payload.shrink_to_fit();
+  free((void*)payload);
+  capacity = 0;
   key_dist->clear();
   key_groups->clear();
   placement_index->clear();
@@ -35,9 +34,11 @@ mtable::~mtable() {
 mtable::mtable(const std::shared_ptr<node> node_ptr, const std::shared_ptr<TableSchema> schema_ptr,
                size_t capacity) {
   CHECK_GE(capacity, 0);
+  this->capacity = capacity;
   this->schema_ptr = schema_ptr;
   this->node_ptr = node_ptr;
-  payload.resize(capacity);
+  payload = (uint8_t*)malloc(capacity);
+  CHECK(payload != NULL);
   schedule_size = -1;
   key_dist = std::make_unique<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>>();
   key_groups = std::make_unique<std::map<size_t, std::vector<size_t>, std::less<size_t>>>();
@@ -48,9 +49,6 @@ mtable::mtable(const std::shared_ptr<node> node_ptr, const std::shared_ptr<Table
 }
 
 void mtable::flush_rma_memory(size_t rows) {
-  payload.clear();
-  payload.shrink_to_fit();
-
   key_dist->clear();
   key_groups->clear();
   placement_index->clear();
@@ -88,8 +86,7 @@ void mtable::reserve_rma_memory(size_t rows) {
 void mtable::reserveRow(size_t rows) {
   CHECK_GT(schema_ptr->rowSize(), 0);
   CHECK_GE(rows, 0);
-  if (this->payload.capacity() > rows * schema_ptr->rowSize()) return;
-  payload.resize(rows * schema_ptr->rowSize());
+  payload = (uint8_t*)realloc((void*)payload, rows * schema_ptr->rowSize());
 }
 
 /**
@@ -118,13 +115,13 @@ uint8_t* mtable::payload_ptr() {
 }
 
 void mtable::appendRow(RowBuffer& row) {
-  CHECK_EQ(row.schema_sig(), schema_ptr->signature());   // check schema signature
-  CHECK_EQ(schema_ptr->rowSize(), row.row_size());       // check row size
-  CHECK_LE(row.row_size() + offset, payload.capacity()); // check capacity of temp table
+  CHECK_EQ(row.schema_sig(), schema_ptr->signature()); // check schema signature
+  CHECK_EQ(schema_ptr->rowSize(), row.row_size());     // check row size
+  CHECK_LE(row.row_size() + offset, capacity);         // check capacity of temp table
   memcpy(&payload[offset], row.payload_ptr(), row.row_size());
   offset += row.row_size();
   row_count++;
-  CHECK_LE(offset, payload.capacity());
+  CHECK_LE(offset, capacity);
 }
 
 void mtable::verifyShuffle(const Field& field) {
@@ -277,7 +274,7 @@ std::shared_ptr<mtable> mtable::placement_sort(const Field& f) {
       size_t rank = sender->placement(g.first);
       /**
        * @brief if placment of a key equals to a specific rank i
-       * 
+       *
        */
       if (rank == (size_t)i) {
         for (auto item : g.second) {
@@ -346,8 +343,7 @@ void mtable::load(const std::string& path) {
   CHECK_GE(row_count, 0);
 
   if (row_count == 0) {
-    payload.clear();
-    payload.shrink_to_fit();
+    payload = (uint8_t*)realloc((void*)payload, 0);
   } else {
     CHECK_EQ(offset / row_count, schema_ptr->rowSize());
     this->reserveRow(row_count);
@@ -689,8 +685,6 @@ std::shared_ptr<mtable> mtable::compactTable() {
 }
 
 void mtable::release() {
-  payload.clear();
-  payload.shrink_to_fit();
   key_dist->clear();
   key_groups->clear();
   placement_index->clear();

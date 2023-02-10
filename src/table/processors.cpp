@@ -157,7 +157,7 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f
        * matching sender side
        */
       int tag = recv_rank_offset * world + rank;
-      MPI_Irecv(&table->payload[transfered_row_index_rank[recv_rank_offset] * rowsize], recv_from_vec[recv_rank_offset], row_type, recv_rank_offset, tag, MPI_COMM_WORLD, &recvs[recv_count++]);
+      MPI_Irecv(table->payload_ptr() + transfered_row_index_rank[recv_rank_offset] * rowsize, recv_from_vec[recv_rank_offset], row_type, recv_rank_offset, tag, MPI_COMM_WORLD, &recvs[recv_count++]);
     }
   }
   MPI_Waitall(send_count, sends, statuses);

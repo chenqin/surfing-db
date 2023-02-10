@@ -46,6 +46,8 @@ using namespace surfingdb::meta;
  */
 class mtable {
 private:
+  uint8_t* payload;
+  size_t capacity = 0;
   ValueHasher value_hasher;
 
   size_t schedule_size = 0; // RMA memory size
@@ -59,7 +61,6 @@ private:
   std::shared_ptr<arrow::Table> table_ptr;
 
 public:
-  std::vector<uint8_t> payload;
   MPI_Win win;
   uint8_t* schedule;
   size_t row_count = 0; // number of rows in table
