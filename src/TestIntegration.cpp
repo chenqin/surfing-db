@@ -21,7 +21,7 @@
 #include <iostream>
 #include <omp.h>
 #include <rapidjson/document.h>
-#include "connector/kafka.h"
+#include "connector/datagen.h"
 #include "meta/node.h"
 #include "table/processors.h"
 
@@ -74,24 +74,19 @@ int main(int argc, char** argv) {
 
   // define max number of rows to ingest onetime per worker (total = np * batch_num)
   auto ptr = std::make_shared<TableSchema>(r);
-  long total = 0;
+  auto con = DataGenConnector(node);
   while (true) {
-
     /**
      * @brief import pyarrow
      */
     // arrow::py::import_pyarrow();
 
-    size_t total_row_count = 0;
     const size_t intial_row_count = node->rank * BATCH_SIZE;
-    // allocate large memory with fixed layout per column, row and fields
-    auto t1 = std::make_shared<mtable>(node, ptr, intial_row_count * ptr->rowSize());
-
+    size_t total_row_count = intial_row_count;
     double start = MPI_Wtime();
     // ingest, copy rows to local table memory with fixed offsets
-    for (int i = 0; i < intial_row_count; i++) {
-      total_row_count++;
-      auto row = std::make_unique<RowBuffer>(ptr);
+    const auto t1 = con.consume_batch(intial_row_count, 1000, ptr, [](const char* payload, std::shared_ptr<surfingdb::meta::TableSchema> ptr) {
+      auto row = std::make_shared<RowBuffer>(ptr);
       Value p;
 
       p.p_val.long_val = 1;
@@ -118,9 +113,8 @@ int main(int argc, char** argv) {
       pair.second = value;
       p.map_value.insert(pair);
       row->write(ptr->fields.at(4), p);
-
-      t1->appendRow(*row.get());
-    }
+      return row;
+    });
 
     /**
      * pass each row in mtable, if return true, add to new table with schema ptr
@@ -159,15 +153,6 @@ int main(int argc, char** argv) {
      */
     // tables.push_back(t3->getArrowTable());
     size_t r_row_count = t4->row_count;
-
-    size_t g_init_total_count = 0, g_post_total_count = 0;
-    MPI_Allreduce(&total_row_count, &g_init_total_count, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
-    MPI_Allreduce(&r_row_count, &g_post_total_count, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
-    if (node->rank == 0) {
-      CHECK_EQ(g_init_total_count, g_post_total_count);
-      cout << "total rows = " << g_init_total_count << endl;
-    }
-    t4->release();
   }
   return 0;
 }
