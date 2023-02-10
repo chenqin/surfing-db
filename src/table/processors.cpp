@@ -57,7 +57,6 @@ void processors::reduce(std::shared_ptr<mtable> in_ptr,
       reducer(key, val_list, row);
     }
   }
-  in_ptr->release();
 }
 
 void processors::xgb(std::shared_ptr<mtable> in, std::vector<Field> features, Field& label, const XGBParameters& parameters) {
@@ -165,7 +164,6 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f
   table->offset = recv_row_count * rowsize;
   table->row_count = recv_row_count;
 
-  in->release();
   MPI_Type_free(&row_type);
   return table;
 }
