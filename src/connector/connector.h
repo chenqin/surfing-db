@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-#ifndef SURFINGDB_KAFKA_H
-#define SURFINGDB_KAFKA_H
+#ifndef SURFINGDB_CONNECTOR_H
+#define SURFINGDB_CONNECTOR_H
 
 #include <rdkafka.h>
 #include <string>
 #include <vector>
-#include "connector/connector.h"
 #include "meta/node.h"
 #include "meta/schema.h"
 #include "table/mtable.h"
@@ -35,31 +34,43 @@ using namespace surfingdb::table;
  * thin kafka client wrapper
  * https://docs.confluent.io/5.5.1/clients/librdkafka/md_CONFIGURATION.html
  */
-class KafkaConnector : public Connector {
+class Connector {
 public:
-  KafkaConnector(const std::shared_ptr<node>, std::string, std::string, std::string);
+  Connector() {}
 
-  std::shared_ptr<mtable>
+  /**
+   * @brief method that poll records into a mtable
+   *
+   * @param max_batch_size max size of table returned
+   * @param timeout max time in milliseconds for each poll
+   * @param schema_ptr schema of table returned
+   * @param deser function that convert payload binary to a RowBuffer with schema_ptr
+   * @return std::shared_ptr<mtable> micro batch table
+   */
+  virtual std::shared_ptr<mtable>
     consume_batch(size_t max_batch_size, int timeout, std::shared_ptr<TableSchema> schema_ptr,
                   std::function<std::shared_ptr<RowBuffer>(const char* payload,
-                                                           std::shared_ptr<TableSchema> schema_ptr)>);
+                                                           std::shared_ptr<TableSchema> schema_ptr)>
+                    deser)
+    = 0;
 
-  ~KafkaConnector();
+  /**
+   * @brief
+   *
+   * @param timeout max time used push data out
+   * @param output micro batch table
+   * @param ser serialize each row in output and push out
+   * @return size_t total number of rows published
+   */
+  size_t produce_batch(int timeout, std::shared_ptr<mtable> output, std::function<bool(const std::shared_ptr<RowBuffer> row)> ser) {
+    return 0;
+  }
 
-private:
-  rd_kafka_t* rk; /* Consumer instance handle */
-  rd_kafka_topic_conf_t* topic_conf;
-  rd_kafka_conf_t* conf;                         /* Temporary configuration object */
-  rd_kafka_resp_err_t err;                       /* librdkafka API error code */
-  char errstr[512];                              /* librdkafka API error reporting buffer */
-  const char* brokers;                           /* Argument: broker list */
-  const char* groupid;                           /* Argument: Consumer group id */
-  char* topics;                                  /* Argument: list of topics to subscribe to */
-  int topic_cnt;                                 /* Number of topics to subscribe to */
-  rd_kafka_topic_partition_list_t* subscription; /* Subscribed topics */
-  int i;
+protected:
+  std::shared_ptr<node> node_ptr;
+  bool isProducer;
 };
 } // namespace connector
 
 } // namespace surfingdb
-#endif // SURFINGDB_KAFKA_H
+#endif // SURFINGDB_CONNECTOR_H

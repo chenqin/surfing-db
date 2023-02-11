@@ -20,6 +20,7 @@
 #include <rdkafka.h>
 #include <string>
 #include <vector>
+#include "connector/connector.h"
 #include "meta/node.h"
 #include "meta/schema.h"
 #include "table/mtable.h"
@@ -27,24 +28,21 @@
 
 namespace surfingdb {
 namespace connector {
+using namespace std;
 using namespace surfingdb::meta;
 using namespace surfingdb::table;
 
 /**
- * thin kafka client wrapper
- * https://docs.confluent.io/5.5.1/clients/librdkafka/md_CONFIGURATION.html
+ * @brief data generator
+ *
  */
-class DataGenConnector {
+class DataGenConnector : public Connector {
 public:
-  DataGenConnector(std::shared_ptr<node>);
+  DataGenConnector(const shared_ptr<node>);
 
-  std::shared_ptr<mtable>
-    consume_batch(size_t max_batch_size, int timeout, std::shared_ptr<TableSchema> schema_ptr,
-                  std::function<std::shared_ptr<RowBuffer>(const char* payload,
-                                                           std::shared_ptr<TableSchema> schema_ptr)> deser);
-
-private:
-  std::shared_ptr<node> node_ptr;
+  shared_ptr<mtable>
+    consume_batch(size_t max_batch_size, int timeout, shared_ptr<TableSchema> schema_ptr,
+                  function<shared_ptr<RowBuffer>(const char* payload, shared_ptr<TableSchema> schema_ptr)> deser);
 };
 } // namespace connector
 

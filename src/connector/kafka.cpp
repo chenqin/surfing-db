@@ -220,7 +220,7 @@ KafkaConnector::~KafkaConnector() {
   rd_kafka_destroy(rk);
 }
 
-std::shared_ptr<arrow::Table> KafkaConnector::consume_batch(size_t max_batch_size, int timeout,
+std::shared_ptr<mtable> KafkaConnector::consume_batch(size_t max_batch_size, int timeout,
                                                             std::shared_ptr<TableSchema> schema_ptr,
                                                             std::function<std::shared_ptr<RowBuffer>(
                                                               const char*,
@@ -259,8 +259,7 @@ std::shared_ptr<arrow::Table> KafkaConnector::consume_batch(size_t max_batch_siz
    * @brief transform table to arrow table and release memory
    *
    */
-  t->toColumnar();
-  return t->getArrowTable();
+  return t;
 }
 } // namespace connector
 } // namespace surfingdb

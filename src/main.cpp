@@ -67,13 +67,11 @@ int main(int argc, char** argv) {
   // threaded ingest - map - shuffle - reduce
 
   auto consumer = KafkaConnector(node, kafka_topic, brokers, group_id);
-  auto t1 = std::make_shared<mtable>(node, schema_ptr, rows * schema_ptr->rowSize());
-
   // simulate a delay to decode and handle kafka batch
   std::this_thread::sleep_for(std::chrono::microseconds(rand() % 10));
 
   // kafka consumer
-  auto arrow_table = consumer.consume_batch(rows, 100, schema_ptr, [=](const char* payload, std::shared_ptr<surfingdb::meta::TableSchema> schema_ptr) -> std::shared_ptr<RowBuffer> {
+  auto t1 = consumer.consume_batch(rows, 100, schema_ptr, [=](const char* payload, std::shared_ptr<surfingdb::meta::TableSchema> schema_ptr) -> std::shared_ptr<RowBuffer> {
     auto r = std::make_shared<RowBuffer>(schema_ptr);
     rapidjson::Document document;
     rapidjson::ParseResult ok = document.Parse((const char*)payload);

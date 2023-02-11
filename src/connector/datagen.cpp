@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "datagen.h"
 #include <chrono>
 #include <csignal>
 #include <ctype.h>
@@ -22,12 +23,11 @@
 #include <string.h>
 #include <sys/time.h>
 #include <vector>
-#include "datagen.h"
 
 namespace surfingdb {
 namespace connector {
 
-DataGenConnector::DataGenConnector(std::shared_ptr<node> node_ptr) {
+DataGenConnector::DataGenConnector(const std::shared_ptr<node> node_ptr) {
   this->node_ptr = node_ptr;
 }
 
