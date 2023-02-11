@@ -131,13 +131,24 @@ int main(int argc, char** argv) {
       }
       return true;
     });
-    /**
-     * MPI based shuffle based on hash value of a field
-     * release t2 mtable in the end
-     */
+   
+   /**
+    * @brief 
+    * show case consumer send data async to ranks not pulling data
+    * so that while other workers working on shuffle or post shuffle stages
+    * consumer ranks can jump to next iteration and get next batch ready
+    */
     auto partitioner = [](size_t key, int rank, int world){
        int base =world % 2 == 0 ? world - 1 : world;
-       return key % base;
+       int dest = key % base;
+       if (dest%2 == 0) {
+        if(dest + 1 > world - 1) {
+          dest = dest - 1;
+        } else {
+          dest = dest + 1;
+        }
+       }
+       return dest;
     };
 
     start = MPI_Wtime();
