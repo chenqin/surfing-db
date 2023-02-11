@@ -73,10 +73,31 @@ int main(int argc, char** argv) {
   SchemaUtils::appendPairs(r, "meta", RowType::STRING, RowType::STRING, 1);
 
   // define max number of rows to ingest onetime per worker (total = np * batch_num)
-  auto ptr = std::make_shared<TableSchema>(r);
+  const auto ptr = std::make_shared<TableSchema>(r);
+
   auto con = DataGenConnector(node);
-  bool produce = node->rank%2 == 0;
+
+  /**
+   * @brief
+   * show case consumer send data async to ranks not pulling data
+   * so that while other workers working on shuffle or post shuffle stages
+   * consumer ranks can async send data to other ranks
+   * jump to next iteration and get next batch ready
+   */
+  bool produce = node->rank % 2 == 0;
   node->setIsSubscriber(&produce);
+  auto partitioner = [](size_t key, int rank, int world) {
+    int base = world % 2 == 0 ? world - 1 : world;
+    int dest = key % base;
+    if (dest % 2 == 0) {
+      if (dest + 1 > world - 1) {
+        dest = dest - 1;
+      } else {
+        dest = dest + 1;
+      }
+    }
+    return dest;
+  };
   while (true) {
     /**
      * @brief import pyarrow
@@ -87,7 +108,7 @@ int main(int argc, char** argv) {
     size_t total_row_count = intial_row_count;
     double start = MPI_Wtime();
     // ingest, copy rows to local table memory with fixed offsets
-    const auto t1 = con.consume_batch(intial_row_count, 1000, ptr, [](const char* payload, const TableSchema& out){
+    const auto t1 = con.consume_batch(intial_row_count, 1000, ptr, [](const char* payload, const TableSchema& out) {
       auto row = std::make_shared<RowBuffer>(std::make_shared<TableSchema>(out));
       Value p;
 
@@ -131,30 +152,11 @@ int main(int argc, char** argv) {
       }
       return true;
     });
-   
-   /**
-    * @brief 
-    * show case consumer send data async to ranks not pulling data
-    * so that while other workers working on shuffle or post shuffle stages
-    * consumer ranks can jump to next iteration and get next batch ready
-    */
-    auto partitioner = [](size_t key, int rank, int world){
-       int base =world % 2 == 0 ? world - 1 : world;
-       int dest = key % base;
-       if (dest%2 == 0) {
-        if(dest + 1 > world - 1) {
-          dest = dest - 1;
-        } else {
-          dest = dest + 1;
-        }
-       }
-       return dest;
-    };
 
     start = MPI_Wtime();
     auto t4 = processors::shuffle(t2, ptr->fields.at(2), partitioner);
     auto end = MPI_Wtime();
-    std::cout << " shuffle time = " << (end - start) << " rank = " << node->rank << " ingestor = "<< node->getIsSubscriber() << std::endl;
+    std::cout << " shuffle time = " << (end - start) << " rank = " << node->rank << " ingestor = " << node->getIsSubscriber() << std::endl;
     start = MPI_Wtime();
     /**
      * verify shuffle row placement to right worker (aka MPI rank)
