@@ -120,14 +120,14 @@ void mtable::appendRow(RowBuffer& row) {
   CHECK_LE(offset, capacity);
 }
 
-void mtable::verifyShuffle(const Field& field) {
+void mtable::verifyShuffle(const Field& field, std::function<size_t(size_t, int, int)> partitioner) {
   LOG(INFO) << "verify " << row_count << " rows" << omp_get_thread_num() << " " << node_ptr->rank;
   for (size_t i = 0; i < row_count; i++) {
     auto r = this->readRow(i);
     Value v;
     r->read(field, v);
     size_t key = value_hasher.operator()(v);
-    CHECK_EQ(placement(key), node_ptr->rank);
+    CHECK_EQ(partitioner(key, node_ptr->rank, node_ptr->world), node_ptr->rank);
   }
 }
 

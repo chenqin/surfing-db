@@ -26,7 +26,7 @@
 #include "table/processors.h"
 
 #define FLUSH_DIR "/tmp/"
-#define BATCH_SIZE 22500
+#define BATCH_SIZE 2250000
 
 using namespace surfingdb::meta;
 using namespace surfingdb::table::schema;
@@ -59,9 +59,6 @@ int main(int argc, char** argv) {
   google::InstallFailureSignalHandler();
   google::InitGoogleLogging(argv[0]);
 
-  // define where worker runs (as MPI rank)
-  const auto node = std::make_shared<surfingdb::meta::node>(&argc, &argv);
-
   // define how data will be stored, as rows in a table
   RowSchema r;
   SchemaUtils::appendElements(r, "timestamp", RowType::LONG, 1);
@@ -72,10 +69,15 @@ int main(int argc, char** argv) {
   // user defined meta data pair
   SchemaUtils::appendPairs(r, "meta", RowType::STRING, RowType::STRING, 1);
 
-  // define max number of rows to ingest onetime per worker (total = np * batch_num)
+  /**
+   * @brief initial constructors
+   * node -> single executor binding to MPI rank, number of node determined by mpi processes
+   * TableSchema -> row based MPI friendly schema defined to encode/decode table/row in O(1) time
+   * con -> data connector ingess running on a number of nodes micro batching data pullers
+   */
+  const auto node = std::make_shared<surfingdb::meta::node>(&argc, &argv);
   const auto ptr = std::make_shared<TableSchema>(r);
-
-  auto con = DataGenConnector(node);
+  const auto con = std::make_unique<DataGenConnector>(node);
 
   /**
    * @brief
@@ -89,6 +91,10 @@ int main(int argc, char** argv) {
   auto partitioner = [](size_t key, int rank, int world) {
     int base = world % 2 == 0 ? world - 1 : world;
     int dest = key % base;
+    /**
+     * @brief dest is subscriber to data ingestion
+     * 
+     */
     if (dest % 2 == 0) {
       if (dest + 1 > world - 1) {
         dest = dest - 1;
@@ -96,6 +102,8 @@ int main(int argc, char** argv) {
         dest = dest + 1;
       }
     }
+    CHECK_GE(dest, 0);
+    CHECK_LT(dest, world);
     return dest;
   };
   while (true) {
@@ -108,7 +116,7 @@ int main(int argc, char** argv) {
     size_t total_row_count = intial_row_count;
     double start = MPI_Wtime();
     // ingest, copy rows to local table memory with fixed offsets
-    const auto t1 = con.consume_batch(intial_row_count, 1000, ptr, [](const char* payload, const TableSchema& out) {
+    const auto t1 = con->consume_batch(intial_row_count, 1000, ptr, [](const char* payload, const TableSchema& out) {
       auto row = std::make_shared<RowBuffer>(std::make_shared<TableSchema>(out));
       Value p;
 
@@ -161,7 +169,7 @@ int main(int argc, char** argv) {
     /**
      * verify shuffle row placement to right worker (aka MPI rank)
      */
-    t4->verifyShuffle(ptr->fields.at(2));
+    t4->verifyShuffle(ptr->fields.at(2), partitioner);
     // Write it using Datasets
     // auto pytable = arrow::py::wrap_table(t3->getArrowTable());
     /**

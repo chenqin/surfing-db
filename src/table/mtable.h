@@ -90,7 +90,7 @@ public:
   std::unique_ptr<RowBuffer> readRow(int index);
   void appendRow(RowBuffer& row);
   void appendRows(std::vector<std::shared_ptr<RowBuffer>>& rows);
-  void verifyShuffle(const Field& field);
+  void verifyShuffle(const Field& field, std::function<size_t(size_t, int, int)>);
   void reserveRow(size_t rows);
   void load(const string& path);
   void flush(const string&, uint8_t*, size_t, size_t);
