@@ -77,7 +77,7 @@ public:
   void group(const Field& f, bool);
   std::shared_ptr<TableSchema> getCompactSchema();
   std::shared_ptr<mtable> compactTable();
-  std::shared_ptr<mtable> placement_sort(const Field& f);
+  std::shared_ptr<mtable> placement_sort(const Field& f, std::function<size_t(size_t, int, int)>);
   uint8_t* range_ptr(int dest);
   void flush_rma_memory(size_t rows);
   void copy_rma_memory(size_t rows); // deprecated

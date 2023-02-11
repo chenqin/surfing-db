@@ -100,13 +100,9 @@ std::unique_ptr<RowBuffer> mtable::readRow(int index) {
   return std::make_unique<RowBuffer>(schema_ptr, &payload[schema_ptr->rowSize() * index]);
 }
 
-/**
- * find better hash function
- * @param key
- * @return
- */
 size_t mtable::placement(size_t key) {
   int base = node_ptr->world % 2 == 0 ? node_ptr->world - 1 : node_ptr->world;
+
   return key % base;
 }
 
@@ -246,7 +242,7 @@ size_t mtable::range_row_size(int dest) {
 /**
  * sort rows based on destination process and update _start_index map
  */
-std::shared_ptr<mtable> mtable::placement_sort(const Field& f) {
+std::shared_ptr<mtable> mtable::placement_sort(const Field& f, std::function<size_t(size_t key, int rank, int world)> partitioner) {
   // auto start = MPI_Wtime();
   placement_index->clear();
   key_groups->clear();
@@ -271,7 +267,7 @@ std::shared_ptr<mtable> mtable::placement_sort(const Field& f) {
   for (int i = 0; i < node_ptr->world; i++) {
     sender->placement_index->insert({ i, index });
     for (auto g : *key_groups) {
-      size_t rank = sender->placement(g.first);
+      size_t rank = partitioner(g.first, node_ptr->rank, node_ptr->world);
       /**
        * @brief if placment of a key equals to a specific rank i
        *

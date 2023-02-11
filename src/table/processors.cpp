@@ -88,16 +88,18 @@ void processors::xgb(std::shared_ptr<mtable> in, std::vector<Field> features, Fi
   }
 }
 
-std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> in, Field& f) {
-  auto schema_ptr = in->getSchema();
-  auto node_ptr = in->getNodePtr();
+std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> input, Field& f, std::function<size_t(size_t key, int rank, int world)> partitioner) {
+  auto schema_ptr = input->getSchema();
+  auto node_ptr = input->getNodePtr();
   int rank = node_ptr->rank;
   int world = node_ptr->world;
   size_t rowsize = schema_ptr->rowSize();
+
+  auto in = input->placement_sort(schema_ptr->fields.at(2), partitioner);
   /**
    * verify all workers in same stage
    */
-  node_ptr->forward();
+  //node_ptr->forward();
   /**
    * register and commit schema row size unit to all workers
    */
@@ -184,7 +186,11 @@ const arrow::Datum processors::compute(std::shared_ptr<mtable> m, std::function<
 std::shared_ptr<mtable> processors::shuffleRMA(std::shared_ptr<mtable> in, Field& f) {
   // #pragma omp critical
   in->group(f, false);
-  in->placement_sort(f);
+  auto partitioner = [](size_t key, int rank, int world){
+       int base =world % 2 == 0 ? world - 1 : world;
+       return key % base;
+    };
+  in->placement_sort(f, partitioner);
   CHECK(!in->placement_index->empty());
   CHECK_NOTNULL(in->getSchema());
 

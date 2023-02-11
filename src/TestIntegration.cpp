@@ -135,15 +135,15 @@ int main(int argc, char** argv) {
      * MPI based shuffle based on hash value of a field
      * release t2 mtable in the end
      */
-    start = MPI_Wtime();
-    auto t3 = t2->placement_sort(ptr->fields.at(2));
-    auto end = MPI_Wtime();
-    std::cout << "sort :" << (end - start);
+    auto partitioner = [](size_t key, int rank, int world){
+       int base =world % 2 == 0 ? world - 1 : world;
+       return key % base;
+    };
 
     start = MPI_Wtime();
-    auto t4 = processors::shuffle(t3, ptr->fields.at(2));
-    end = MPI_Wtime();
-    std::cout << " shuffle :" << (end - start) << " rank = " << node->rank << std::endl;
+    auto t4 = processors::shuffle(t2, ptr->fields.at(2), partitioner);
+    auto end = MPI_Wtime();
+    std::cout << " shuffle time = " << (end - start) << " rank = " << node->rank << " ingestor = "<< node->getIsSubscriber() << std::endl;
     start = MPI_Wtime();
     /**
      * verify shuffle row placement to right worker (aka MPI rank)

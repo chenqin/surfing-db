@@ -51,7 +51,12 @@ public:
 
   static std::shared_ptr<mtable> shuffleRMA(std::shared_ptr<mtable>, Field&);
 
-  static std::shared_ptr<mtable> shuffle(std::shared_ptr<mtable>, Field&);
+  /**
+   * @brief shuffle data based on shuffle function provided
+   *
+   * @return std::shared_ptr<mtable>
+   */
+  static std::shared_ptr<mtable> shuffle(std::shared_ptr<mtable>, Field&, std::function<size_t(size_t, int, int)>);
 
   const static arrow::Datum compute(std::shared_ptr<mtable>, std::function<arrow::Result<arrow::Datum>(std::shared_ptr<mtable>)>);
 
