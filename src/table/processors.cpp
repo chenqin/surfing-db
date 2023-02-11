@@ -20,12 +20,20 @@
 namespace surfingdb {
 namespace table {
 
-std::shared_ptr<mtable> processors::map(std::shared_ptr<mtable> in, std::shared_ptr<TableSchema> out_schema_ptr, std::function<bool(const RowBuffer&, RowBuffer&)> transform) {
+/**
+ * @brief scan through each row, apply transform function, append to output table if return true
+ * 
+ * @param in  input micro batch table
+ * @param out_schema_ptr  output micro batch table schema
+ * @param transform transform function with simple type
+ * @return std::shared_ptr<mtable>  outputtable
+ */
+std::shared_ptr<mtable> processors::map(std::shared_ptr<mtable> in, std::shared_ptr<TableSchema> out_schema_ptr, std::function<bool(RowBuffer&, RowBuffer&, const TableSchema&)> transform) {
   auto out = std::make_shared<mtable>(in->getNodePtr(), out_schema_ptr, in->row_count * out_schema_ptr->rowSize());
   for (size_t i = 0; i < in->row_count; i++) {
     auto in_row = in->readRow(i);
     RowBuffer out_row(out->getSchema());
-    bool append = transform(*in_row.get(), out_row);
+    bool append = transform(*in_row.get(), out_row, *out_schema_ptr.get());
     CHECK_EQ(out_row.schema_sig(), out->getSchema()->signature());
 
     if (append) { out->appendRow(out_row); }

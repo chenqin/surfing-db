@@ -25,6 +25,10 @@ namespace meta {
 
 class node {
 private:
+  /**
+   * @brief if connector running on this node produce data
+   *
+   */
   bool* issubscriber;
 
 public:

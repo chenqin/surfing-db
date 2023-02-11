@@ -120,8 +120,8 @@ int main(int argc, char** argv) {
      * pass each row in mtable, if return true, add to new table with schema ptr
      * release t1 mtable in the end
      */
-    auto t2 = processors::map(t1, ptr, [&](RowBuffer in, RowBuffer out) -> bool {
-      for (auto f : ptr->fields) {
+    auto t2 = processors::map(t1, ptr, [](RowBuffer& in, RowBuffer& out, const TableSchema& out_schema) {
+      for (auto f : out_schema.fields) {
         Value v;
         in.read(f, v);
         out.write(f, v);
