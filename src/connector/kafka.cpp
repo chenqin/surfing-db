@@ -74,7 +74,7 @@ void rebalance_cb(rd_kafka_t* rk,
   case RD_KAFKA_RESP_ERR__REVOKE_PARTITIONS:
     fprintf(stderr, "revoked (%s):\n",
             rd_kafka_rebalance_protocol(rk));
-    //print_partition_list(stderr, partitions);
+    // print_partition_list(stderr, partitions);
     isSubscriber = false;
 
     if (!strcmp(rd_kafka_rebalance_protocol(rk), "COOPERATIVE")) {
@@ -225,12 +225,7 @@ KafkaConnector::~KafkaConnector() {
   rd_kafka_destroy(rk);
 }
 
-std::shared_ptr<mtable> KafkaConnector::consume_batch(size_t max_batch_size, int timeout,
-                                                            std::shared_ptr<TableSchema> schema_ptr,
-                                                            std::function<std::shared_ptr<RowBuffer>(
-                                                              const char*,
-                                                              std::shared_ptr<TableSchema>)>
-                                                              convert) {
+std::shared_ptr<mtable> KafkaConnector::consume_batch(size_t max_batch_size, int timeout, std::shared_ptr<TableSchema> schema_ptr, std::function<std::shared_ptr<RowBuffer>(const char*, const TableSchema&)> convert) {
   auto t = std::make_shared<mtable>(node_ptr, schema_ptr, max_batch_size * schema_ptr->rowSize());
   auto start = MPI_Wtime();
   int total = 0;
@@ -254,7 +249,7 @@ std::shared_ptr<mtable> KafkaConnector::consume_batch(size_t max_batch_size, int
       rd_kafka_message_destroy(rkm);
       continue;
     }
-    auto b = convert((const char*)rkm->payload, schema_ptr);
+    auto b = convert((const char*)rkm->payload, *schema_ptr.get());
     if (b != nullptr) {
       t->appendRow(*b.get());
     }

@@ -28,8 +28,8 @@
 #define FLUSH_DIR "/tmp/"
 #define BATCH_SIZE 22500
 
+using namespace surfingdb::meta;
 using namespace surfingdb::table::schema;
-using surfingdb::meta::node;
 using namespace surfingdb::table;
 using namespace surfingdb::connector;
 using namespace std;
@@ -75,6 +75,8 @@ int main(int argc, char** argv) {
   // define max number of rows to ingest onetime per worker (total = np * batch_num)
   auto ptr = std::make_shared<TableSchema>(r);
   auto con = DataGenConnector(node);
+  bool produce = node->rank%2 == 0;
+  node->setIsSubscriber(&produce);
   while (true) {
     /**
      * @brief import pyarrow
@@ -85,34 +87,35 @@ int main(int argc, char** argv) {
     size_t total_row_count = intial_row_count;
     double start = MPI_Wtime();
     // ingest, copy rows to local table memory with fixed offsets
-    const auto t1 = con.consume_batch(intial_row_count, 1000, ptr, [](const char* payload, std::shared_ptr<surfingdb::meta::TableSchema> ptr) {
-      auto row = std::make_shared<RowBuffer>(ptr);
+    const auto t1 = con.consume_batch(intial_row_count, 1000, ptr, [](const char* payload, const TableSchema& out){
+      auto row = std::make_shared<RowBuffer>(std::make_shared<TableSchema>(out));
       Value p;
 
       p.p_val.long_val = 1;
-      row->write(ptr->fields.at(0), p);
+      row->write(out.fields.at(0), p);
 
       p.p_val.string_val = "hello_host";
-      row->write(ptr->fields.at(1), p);
+      row->write(out.fields.at(1), p);
 
       p.p_val.string_val = random_string(16);
-      row->write(ptr->fields.at(2), p);
+      row->write(out.fields.at(2), p);
 
       p.p_val.double_val = 0.1;
       std::vector<PValue> lval;
       lval.push_back(p.p_val);
       lval.push_back(p.p_val);
       p.list_value = lval;
-      row->write(ptr->fields.at(3), p);
+      row->write(out.fields.at(3), p);
 
-      PValue key, value;
+      PValue key;
+      PValue value;
       key.string_val = random_string(16);
       value.string_val = random_string(16);
       std::pair<PValue, PValue> pair;
       pair.first = key;
       pair.second = value;
       p.map_value.insert(pair);
-      row->write(ptr->fields.at(4), p);
+      row->write(out.fields.at(4), p);
       return row;
     });
 
@@ -121,7 +124,7 @@ int main(int argc, char** argv) {
      * release t1 mtable in the end
      */
     auto t2 = processors::map(t1, ptr, [](RowBuffer& in, RowBuffer& out, const TableSchema& out_schema) {
-      for (auto f : out_schema.fields) {
+      for (const auto& f : out_schema.fields) {
         Value v;
         in.read(f, v);
         out.write(f, v);

@@ -48,10 +48,7 @@ public:
    * @return std::shared_ptr<mtable> micro batch table
    */
   virtual std::shared_ptr<mtable>
-    consume_batch(size_t max_batch_size, int timeout, std::shared_ptr<TableSchema> schema_ptr,
-                  std::function<std::shared_ptr<RowBuffer>(const char* payload,
-                                                           std::shared_ptr<TableSchema> schema_ptr)>
-                    deser)
+    consume_batch(size_t max_batch_size, int timeout, std::shared_ptr<TableSchema> schema_ptr, std::function<std::shared_ptr<RowBuffer>(const char* payload,const TableSchema& schema)> deser)
     = 0;
 
   /**
@@ -68,7 +65,6 @@ public:
 
 protected:
   std::shared_ptr<node> node_ptr;
-  bool isProducer;
 };
 } // namespace connector
 

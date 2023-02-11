@@ -71,12 +71,12 @@ int main(int argc, char** argv) {
   std::this_thread::sleep_for(std::chrono::microseconds(rand() % 10));
 
   // kafka consumer
-  auto t1 = consumer.consume_batch(rows, 100, schema_ptr, [=](const char* payload, std::shared_ptr<surfingdb::meta::TableSchema> schema_ptr) -> std::shared_ptr<RowBuffer> {
-    auto r = std::make_shared<RowBuffer>(schema_ptr);
+  auto t1 = consumer.consume_batch(rows, 100, schema_ptr, [](const char* payload, const TableSchema& out) -> std::shared_ptr<RowBuffer> {
+    auto r = std::make_shared<RowBuffer>(std::make_shared<TableSchema>(out));
     rapidjson::Document document;
-    rapidjson::ParseResult ok = document.Parse((const char*)payload);
+    rapidjson::ParseResult ok = document.Parse(payload);
     if (ok) {
-      for (auto f : schema_ptr->fields) {
+      for (const auto& f : out.fields) {
         Value v;
         if (f.type == RowType::LONG) {
           v.p_val.long_val = document[f.name.c_str()].GetInt64();

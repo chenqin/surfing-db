@@ -25,8 +25,9 @@ void node::setIsSubscriber(bool* is) {
   this->issubscriber = is;
 }
 
-bool node::getIsSubscriber() {
-  return *issubscriber;
+int node::getIsSubscriber() {
+  if (issubscriber == nullptr) return 0;
+  return *issubscriber ? 1 : -1;
 }
 
 node::node(int* argc, char*** argv) {

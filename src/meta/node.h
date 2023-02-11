@@ -35,7 +35,12 @@ public:
   node(int* argc, char*** argv);
   node(int, int, std::string);
   void setIsSubscriber(bool*);
-  bool getIsSubscriber();
+  /**
+   * @brief if node running data input
+   *
+   * @return int 1 polling data in, -1 not polling data, 0 default
+   */
+  int getIsSubscriber();
   ~node();
   long forward(); // move to next stage of compute
   int world;
