@@ -36,6 +36,8 @@ void stop(int sig) {
   run = 0;
 }
 
+bool isSubscriber;
+
 int exit_eof = 0;
 int wait_eof = 0; /* number of partitions awaiting EOF */
 
@@ -60,6 +62,7 @@ void rebalance_cb(rd_kafka_t* rk,
     fprintf(stderr, "assigned (%s):\n",
             rd_kafka_rebalance_protocol(rk));
     print_partition_list(partitions);
+    isSubscriber = true;
 
     if (!strcmp(rd_kafka_rebalance_protocol(rk), "COOPERATIVE"))
       error = rd_kafka_incremental_assign(rk, partitions);
@@ -71,7 +74,8 @@ void rebalance_cb(rd_kafka_t* rk,
   case RD_KAFKA_RESP_ERR__REVOKE_PARTITIONS:
     fprintf(stderr, "revoked (%s):\n",
             rd_kafka_rebalance_protocol(rk));
-    // print_partition_list(stderr, partitions);
+    //print_partition_list(stderr, partitions);
+    isSubscriber = false;
 
     if (!strcmp(rd_kafka_rebalance_protocol(rk), "COOPERATIVE")) {
       error = rd_kafka_incremental_unassign(rk, partitions);
@@ -101,6 +105,7 @@ void rebalance_cb(rd_kafka_t* rk,
 
 KafkaConnector::KafkaConnector(std::shared_ptr<node> node_ptr, std::string topic, std::string brokers, std::string groupid) {
   this->node_ptr = node_ptr;
+  node_ptr->setIsSubscriber(&isSubscriber);
   this->brokers = (char*)brokers.c_str();
   this->groupid = (char*)groupid.c_str();
   topics = (char*)topic.c_str();

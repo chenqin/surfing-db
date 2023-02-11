@@ -20,7 +20,16 @@
 namespace surfingdb {
 namespace meta {
 
-node::node(int* argc, char ***argv) {
+void node::setIsSubscriber(bool* is) {
+  CHECK_NOTNULL(is);
+  this->issubscriber = is;
+}
+
+bool node::getIsSubscriber() {
+  return *issubscriber;
+}
+
+node::node(int* argc, char*** argv) {
   // Initialize the MPI environment
   int supported;
   // Get the name of the processor
@@ -40,7 +49,7 @@ node::node(int* argc, char ***argv) {
 node::~node() {
   // Finalize the MPI environment.
   MPI_Finalize();
-  //LOG(INFO) << "cluster finalized";
+  // LOG(INFO) << "cluster finalized";
 }
 
 /**
@@ -65,5 +74,5 @@ node::node(int rank, int world, std::string processor) {
   this->processor = processor;
   stage = 0;
 }
-} // namespace node
+} // namespace meta
 } // namespace surfingdb

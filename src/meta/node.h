@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 #include <iostream>
-#include <vector>
 #include <memory>
 #include <mpi.h>
+#include <vector>
 
 #ifndef SURFINGDB_NODE_H
 #define SURFINGDB_NODE_H
@@ -24,11 +24,15 @@ namespace surfingdb {
 namespace meta {
 
 class node {
-public:
-  node(int* argc, char ***argv);
-  node(int, int, std::string);
-  ~node();
+private:
+  bool* issubscriber;
 
+public:
+  node(int* argc, char*** argv);
+  node(int, int, std::string);
+  void setIsSubscriber(bool*);
+  bool getIsSubscriber();
+  ~node();
   long forward(); // move to next stage of compute
   int world;
   int rank;
@@ -37,4 +41,4 @@ public:
 };
 } // namespace meta
 } // namespace surfingdb
-#endif //SURFINGDB_NODE_H
+#endif // SURFINGDB_NODE_H
