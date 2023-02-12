@@ -14,7 +14,7 @@ if(APPLE)
 endif()
 
 add_library(${TABLE} STATIC
-        ${SURFINGDB_SRC}/table/row.cpp
+        ${SURFINGDB_SRC}/table/mrow.cpp
         ${SURFINGDB_SRC}/table/mtable.cpp
         ${SURFINGDB_SRC}/table/processors.cpp)
 

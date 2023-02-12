@@ -17,7 +17,7 @@
 #ifndef SURFINGDB_KMEANOPERATOR_H
 #define SURFINGDB_KMEANOPERATOR_H
 
-#include "row.h"
+#include "mrow.h"
 
 namespace surfingdb {
 namespace table {

@@ -29,7 +29,7 @@
 #include <string.h>
 
 #include "KMeanOperator.h"
-#include "row.h"
+#include "mrow.h"
 #include "xgbop.h"
 
 #pragma once

@@ -18,7 +18,7 @@
 #include <omp.h>
 #include <xgboost/c_api.h>
 #include "meta/node.h"
-#include "row.h"
+#include "mrow.h"
 #ifndef SURFINGDB_XGBOPERATOR_H
 #define SURFINGDB_XGBOPERATOR_H
 

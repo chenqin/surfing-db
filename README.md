@@ -5,7 +5,7 @@ A efficient and powerful in memory kafka messages processor using MPI and Apache
 # features
 
 - in-memory data processor, O(1) access low level memory layout optimization. row oriented maper and shuffe, columnar oriented slice and dice
-- kafka consumer sharding with MPI based distributed programming and zero copy arrow rpc
+- kafka consumer sharding with MPI based distributed programming and zero copy arrow rpce
 - user defined partioner decouple ingest workers from rest of workloads (aka map reduce, slice/dice rpc stages)
 # how to run
 - run install.sh for dependencies

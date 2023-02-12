@@ -23,7 +23,7 @@
 #include "meta/node.h"
 #include "meta/schema.h"
 #include "table/mtable.h"
-#include "table/row.h"
+#include "table/mrow.h"
 
 namespace surfingdb {
 namespace connector {
