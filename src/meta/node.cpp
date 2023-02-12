@@ -48,7 +48,7 @@ node::node(int* argc, char*** argv) {
 }
 
 /**
- * all processes move to next stage
+ * all processes move to next synchorinization stage
  * @return
  */
 long node::forward() {

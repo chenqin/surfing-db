@@ -120,7 +120,7 @@ int main(int argc, char** argv) {
     /**
      * @brief import pyarrow
      */
-    // arrow::py::import_pyarrow();
+    //arrow::py::import_pyarrow();
 
     const size_t intial_row_count = node->rank * BATCH_SIZE;
     size_t total_row_count = intial_row_count;
@@ -180,8 +180,15 @@ int main(int argc, char** argv) {
      * verify shuffle row placement to right worker (aka MPI rank)
      */
     t4->verifyShuffle(ptr->fields.at(2), partitioner);
-    // Write it using Datasets
-    // auto pytable = arrow::py::wrap_table(t3->getArrowTable());
+    
+    /**
+     * @brief shuffle again with another field with same partitioner
+     * 
+     */
+    auto t5 = processors::shuffle(t4, ptr->fields.at(4), partitioner);
+    t5->verifyShuffle(ptr->fields.at(4), partitioner);
+    
+    //auto pytable = arrow::py::wrap_table(t4->getArrowTable());
     /**
      * store post paritioned columnar table
      */

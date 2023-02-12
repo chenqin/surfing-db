@@ -95,11 +95,11 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> input, Field
   int world = node_ptr->world;
   size_t rowsize = schema_ptr->rowSize();
 
-  auto in = input->placement_sort(schema_ptr->fields.at(2), partitioner);
+  auto in = input->placement_sort(f, partitioner);
   /**
    * verify all workers in same stage
    */
-  //node_ptr->forward();
+  node_ptr->forward();
   /**
    * register and commit schema row size unit to all workers
    */

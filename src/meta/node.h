@@ -43,9 +43,18 @@ public:
    * @return int 1 polling data in, -1 not polling data, 0 default
    */
   int getissubscriber();
+  /**
+   * @brief check if all nodes running at same synchoronization stage
+   * 
+   * @return long 
+   */
   long forward(); // move to next stage of compute
   int world;
   int rank;
+  /**
+   * @brief stage that needs golbal synchorization (e.g shuffle)
+   * 
+   */
   long stage;
   std::string processor;
 };
