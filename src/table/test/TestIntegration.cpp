@@ -71,8 +71,8 @@ TEST(TableTest, testCompact) {
   v7.map_value.insert(pair);
 
   // build continuous buffer with fixed fields offsets
-  std::shared_ptr<TableSchema> tpr = std::make_shared<TableSchema>(r);
-  surfingdb::table::RowBuffer b(tpr);
+  std::shared_ptr<mschema> tpr = std::make_shared<mschema>(r);
+  surfingdb::table::mrow b(tpr);
   b.write(field1, v1);
   b.write(field2, v2);
   b.write(field3, v3);
@@ -91,7 +91,7 @@ TEST(TableTest, testCompact) {
   CHECK_EQ(q->num_columns(), r.fields.size());
 }
 
-TEST(TableTest, testRowBuffer) {
+TEST(TableTest, testmrow) {
   RowSchema r;
   r.fields = std::vector<surfingdb::table::schema::Field>();
 
@@ -138,8 +138,8 @@ TEST(TableTest, testRowBuffer) {
   v7.map_value.insert(pair);
 
   // build continuous buffer with fixed fields offsets
-  std::shared_ptr<TableSchema> tpr = std::make_shared<TableSchema>(r);
-  surfingdb::table::RowBuffer b(tpr);
+  std::shared_ptr<mschema> tpr = std::make_shared<mschema>(r);
+  surfingdb::table::mrow b(tpr);
   b.write(field1, v1);
   b.write(field2, v2);
   b.write(field3, v3);
@@ -161,7 +161,7 @@ TEST(TableTest, testRowBuffer) {
 
   // verify read by reference
   Value v11, v22, v33, v44, v55, v66, v77;
-  auto s = RowBuffer(tpr, b.payload_ptr());
+  auto s = mrow(tpr, b.payload_ptr());
   s.read(field1, v11);
   s.read(field2, v22);
   s.read(field3, v33);
@@ -178,7 +178,7 @@ TEST(TableTest, testRowBuffer) {
   memset(buf, 0, tpr->rowSize());
   memcpy(buf, b.payload_ptr(), tpr->rowSize());
 
-  s = RowBuffer(tpr, &buf[0]);
+  s = mrow(tpr, &buf[0]);
   s.read(field1, v11);
   s.read(field2, v22);
   s.read(field3, v33);
@@ -193,7 +193,7 @@ TEST(TableTest, testRowBuffer) {
   // test point to temp table
   mtable t(nullptr, tpr, MEM_PAGE_SIZE);
   t.appendRow(s);
-  s = RowBuffer(tpr, t.payload_ptr());
+  s = mrow(tpr, t.payload_ptr());
   s.read(field1, v11);
   EXPECT_EQ(v11.p_val.int_val, 3);
 

@@ -31,7 +31,7 @@ mtable::~mtable() {
   placement_index->clear();
 }
 
-mtable::mtable(const std::shared_ptr<node> node_ptr, const std::shared_ptr<TableSchema> schema_ptr,
+mtable::mtable(const std::shared_ptr<node> node_ptr, const std::shared_ptr<mschema> schema_ptr,
                size_t capacity) {
   CHECK_GE(capacity, 0);
   this->capacity = capacity;
@@ -94,10 +94,10 @@ void mtable::reserveRow(size_t rows) {
  * @param index
  * @return
  */
-std::unique_ptr<RowBuffer> mtable::readRow(int index) {
+std::unique_ptr<mrow> mtable::readRow(int index) {
   CHECK_LT(index, row_count);
   CHECK_NOTNULL(schema_ptr);
-  return std::make_unique<RowBuffer>(schema_ptr, &payload[schema_ptr->rowSize() * index]);
+  return std::make_unique<mrow>(schema_ptr, &payload[schema_ptr->rowSize() * index]);
 }
 
 size_t mtable::placement(size_t key) {
@@ -110,7 +110,7 @@ uint8_t* mtable::payload_ptr() {
   return &this->payload[0];
 }
 
-void mtable::appendRow(RowBuffer& row) {
+void mtable::appendRow(mrow& row) {
   CHECK_EQ(row.schema_sig(), schema_ptr->signature()); // check schema signature
   CHECK_EQ(schema_ptr->rowSize(), row.row_size());     // check row size
   CHECK_LE(row.row_size() + offset, capacity);         // check capacity of temp table
@@ -368,7 +368,7 @@ size_t mtable::row_size() {
   return this->row_count;
 }
 
-std::shared_ptr<TableSchema> mtable::getSchema() {
+std::shared_ptr<mschema> mtable::getSchema() {
   return this->schema_ptr;
 }
 
@@ -529,7 +529,7 @@ arrow::Status mtable::toColumnar() {
   }
 
   /**
-   * read each row and field value, append to corresponding builder, release mtable vector<RowBuffer>
+   * read each row and field value, append to corresponding builder, release mtable vector<mrow>
    */
   for (auto j = 0; j < row_count; j++) {
     auto r = readRow(j);
@@ -556,9 +556,9 @@ arrow::Status mtable::toColumnar() {
   return arrow::Status::OK();
 }
 
-std::shared_ptr<TableSchema> mtable::getCompactSchema() {
+std::shared_ptr<mschema> mtable::getCompactSchema() {
   std::vector<size_t> max_units;
-  auto compact_schema_ptr = std::make_shared<TableSchema>(*schema_ptr.get());
+  auto compact_schema_ptr = std::make_shared<mschema>(*schema_ptr.get());
   /**
    * find list and map type max_unit per mtable rows
    */
@@ -662,7 +662,7 @@ std::shared_ptr<mtable> mtable::compactTable() {
                                                     compact_schema_ptr->rowSize() * row_count);
   for (size_t index = 0; index < row_size(); index++) {
     auto r = readRow(index);
-    auto rcompact = RowBuffer(compact_schema_ptr);
+    auto rcompact = mrow(compact_schema_ptr);
     for (auto f : schema_ptr->fields) {
       if (f.type != RowType::LIST && f.type != RowType::MAP && f.type != RowType::STRING) continue;
       Value v;
@@ -686,8 +686,8 @@ void mtable::release() {
   placement_index->clear();
 }
 
-void mtable::appendRows(std::vector<std::shared_ptr<RowBuffer>>& rows) {
-  for (std::shared_ptr<RowBuffer> m : rows) {
+void mtable::appendRows(std::vector<std::shared_ptr<mrow>>& rows) {
+  for (std::shared_ptr<mrow> m : rows) {
     appendRow(*m.get());
   }
 }

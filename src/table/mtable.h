@@ -54,7 +54,7 @@ private:
 
   // defines the node row table bind to
   std::shared_ptr<node> node_ptr;
-  std::shared_ptr<TableSchema> schema_ptr;
+  std::shared_ptr<mschema> schema_ptr;
   /**
    * define columnar table ptr
    */
@@ -71,11 +71,11 @@ public:
   std::unique_ptr<std::map<int, size_t>> placement_index;                                             // placement , start index of rows
   std::unordered_map<Field, size_t, FieldHasher> max_unit_size;
 
-  mtable(const std::shared_ptr<node>, const std::shared_ptr<TableSchema>, size_t capacity);
+  mtable(const std::shared_ptr<node>, const std::shared_ptr<mschema>, size_t capacity);
   ~mtable();
   void release();
   void group(const Field& f, bool);
-  std::shared_ptr<TableSchema> getCompactSchema();
+  std::shared_ptr<mschema> getCompactSchema();
   std::shared_ptr<mtable> compactTable();
   std::shared_ptr<mtable> placement_sort(const Field& f, std::function<size_t(size_t, int, int)>);
   uint8_t* range_ptr(int dest);
@@ -86,10 +86,10 @@ public:
   uint8_t* payload_ptr();
   size_t placement(size_t key);
   size_t row_size();
-  std::shared_ptr<TableSchema> getSchema();
-  std::unique_ptr<RowBuffer> readRow(int index);
-  void appendRow(RowBuffer& row);
-  void appendRows(std::vector<std::shared_ptr<RowBuffer>>& rows);
+  std::shared_ptr<mschema> getSchema();
+  std::unique_ptr<mrow> readRow(int index);
+  void appendRow(mrow& row);
+  void appendRows(std::vector<std::shared_ptr<mrow>>& rows);
   void verifyShuffle(const Field& field, std::function<size_t(size_t, int, int)>);
   void reserveRow(size_t rows);
   void load(const string& path);

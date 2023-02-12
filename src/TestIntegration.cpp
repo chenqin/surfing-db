@@ -15,6 +15,7 @@
  */
 
 #include <chrono>
+#include <csignal>
 #include <fmt/core.h>
 #include <future>
 #include <glog/logging.h>
@@ -51,14 +52,21 @@ std::string random_string(size_t length) {
   return str;
 }
 
+volatile std::sig_atomic_t terminal_signal;
+void signal_handler(int signal) {
+  std::cout << "user exit program";
+  terminal_signal = signal;
+}
+
+
 /** run this program with
  * mpirun -np 12 ./Test
  * @return
  */
 int main(int argc, char** argv) {
+
   google::InstallFailureSignalHandler();
   google::InitGoogleLogging(argv[0]);
-
   // define how data will be stored, as rows in a table
   RowSchema r;
   SchemaUtils::appendElements(r, "timestamp", RowType::LONG, 1);
@@ -72,12 +80,14 @@ int main(int argc, char** argv) {
   /**
    * @brief initial constructors
    * node -> single executor binding to MPI rank, number of node determined by mpi processes
-   * TableSchema -> row based MPI friendly schema defined to encode/decode table/row in O(1) time
+   * mschema -> row based MPI friendly schema defined to encode/decode table/row in O(1) time
    * con -> data connector ingess running on a number of nodes micro batching data pullers
    */
   const auto node = std::make_shared<surfingdb::meta::node>(&argc, &argv);
-  const auto ptr = std::make_shared<TableSchema>(r);
+  const auto ptr = std::make_shared<mschema>(r);
   const auto con = std::make_unique<DataGenConnector>(node);
+
+  std::signal(SIGTERM|SIGINT, signal_handler);
 
   /**
    * @brief
@@ -87,13 +97,13 @@ int main(int argc, char** argv) {
    * jump to next iteration and get next batch ready
    */
   bool produce = node->rank % 2 == 0;
-  node->setIsSubscriber(&produce);
+  node->setissubscriber(&produce);
   auto partitioner = [](size_t key, int rank, int world) {
     int base = world % 2 == 0 ? world - 1 : world;
     int dest = key % base;
     /**
      * @brief dest is subscriber to data ingestion
-     * 
+     *
      */
     if (dest % 2 == 0) {
       if (dest + 1 > world - 1) {
@@ -106,7 +116,7 @@ int main(int argc, char** argv) {
     CHECK_LT(dest, world);
     return dest;
   };
-  while (true) {
+  while (terminal_signal == 0) {
     /**
      * @brief import pyarrow
      */
@@ -116,8 +126,8 @@ int main(int argc, char** argv) {
     size_t total_row_count = intial_row_count;
     double start = MPI_Wtime();
     // ingest, copy rows to local table memory with fixed offsets
-    const auto t1 = con->consume_batch(intial_row_count, 1000, ptr, [](const char* payload, const TableSchema& out) {
-      auto row = std::make_shared<RowBuffer>(std::make_shared<TableSchema>(out));
+    const auto t1 = con->consume_batch(intial_row_count, 1000, ptr, [](const char* payload, const mschema& out) {
+      auto row = std::make_shared<mrow>(std::make_shared<mschema>(out));
       Value p;
 
       p.p_val.long_val = 1;
@@ -152,7 +162,7 @@ int main(int argc, char** argv) {
      * pass each row in mtable, if return true, add to new table with schema ptr
      * release t1 mtable in the end
      */
-    auto t2 = processors::map(t1, ptr, [](RowBuffer& in, RowBuffer& out, const TableSchema& out_schema) {
+    auto t2 = processors::map(t1, ptr, [](mrow& in, mrow& out, const mschema& out_schema) {
       for (const auto& f : out_schema.fields) {
         Value v;
         in.read(f, v);
@@ -164,7 +174,7 @@ int main(int argc, char** argv) {
     start = MPI_Wtime();
     auto t4 = processors::shuffle(t2, ptr->fields.at(2), partitioner);
     auto end = MPI_Wtime();
-    std::cout << " shuffle time = " << (end - start) << " rank = " << node->rank << " ingestor = " << node->getIsSubscriber() << std::endl;
+    std::cout << " shuffle time = " << (end - start) << " rank = " << node->rank << " ingestor = " << node->getissubscriber() << std::endl;
     start = MPI_Wtime();
     /**
      * verify shuffle row placement to right worker (aka MPI rank)
@@ -178,5 +188,5 @@ int main(int argc, char** argv) {
     // tables.push_back(t3->getArrowTable());
     size_t r_row_count = t4->row_count;
   }
-  return 0;
+  return terminal_signal;
 }

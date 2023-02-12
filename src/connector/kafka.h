@@ -40,7 +40,7 @@ public:
   KafkaConnector(const std::shared_ptr<node>, std::string, std::string, std::string);
 
   std::shared_ptr<mtable>
-    consume_batch(size_t max_batch_size, int timeout, std::shared_ptr<TableSchema>, std::function<std::shared_ptr<RowBuffer>(const char*, const TableSchema&)>);
+    consume_batch(size_t max_batch_size, int timeout, std::shared_ptr<mschema>, std::function<std::shared_ptr<mrow>(const char*, const mschema&)>);
 
   ~KafkaConnector();
 

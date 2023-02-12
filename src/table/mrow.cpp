@@ -18,7 +18,7 @@
 namespace surfingdb {
 namespace table {
 
-RowBuffer::RowBuffer(std::shared_ptr<meta::TableSchema> schemaptr) {
+mrow::mrow(std::shared_ptr<meta::mschema> schemaptr) {
   _header.type = RowType::LONG;
   _header.max_unit_size = meta::SchemaUtils::getFieldSize(_header);
   CHECK_EQ(sizeof(uint64_t), meta::SchemaUtils::getFieldSize(_header));
@@ -29,7 +29,7 @@ RowBuffer::RowBuffer(std::shared_ptr<meta::TableSchema> schemaptr) {
   _payload = (uint8_t*)&_vpayload[0];
 }
 
-RowBuffer::RowBuffer(std::shared_ptr<meta::TableSchema> schemaptr, uint8_t* payloadptr) {
+mrow::mrow(std::shared_ptr<meta::mschema> schemaptr, uint8_t* payloadptr) {
   _header.type = RowType::LONG;
   _header.max_unit_size = meta::SchemaUtils::getFieldSize(_header);
   CHECK_EQ(sizeof(uint64_t), meta::SchemaUtils::getFieldSize(_header));
@@ -42,26 +42,26 @@ RowBuffer::RowBuffer(std::shared_ptr<meta::TableSchema> schemaptr, uint8_t* payl
   _payload = payloadptr;
 }
 
-RowBuffer::~RowBuffer() {
+mrow::~mrow() {
   _payload = nullptr;
   _vpayload.clear();
   _vpayload.shrink_to_fit();
 }
 
-size_t RowBuffer::row_size() {
+size_t mrow::row_size() {
   return this->schema_ptr->rowSize();
 }
 
-uint8_t* RowBuffer::payload_ptr() {
+uint8_t* mrow::payload_ptr() {
   return this->_payload;
 }
 
-size_t RowBuffer::schema_sig() {
+size_t mrow::schema_sig() {
   CHECK_NE(_schema_sig, 0);
   return this->_schema_sig;
 }
 
-size_t RowBuffer::read(const Field& f, Value& v) {
+size_t mrow::read(const Field& f, Value& v) {
   CHECK_GE(schema_ptr->_offsets->size(), 0);
   CHECK(schema_ptr->_offsets->find(f) != schema_ptr->_offsets->end());
   uint64_t offset = schema_ptr->_offsets->at(f);
@@ -70,13 +70,13 @@ size_t RowBuffer::read(const Field& f, Value& v) {
   return unit;
 }
 
-void RowBuffer::write(const Field& f, const Value& v) {
+void mrow::write(const Field& f, const Value& v) {
   uint64_t offset = schema_ptr->_offsets->at(f);
   CHECK_GT(offset, 0);
   write(f, v, offset);
 }
 
-void RowBuffer::write(const Field& f, const Value& v, const uint64_t& offset) {
+void mrow::write(const Field& f, const Value& v, const uint64_t& offset) {
   switch (f.type) {
   case surfingdb::meta::schema::RowType::VOID: {
     assert(false);
@@ -150,7 +150,7 @@ void RowBuffer::write(const Field& f, const Value& v, const uint64_t& offset) {
   }
 }
 
-size_t RowBuffer::read(const Field& f, Value& v, const uint64_t& offset) {
+size_t mrow::read(const Field& f, Value& v, const uint64_t& offset) {
   switch (f.type) {
   case surfingdb::meta::schema::RowType::VOID: {
     return 0;
@@ -228,7 +228,7 @@ size_t RowBuffer::read(const Field& f, Value& v, const uint64_t& offset) {
   return -1;
 }
 
-void RowBuffer::_pwrite(const Field& f, const void* data, const uint64_t& offset) {
+void mrow::_pwrite(const Field& f, const void* data, const uint64_t& offset) {
   switch (f.type) {
   case surfingdb::meta::schema::RowType::VOID: {
     break;
@@ -271,7 +271,7 @@ void RowBuffer::_pwrite(const Field& f, const void* data, const uint64_t& offset
   }
 }
 
-size_t RowBuffer::_pread(const Field& f, void* dataptr, const uint64_t& offset) {
+size_t mrow::_pread(const Field& f, void* dataptr, const uint64_t& offset) {
   switch (f.type) {
   case surfingdb::meta::schema::RowType::VOID: {
     assert(false);
@@ -316,7 +316,7 @@ size_t RowBuffer::_pread(const Field& f, void* dataptr, const uint64_t& offset) 
   }
   return 0;
 }
-std::vector<size_t> RowBuffer::readLen(const Field& f, size_t offset) {
+std::vector<size_t> mrow::readLen(const Field& f, size_t offset) {
   std::vector<size_t> lens;
   switch (f.type) {
   case surfingdb::meta::schema::RowType::VOID: {

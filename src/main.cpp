@@ -52,14 +52,14 @@ int main(int argc, char** argv) {
   SchemaUtils::appendElements(r, "host", RowType::STRING, 1);
   SchemaUtils::appendElements(r, "metricName", RowType::STRING, 1);
   SchemaUtils::appendElements(r, "metricValues", RowType::DOUBLE, 1);
-  const std::shared_ptr<TableSchema> schema_ptr = std::make_shared<TableSchema>(r);
+  const std::shared_ptr<mschema> schema_ptr = std::make_shared<mschema>(r);
 
   int rows = 1500;
   size_t total = 0;
   srand(std::time(nullptr));
 
   auto start = MPI_Wtime();
-  auto results_ptr = std::make_shared<std::unordered_map<Value, std::shared_ptr<RowBuffer>, ValueHasher>>();
+  auto results_ptr = std::make_shared<std::unordered_map<Value, std::shared_ptr<mrow>, ValueHasher>>();
   std::string kafka_topic = "xenon_metrics_prod";
   std::string brokers = "datakafka08001:9092,datakafka08002:9092,datakafka08003:9092";
   std::string group_id = "surfing.test";
@@ -71,8 +71,8 @@ int main(int argc, char** argv) {
   std::this_thread::sleep_for(std::chrono::microseconds(rand() % 10));
 
   // kafka consumer
-  auto t1 = consumer.consume_batch(rows, 100, schema_ptr, [](const char* payload, const TableSchema& out) -> std::shared_ptr<RowBuffer> {
-    auto r = std::make_shared<RowBuffer>(std::make_shared<TableSchema>(out));
+  auto t1 = consumer.consume_batch(rows, 100, schema_ptr, [](const char* payload, const mschema& out) -> std::shared_ptr<mrow> {
+    auto r = std::make_shared<mrow>(std::make_shared<mschema>(out));
     rapidjson::Document document;
     rapidjson::ParseResult ok = document.Parse(payload);
     if (ok) {

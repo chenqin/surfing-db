@@ -13,7 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <csignal>
 #include <iostream>
+#include <functional>
 #include <memory>
 #include <mpi.h>
 #include <vector>
@@ -34,14 +36,13 @@ private:
 public:
   node(int* argc, char*** argv);
   node(int, int, std::string);
-  void setIsSubscriber(bool*);
+  void setissubscriber(bool*);
   /**
    * @brief if node running data input
    *
    * @return int 1 polling data in, -1 not polling data, 0 default
    */
-  int getIsSubscriber();
-  ~node();
+  int getissubscriber();
   long forward(); // move to next stage of compute
   int world;
   int rank;

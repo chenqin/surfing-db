@@ -45,9 +45,9 @@ public:
   /**
    * map convert mtable to new table with schema ptr, if map function return true, otherwise current row
    */
-  static std::shared_ptr<mtable> map(std::shared_ptr<mtable>, std::shared_ptr<TableSchema>, std::function<bool(RowBuffer&, RowBuffer&, const TableSchema&)>);
+  static std::shared_ptr<mtable> map(std::shared_ptr<mtable>, std::shared_ptr<mschema>, std::function<bool(mrow&, mrow&, const mschema&)>);
 
-  static void reduce(std::shared_ptr<mtable>, Field&, std::shared_ptr<std::unordered_map<Value, std::shared_ptr<RowBuffer>, ValueHasher>> result_ptr, std::shared_ptr<TableSchema> result_schema_ptr, std::function<void(Value&, std::vector<std::unique_ptr<RowBuffer>>&, std::shared_ptr<RowBuffer>&)>);
+  static void reduce(std::shared_ptr<mtable>, Field&, std::shared_ptr<std::unordered_map<Value, std::shared_ptr<mrow>, ValueHasher>> result_ptr, std::shared_ptr<mschema> result_schema_ptr, std::function<void(Value&, std::vector<std::unique_ptr<mrow>>&, std::shared_ptr<mrow>&)>);
 
   static std::shared_ptr<mtable> shuffleRMA(std::shared_ptr<mtable>, Field&);
 

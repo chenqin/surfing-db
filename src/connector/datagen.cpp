@@ -31,12 +31,12 @@ DataGenConnector::DataGenConnector(const std::shared_ptr<node> node_ptr) {
   this->node_ptr = node_ptr;
 }
 
-std::shared_ptr<mtable> DataGenConnector::consume_batch(size_t max_batch_size, int timeout, std::shared_ptr<TableSchema> schema_ptr, std::function<std::shared_ptr<RowBuffer>(const char*, const TableSchema&)> deser) {
+std::shared_ptr<mtable> DataGenConnector::consume_batch(size_t max_batch_size, int timeout, std::shared_ptr<mschema> schema_ptr, std::function<std::shared_ptr<mrow>(const char*, const mschema&)> deser) {
   /**
    * @brief if node runs data polling set to max_batch, otherwise skip
    *
    */
-  auto batch_size = node_ptr->getIsSubscriber() != 1 ? 0 : max_batch_size;
+  auto batch_size = node_ptr->getissubscriber() != 1 ? 0 : max_batch_size;
   auto t = std::make_shared<mtable>(node_ptr, schema_ptr, batch_size * schema_ptr->rowSize());
   auto start = MPI_Wtime();
   int total = 0;

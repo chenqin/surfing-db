@@ -181,7 +181,7 @@ public:
                            const uint64_t& max_value_size);
 };
 
-class TableSchema : public RowSchema {
+class mschema : public RowSchema {
 private:
   std::string name;
   size_t _size;       // fixed size of each row
@@ -232,16 +232,16 @@ public:
   MPI_Datatype* schemaMPIType();
   bool containField(Field field);
 
-  TableSchema() {
+  mschema() {
     _size = 0;
     _schema_sig = 0;
     _type_set = false;
   }
-  TableSchema(const RowSchema& schema);
+  mschema(const RowSchema& schema);
 
   std::shared_ptr<arrow::Schema> getArrowSchema();
 
-  ~TableSchema();
+  ~mschema();
 };
 
 } // namespace meta

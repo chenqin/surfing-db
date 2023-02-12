@@ -114,7 +114,7 @@ public:
     return iteration >= max_iteration;
   }
 
-  void process(RowBuffer, RowBuffer, RowBuffer) {
+  void process(mrow, mrow, mrow) {
 
   }
 };

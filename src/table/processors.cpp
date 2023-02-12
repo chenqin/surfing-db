@@ -28,11 +28,11 @@ namespace table {
  * @param transform transform function with simple type
  * @return std::shared_ptr<mtable>  outputtable
  */
-std::shared_ptr<mtable> processors::map(std::shared_ptr<mtable> in, std::shared_ptr<TableSchema> out_schema_ptr, std::function<bool(RowBuffer&, RowBuffer&, const TableSchema&)> transform) {
+std::shared_ptr<mtable> processors::map(std::shared_ptr<mtable> in, std::shared_ptr<mschema> out_schema_ptr, std::function<bool(mrow&, mrow&, const mschema&)> transform) {
   auto out = std::make_shared<mtable>(in->getNodePtr(), out_schema_ptr, in->row_count * out_schema_ptr->rowSize());
   for (size_t i = 0; i < in->row_count; i++) {
     auto in_row = in->readRow(i);
-    RowBuffer out_row(out->getSchema());
+    mrow out_row(out->getSchema());
     bool append = transform(*in_row.get(), out_row, *out_schema_ptr.get());
     CHECK_EQ(out_row.schema_sig(), out->getSchema()->signature());
 
@@ -43,13 +43,13 @@ std::shared_ptr<mtable> processors::map(std::shared_ptr<mtable> in, std::shared_
 
 void processors::reduce(std::shared_ptr<mtable> in_ptr,
                         Field& field,
-                        std::shared_ptr<std::unordered_map<Value, std::shared_ptr<RowBuffer>, ValueHasher>> result_ptr,
-                        std::shared_ptr<TableSchema> result_schema_ptr,
-                        std::function<void(Value&, std::vector<std::unique_ptr<RowBuffer>>&, std::shared_ptr<RowBuffer>&)> reducer) {
+                        std::shared_ptr<std::unordered_map<Value, std::shared_ptr<mrow>, ValueHasher>> result_ptr,
+                        std::shared_ptr<mschema> result_schema_ptr,
+                        std::function<void(Value&, std::vector<std::unique_ptr<mrow>>&, std::shared_ptr<mrow>&)> reducer) {
   in_ptr->group(field, true);
   for (auto g : *in_ptr->key_groups) {
     auto vals = g.second;
-    std::vector<std::unique_ptr<RowBuffer>> val_list;
+    std::vector<std::unique_ptr<mrow>> val_list;
     Value key;
     for (auto index : vals) {
       auto r = in_ptr->readRow(index);
@@ -59,9 +59,9 @@ void processors::reduce(std::shared_ptr<mtable> in_ptr,
 #pragma omp critical
     {
       if (result_ptr->find(key) == result_ptr->end()) {
-        result_ptr->insert({ key, std::make_shared<RowBuffer>(result_schema_ptr) });
+        result_ptr->insert({ key, std::make_shared<mrow>(result_schema_ptr) });
       }
-      std::shared_ptr<RowBuffer> row = result_ptr->at(key);
+      std::shared_ptr<mrow> row = result_ptr->at(key);
       reducer(key, val_list, row);
     }
   }

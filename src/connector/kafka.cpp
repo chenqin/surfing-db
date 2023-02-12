@@ -36,7 +36,7 @@ void stop(int sig) {
   run = 0;
 }
 
-bool isSubscriber;
+bool issubscriber;
 
 int exit_eof = 0;
 int wait_eof = 0; /* number of partitions awaiting EOF */
@@ -62,7 +62,7 @@ void rebalance_cb(rd_kafka_t* rk,
     fprintf(stderr, "assigned (%s):\n",
             rd_kafka_rebalance_protocol(rk));
     print_partition_list(partitions);
-    isSubscriber = true;
+    issubscriber = true;
 
     if (!strcmp(rd_kafka_rebalance_protocol(rk), "COOPERATIVE"))
       error = rd_kafka_incremental_assign(rk, partitions);
@@ -75,7 +75,7 @@ void rebalance_cb(rd_kafka_t* rk,
     fprintf(stderr, "revoked (%s):\n",
             rd_kafka_rebalance_protocol(rk));
     // print_partition_list(stderr, partitions);
-    isSubscriber = false;
+    issubscriber = false;
 
     if (!strcmp(rd_kafka_rebalance_protocol(rk), "COOPERATIVE")) {
       error = rd_kafka_incremental_unassign(rk, partitions);
@@ -105,7 +105,7 @@ void rebalance_cb(rd_kafka_t* rk,
 
 KafkaConnector::KafkaConnector(std::shared_ptr<node> node_ptr, std::string topic, std::string brokers, std::string groupid) {
   this->node_ptr = node_ptr;
-  node_ptr->setIsSubscriber(&isSubscriber);
+  node_ptr->setissubscriber(&issubscriber);
   this->brokers = (char*)brokers.c_str();
   this->groupid = (char*)groupid.c_str();
   topics = (char*)topic.c_str();
@@ -225,7 +225,7 @@ KafkaConnector::~KafkaConnector() {
   rd_kafka_destroy(rk);
 }
 
-std::shared_ptr<mtable> KafkaConnector::consume_batch(size_t max_batch_size, int timeout, std::shared_ptr<TableSchema> schema_ptr, std::function<std::shared_ptr<RowBuffer>(const char*, const TableSchema&)> convert) {
+std::shared_ptr<mtable> KafkaConnector::consume_batch(size_t max_batch_size, int timeout, std::shared_ptr<mschema> schema_ptr, std::function<std::shared_ptr<mrow>(const char*, const mschema&)> convert) {
   auto t = std::make_shared<mtable>(node_ptr, schema_ptr, max_batch_size * schema_ptr->rowSize());
   auto start = MPI_Wtime();
   int total = 0;

@@ -206,7 +206,7 @@ auto getArrowType(const RowType::type& type, const RowType::type& type1, const R
   }
 }
 
-TableSchema::TableSchema(const RowSchema& schema) {
+mschema::mschema(const RowSchema& schema) {
   _type_set = false;
   _offsets = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
   _max_unit = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
@@ -256,12 +256,12 @@ TableSchema::TableSchema(const RowSchema& schema) {
   CHECK(arrowSchema->num_fields() == schema.fields.size());
 }
 
-std::shared_ptr<arrow::Schema> TableSchema::getArrowSchema() {
+std::shared_ptr<arrow::Schema> mschema::getArrowSchema() {
   CHECK(this->arrowSchema->fields().size() > 0);
   return this->arrowSchema;
 }
 
-TableSchema::~TableSchema() {
+mschema::~mschema() {
   if (_type_set) {
     MPI_Type_free(&_row_type);
     for (auto s : *_field_types.get()) {
@@ -270,7 +270,7 @@ TableSchema::~TableSchema() {
   }
 }
 
-bool TableSchema::containField(Field field) {
+bool mschema::containField(Field field) {
   CHECK_GT(fields.size(), 0);
   for (auto f : fields) {
     if (field_hasher.operator()(field) == field_hasher.operator()(f)) return true;
@@ -278,7 +278,7 @@ bool TableSchema::containField(Field field) {
   return false;
 }
 
-MPI_Datatype* TableSchema::schemaMPIType() {
+MPI_Datatype* mschema::schemaMPIType() {
 #pragma omp critical
   {
     if (!_type_set) {

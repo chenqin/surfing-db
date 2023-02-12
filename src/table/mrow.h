@@ -35,17 +35,17 @@ using std::string;
  * offset regarding to starting address, it helps MPI collective communication and cache loading faster
  * |SchemaSignature|Field1|Field2|Field3Count|Field3Value|PADDING|
  */
-class RowBuffer {
+class mrow {
 private:
   /**
    * @brief used by container datatype
    *
    */
   Field _header;
-  std::shared_ptr<meta::TableSchema> schema_ptr;
+  std::shared_ptr<meta::mschema> schema_ptr;
   size_t _schema_sig;
   /**
-   * @brief use duo pointer to avoid double free when random fetch a rowbuffer in mtable
+   * @brief use duo pointer to avoid double free when random fetch a mrow in mtable
    * 
    */
   uint8_t* _payload;
@@ -56,16 +56,16 @@ private:
   size_t _pread(const Field& f, void* dataptr, const uint64_t& offset);
 
 public:
-  RowBuffer(std::shared_ptr<meta::TableSchema> schemaptr);
+  mrow(std::shared_ptr<meta::mschema> schemaptr);
 
   /**
    * only used in Temptable point to piece map memory to readRow/append fields
    * @param schema
    * @param payload
    */
-  RowBuffer(std::shared_ptr<meta::TableSchema> schemaptr, uint8_t* payloadptr);
+  mrow(std::shared_ptr<meta::mschema> schemaptr, uint8_t* payloadptr);
 
-  ~RowBuffer();
+  ~mrow();
 
   size_t schema_sig();
 
@@ -74,7 +74,7 @@ public:
   uint8_t* payload_ptr();
 
   /**
-   * copy readRow RowBuffer map given field
+   * copy readRow mrow map given field
    * @param f
    * @param v
    */

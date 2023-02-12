@@ -44,11 +44,11 @@ public:
    * @param max_batch_size max size of table returned
    * @param timeout max time in milliseconds for each poll
    * @param schema_ptr schema of table returned
-   * @param deser function that convert payload binary to a RowBuffer with schema_ptr
+   * @param deser function that convert payload binary to a mrow with schema_ptr
    * @return std::shared_ptr<mtable> micro batch table
    */
   virtual std::shared_ptr<mtable>
-    consume_batch(size_t max_batch_size, int timeout, std::shared_ptr<TableSchema> schema_ptr, std::function<std::shared_ptr<RowBuffer>(const char* payload,const TableSchema& schema)> deser)
+    consume_batch(size_t max_batch_size, int timeout, std::shared_ptr<mschema> schema_ptr, std::function<std::shared_ptr<mrow>(const char* payload,const mschema& schema)> deser)
     = 0;
 
   /**
@@ -59,7 +59,7 @@ public:
    * @param ser serialize each row in output and push out
    * @return size_t total number of rows published
    */
-  size_t produce_batch(int timeout, std::shared_ptr<mtable> output, std::function<bool(const std::shared_ptr<RowBuffer> row)> ser) {
+  size_t produce_batch(int timeout, std::shared_ptr<mtable> output, std::function<bool(const std::shared_ptr<mrow> row)> ser) {
     return 0;
   }
 

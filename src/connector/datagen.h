@@ -41,7 +41,7 @@ public:
   DataGenConnector(const shared_ptr<node>);
 
   shared_ptr<mtable>
-    consume_batch(size_t, int, shared_ptr<TableSchema>, function<shared_ptr<RowBuffer>(const char* payload, const TableSchema&)>);
+    consume_batch(size_t, int, shared_ptr<mschema>, function<shared_ptr<mrow>(const char* payload, const mschema&)>);
 };
 } // namespace connector
 

@@ -20,12 +20,12 @@
 namespace surfingdb {
 namespace meta {
 
-void node::setIsSubscriber(bool* is) {
+void node::setissubscriber(bool* is) {
   CHECK_NOTNULL(is);
   this->issubscriber = is;
 }
 
-int node::getIsSubscriber() {
+int node::getissubscriber() {
   if (issubscriber == nullptr) return 0;
   return *issubscriber ? 1 : -1;
 }
@@ -45,12 +45,6 @@ node::node(int* argc, char*** argv) {
   processor = std::string(processor_name);
   stage = 0;
   LOG(INFO) << "cluster size " << world << " node rank " << rank << " alias " << processor;
-}
-
-node::~node() {
-  // Finalize the MPI environment.
-  MPI_Finalize();
-  // LOG(INFO) << "cluster finalized";
 }
 
 /**
