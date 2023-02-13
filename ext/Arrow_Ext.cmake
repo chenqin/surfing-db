@@ -1,96 +1,64 @@
-find_package(Threads REQUIRED)
+# Build the Arrow C++ libraries.
+function(build_arrow)
+    set(one_value_args)
+    set(multi_value_args)
 
-# Since we have problems to integrate the source build.
-# We're using pre-installed versions instead.
-# ref: https://arrow.apache.org/install/
-# Mac
-# 1. install miniconda according to https://docs.conda.io/en/latest/miniconda.html
-# 2. install arrow through "conda install arrow-cpp=0.13.* -c conda-forge"
-# Ubuntu
+    cmake_parse_arguments(ARG
+            "${options}"
+            "${one_value_args}"
+            "${multi_value_args}"
+            ${ARGN})
+    if (ARG_UNPARSED_ARGUMENTS)
+        message(SEND_ERROR "Error: unrecognized arguments: ${ARG_UNPARSED_ARGUMENTS}")
+    endif ()
 
-# https://cmake.org/cmake/help/latest/module/ExternalProject.html
-include(ExternalProject)
+    # If Arrow needs to be built, the default location will be within the build tree.
+    set(ARROW_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/arrow_ep-prefix")
 
-# if cmake make really complains find_package problems on linux
-# let's just install them, such as flex and bison
-# "Could NOT find BISON (missing: BISON_EXECUTABLE)"
-# sudo apt-get install flex
-# sudo apt-get install bison
+    set(ARROW_SHARED_LIBRARY_DIR "${ARROW_PREFIX}/lib")
 
-# build arrow
-SET(ARROW_OPTS
-        -DARROW_BUILD_SHARED=ON
-        -DARROW_USE_GLOG=ON
-        -DARROW_USE_CCACHE:BOOL=ON
-        -DARROW_OPTIONAL_INSTALL:BOOL=ON
-        -DARROW_BUILD_TESTS:BOOL=OFF
-        -DARROW_BUILD_BENCHMARKS:BOOL=OFF
-        -DARROW_PARQUET=ON
-        -DARROW_FILESYSTEM=ON
-        -DPARQUET_BUILD_EXAMPLES:BOOL=OFF
-        -DARROW_ORC:BOOL=OFF
-        -DARROW_NO_DEPRECATED_API:BOOL=ON
-        -DARROW_JEMALLOC:BOOL=OFF
-        -DARROW_IPC=ON
-        -DARROW_JSON=ON
-        -DARROW_COMPUTE=ON
-        -DARROW_HDFS=OFF
-        -DARROW_WITH_BROTLI=OFF
-        -DARROW_S3=OFF
-        -DARROW_WITH_RE2=ON
-        -DARROW_WITH_UTF8PROC=ON
-        -DARROW_WITH_LZ4=OFF
-        -DARROW_WITH_ZSTD=OFF
-        -DARROW_WITH_UTF8PROC=OFF
-        -DPARQUET_BUILD_ENCRYPTION=OFF
-        -DPARQUET_MINIMAL_DEPENDENCY=ON
-        -DPARQUET_ARROW_LINKAGE=DYNAMIC
-        -DARROW_DEPENDENCY_SOURCE=BUNDLED
-        -DCMAKE_BUILD_TYPE=Release)
+    set(ARROW_SHARED_LIB_FILENAME
+            "${CMAKE_SHARED_LIBRARY_PREFIX}arrow${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    set(ARROW_SHARED_LIB "${ARROW_SHARED_LIBRARY_DIR}/${ARROW_SHARED_LIB_FILENAME}")
+    set(PARQUET_SHARED_LIB_FILENAME
+            "${CMAKE_SHARED_LIBRARY_PREFIX}parquet${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    set(PARQUET_SHARED_LIB "${ARROW_SHARED_LIBRARY_DIR}/${PARQUET_SHARED_LIB_FILENAME}")
 
-# arrow versions after 0.13.0 does not work with boost 70
-ExternalProject_Add(arrow
-        PREFIX arrow
-        GIT_REPOSITORY https://github.com/apache/arrow.git
-        GIT_TAG apache-arrow-11.0.0
-        SOURCE_SUBDIR cpp
-        CMAKE_ARGS ${ARROW_OPTS}
-        UPDATE_COMMAND ""
-        INSTALL_COMMAND ""
-        LOG_DOWNLOAD ON
-        LOG_CONFIGURE ON
-        LOG_BUILD ON)
+    set(ARROW_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/arrow_ep-build")
+    set(ARROW_CMAKE_ARGS "-DCMAKE_INSTALL_PREFIX=${ARROW_PREFIX}"
+            "-DCMAKE_INSTALL_LIBDIR=lib" "-Dxsimd_SOURCE=BUNDLED" "-DARROW_EXTRA_ERROR_CONTEXT=ON"
+            "-DARROW_BUILD_STATIC=OFF" "-DARROW_PARQUET=ON" "-DARROW_COMPUTE=ON"
+            "-DARROW_WITH_UTF8PROC=OFF" "-DARROW_WITH_RE2=OFF" "-DThrift_SOURCE=BUNDLED"
+            "-DARROW_FILESYSTEM=ON" "-DARROW_CSV=ON" "-DARROW_PYTHON=ON")
+    set(ARROW_INCLUDE_DIR "${ARROW_PREFIX}/include")
 
-# get source dir after download step
-ExternalProject_Get_Property(arrow SOURCE_DIR)
-ExternalProject_Get_Property(arrow BINARY_DIR)
-set(ARROW_INCLUDE_DIRS ${SOURCE_DIR}/cpp/src)
-include_directories(include ${ARROW_INCLUDE_DIRS})
-message(STATUS "arrow_include=${ARROW_INCLUDE_DIRS}")
-file(MAKE_DIRECTORY ${ARROW_INCLUDE_DIRS})
-set(ARROW_LIBRARY_PATH ${BINARY_DIR}/release/${CMAKE_FIND_LIBRARY_PREFIXES}arrow.a)
-set(ARROW_LIBRARY libarrow)
-add_library(${ARROW_LIBRARY} UNKNOWN IMPORTED)
-set_target_properties(${ARROW_LIBRARY} PROPERTIES
-        CXX_STANDARD 20
-        CXX_STANDARD_REQUIRED ON
-        CXX_EXTENSIONS ON
-        "IMPORTED_LOCATION" "${ARROW_LIBRARY_PATH}"
-        "IMPORTED_LINK_INTERFACE_LIBRARIES" "${CMAKE_THREAD_LIBS_INIT}"
-        "INTERFACE_INCLUDE_DIRECTORIES" "${ARROW_INCLUDE_DIRS}")
-add_dependencies(${ARROW_LIBRARY} arrow)
+    set(ARROW_BUILD_BYPRODUCTS "${ARROW_SHARED_LIB}" "${PARQUET_SHARED_LIB}")
 
-# declare parquet library
-set(PARQUET_INCLUDE_DIRS ${BINARY_DIR}/src)
-file(MAKE_DIRECTORY ${PARQUET_INCLUDE_DIRS})
-set(PARQUET_LIBRARY_PATH ${BINARY_DIR}/release/${CMAKE_FIND_LIBRARY_PREFIXES}parquet.a)
-set(PARQUET_LIBRARY libparquet)
-add_library(${PARQUET_LIBRARY} UNKNOWN IMPORTED)
-set_target_properties(${PARQUET_LIBRARY} PROPERTIES
-        CXX_STANDARD 20
-        CXX_STANDARD_REQUIRED ON
-        CXX_EXTENSIONS ON
-        "IMPORTED_LOCATION" "${PARQUET_LIBRARY_PATH}"
-        "IMPORTED_LINK_INTERFACE_LIBRARIES" "${CMAKE_THREAD_LIBS_INIT}"
-        "INTERFACE_INCLUDE_DIRECTORIES" "${PARQUET_INCLUDE_DIRS}")
-add_dependencies(${PARQUET_LIBRARY} arrow)
+    include(ExternalProject)
+
+    externalproject_add(arrow_ep
+            GIT_REPOSITORY https://github.com/apache/arrow.git
+            GIT_TAG apache-arrow-11.0.0
+            SOURCE_SUBDIR cpp
+            BINARY_DIR "${ARROW_BINARY_DIR}"
+            CMAKE_ARGS "${ARROW_CMAKE_ARGS}"
+            BUILD_BYPRODUCTS "${ARROW_BUILD_BYPRODUCTS}")
+
+    set(ARROW_LIBRARY arrow_shared)
+    set(PARQUET_LIBRARY parquet_shared)
+
+    file(MAKE_DIRECTORY "${ARROW_INCLUDE_DIR}")
+    add_library(${ARROW_LIBRARY} SHARED IMPORTED)
+    add_library(${PARQUET_LIBRARY} SHARED IMPORTED)
+    set_target_properties(${ARROW_LIBRARY}
+            PROPERTIES INTERFACE_INCLUDE_DIRECTORIES ${ARROW_INCLUDE_DIR}
+            IMPORTED_LOCATION ${ARROW_SHARED_LIB})
+    set_target_properties(${PARQUET_LIBRARY}
+            PROPERTIES INTERFACE_INCLUDE_DIRECTORIES ${ARROW_INCLUDE_DIR}
+            IMPORTED_LOCATION ${PARQUET_SHARED_LIB})
+
+    add_dependencies(${ARROW_LIBRARY} arrow_ep)
+
+    message(STATUS "arrow_include=${ARROW_INCLUDE_DIR}")
+    include_directories(include ${ARROW_INCLUDE_DIR})
+endfunction()
