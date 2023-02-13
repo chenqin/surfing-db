@@ -25,7 +25,7 @@ target_link_libraries(${TABLE}
         PUBLIC ${OPENSSL_LIBRARY}
         PUBLIC ${CRYPTO_LIBRARY}
         PUBLIC ${THRIFT_LIBRARY}
-        PUBLIC glog::glog
+        PUBLIC ${GLOG_LIBRARY}
         PUBLIC ${GFLAGS_LIBRARY}
         PUBLIC ${JSON_LIBRARY}
         PUBLIC ${ARROW_LIBRARY}

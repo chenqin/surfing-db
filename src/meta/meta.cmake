@@ -13,7 +13,7 @@ add_library(${META} STATIC
         ${SURFINGDB_SRC}/meta/schema.cpp)
 
 target_link_libraries(${META}
-        PUBLIC glog::glog
+        PUBLIC ${GLOG_LIBRARY}
         PUBLIC ${GFLAGS_LIBRARY}
         PUBLIC ${JSON_LIBRARY}
         PUBLIC ${FMT_LIBRARY}

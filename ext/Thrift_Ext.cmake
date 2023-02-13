@@ -16,7 +16,7 @@ else()
     # build thrift
     SET(THRIFT_OPTS
             -DBUILD_TESTING=OFF
-            -DBUILD_COMPILER=OFF
+            -DBUILD_COMPILER=ON
             -DBUILD_CPP=ON
             -DBUILD_TUTORIALS=OFF
             -DBUILD_AS3=OFF

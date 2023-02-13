@@ -206,7 +206,8 @@ include(ext/Gtest_Ext.cmake)
 include(ext/Gflags_Ext.cmake)
 
 # add a dependency of glog
-find_package (glog REQUIRED)
+include(ext/Glog_Ext.cmake)
+#find_package (glog REQUIRED)
 
 # include utils
 include(ext/Gflatbuffers_Ext.cmake)

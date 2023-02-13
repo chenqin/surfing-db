@@ -19,7 +19,7 @@ add_executable(ParserTest
 target_link_libraries(ParserTest
         PRIVATE OpenMP::OpenMP_CXX
         PRIVATE ${PARSER}
-        PRIVATE glog::glog
+        PRIVATE ${GLOG_LIBRARY}
         PRIVATE ${JSON_LIBRARY}
         PRIVATE ${GTEST_LIBRARY}
         PRIVATE ${GTEST_MAIN_LIBRARY}
