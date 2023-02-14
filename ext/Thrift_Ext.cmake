@@ -28,7 +28,7 @@ else()
             -DBUILD_HASKELL=OFF
             -DBUILD_JAVASCRIPT=OFF
             -DBUILD_NODEJS=OFF
-            -DWITH_OPENSSL=OFF
+            -DWITH_OPENSSL=ON
             -DBUILD_PYTHON=OFF
             -DCMAKE_BUILD_TYPE=Release)
 
@@ -49,7 +49,7 @@ else()
     set(THRIFT_ROOT ${SOURCE_DIR})
     set(THRIFT_INCLUDE_DIR ${SOURCE_DIR}/lib/cpp/src)
     file(MAKE_DIRECTORY ${THRIFT_INCLUDE_DIR})
-    set(THRIFT_LIBRARY_PATH ${BINARY_DIR}/lib/${CMAKE_FIND_LIBRARY_PREFIXES}thrift.a)
+    set(THRIFT_LIBRARY_PATH ${BINARY_DIR}/lib/${CMAKE_FIND_LIBRARY_PREFIXES}thrift${CMAKE_STATIC_LIBRARY_SUFFIX})
     include_directories(include ${THRIFT_INCLUDE_DIR})
 endif()
 message(STATUS "THRIFT_INCLUDE_DIR=${THRIFT_INCLUDE_DIR}")

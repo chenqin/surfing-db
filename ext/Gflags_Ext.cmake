@@ -3,7 +3,7 @@ find_package(Threads REQUIRED)
 include(ExternalProject)
 
 SET(GFLAGS_OPTS
-  -DGFLAGS_BUILD_SHARED_LIBS:BOOL=OFF)
+  -DGFLAGS_BUILD_SHARED_LIBS:BOOL=ON)
 
 ExternalProject_Add(gflags
   PREFIX gflags
@@ -20,7 +20,7 @@ ExternalProject_Get_Property(gflags SOURCE_DIR)
 ExternalProject_Get_Property(gflags BINARY_DIR)
 set(GFLAGS_INCLUDE_DIRS ${BINARY_DIR}/include)
 file(MAKE_DIRECTORY ${GFLAGS_INCLUDE_DIRS})
-set(GFLAGS_LIBRARY_PATH ${BINARY_DIR}/lib/${CMAKE_FIND_LIBRARY_PREFIXES}gflags.a)
+set(GFLAGS_LIBRARY_PATH ${BINARY_DIR}/lib/${CMAKE_FIND_LIBRARY_PREFIXES}gflags${CMAKE_SHARED_LIBRARY_SUFFIX})
 
 set(GFLAGS_LIBRARY libgflags)
 add_library(${GFLAGS_LIBRARY} UNKNOWN IMPORTED)

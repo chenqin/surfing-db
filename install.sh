@@ -2,7 +2,14 @@ sudo apt update
 
 
 # install needed dependencies
-sudo apt install g++ cmake libomp-dev libopenmpi-dev libstdc++6 libssl-dev libgoogle-glog-dev libboost-dev libthrift-dev librdkafka-dev
+sudo apt install -y -V g++ 
+sudo apt install -y -V cmake
+sudo apt install -y -V libomp-dev
+sudo apt install -y -V libopenmpi-dev
+sudo apt install -y -V libstdc++6
+sudo apt install -y -V libssl-dev
+sudo apt install -y -V libboost-dev
+sudo apt install -y -V librdkafka-dev
 
 #https://arrow.apache.org/install/
 sudo apt install -y -V ca-certificates lsb-release wget
