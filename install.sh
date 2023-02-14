@@ -1,6 +1,5 @@
 sudo apt update
 
-
 # install needed dependencies
 sudo apt install -y -V g++ 
 sudo apt install -y -V cmake
@@ -9,7 +8,10 @@ sudo apt install -y -V libopenmpi-dev
 sudo apt install -y -V libstdc++6
 sudo apt install -y -V libssl-dev
 sudo apt install -y -V libboost-dev
-sudo apt install -y -V librdkafka-dev
+sudo apt install  -y -V pybind11-dev
+sudo apt install  -y -V libgoogle-glog-dev
+sudp apt install  -y -V flex bison
+sudo apt install  -y -V libunwind-dev
 
 #https://arrow.apache.org/install/
 sudo apt install -y -V ca-certificates lsb-release wget
@@ -27,15 +29,16 @@ sudo apt install -y -V libarrow-flight-glib-dev # For Apache Arrow Flight GLib (
 #   * You need to enable "non-free" component on Debian GNU/Linux
 #   * You need to enable "multiverse" component on Ubuntu
 #   * You can use Plasma related packages only on amd64
-sudo apt install -y -V libplasma-dev # For Plasma C++
-sudo apt install -y -V libplasma-glib-dev # For Plasma GLib (C)
+#sudo apt install -y -V libplasma-dev # For Plasma C++
+#sudo apt install -y -V libplasma-glib-dev # For Plasma GLib (C)
 sudo apt install -y -V libgandiva-dev # For Gandiva C++
 sudo apt install -y -V libgandiva-glib-dev # For Gandiva GLib (C)
 sudo apt install -y -V libparquet-dev # For Apache Parquet C++
 sudo apt install -y -V libparquet-glib-dev # For Apache Parquet GLib (C)
 
-
 pip install "pybind11[global]"
+# pin already install librdkafka
+#sudo apt install -y -V librdkafka-dev
 
 # cleanup
 sudo apt autoremove
