@@ -51,60 +51,66 @@ int main(int argc, char** argv) {
   SchemaUtils::appendElements(r, "timestamp", RowType::LONG, 1);
   SchemaUtils::appendElements(r, "host", RowType::STRING, 1);
   SchemaUtils::appendElements(r, "metricName", RowType::STRING, 1);
-  SchemaUtils::appendElements(r, "metricValues", RowType::DOUBLE, 1);
+  SchemaUtils::appendElements(r, "metricValue", RowType::STRING, 1);
   const std::shared_ptr<mschema> schema_ptr = std::make_shared<mschema>(r);
 
-  int rows = 1500;
+  int rows = 15000;
   size_t total = 0;
   srand(std::time(nullptr));
 
   auto start = MPI_Wtime();
-  auto results_ptr = std::make_shared<std::unordered_map<Value, std::shared_ptr<mrow>, ValueHasher>>();
   std::string kafka_topic = "xenon_metrics_prod";
-  std::string brokers = "datakafka08001:9092,datakafka08002:9092,datakafka08003:9092";
-  std::string group_id = "surfing.test";
-
-  // threaded ingest - map - shuffle - reduce
+  /**
+   * read from /var/serverset/datakafka08
+   */
+  std::string brokers = "10.1.145.151:9092,10.1.145.239:9092,10.1.147.235:9092,10.1.148.60:9092";
+  std::string group_id = "cqin-test";
 
   auto consumer = KafkaConnector(node, kafka_topic, brokers, group_id);
-  // simulate a delay to decode and handle kafka batch
-  std::this_thread::sleep_for(std::chrono::microseconds(rand() % 10));
-
-  // kafka consumer
-  auto t1 = consumer.consume_batch(rows, 100, schema_ptr, [](const char* payload, const mschema& out) -> std::shared_ptr<mrow> {
-    auto r = std::make_shared<mrow>(std::make_shared<mschema>(out));
-    rapidjson::Document document;
-    rapidjson::ParseResult ok = document.Parse(payload);
-    if (ok) {
-      for (const auto& f : out.fields) {
-        Value v;
-        if (f.type == RowType::LONG) {
-          v.p_val.long_val = document[f.name.c_str()].GetInt64();
-          r->write(f, v);
-        } else if (f.type == RowType::STRING) {
-          CHECK(document[f.name.c_str()].GetStringLength() < MAX_STR_LEN);
-          v.p_val.string_val = std::string(document[f.name.c_str()].GetString());
-        } else if (f.type == RowType::DOUBLE) {
-          std::string val = std::string(document[f.name.c_str()].GetString());
-          try {
-            v.p_val.double_val = (float)std::stod(val);
-          } catch (std::exception& e) {
-            v.p_val.double_val = 0;
-          }
+  while (true) {
+    // simulate a delay to decode and handle kafka batch
+    auto start = MPI_Wtime();
+    // kafka consumer
+    auto t1 = consumer.consume_batch(rows, 100, schema_ptr, [](const char* payload, const mschema& out) {
+      auto r = std::make_shared<mrow>(std::make_shared<mschema>(out));
+      rapidjson::Document document;
+      bool err = document.Parse((const char*)payload).HasParseError();
+      if (!err && document.HasMember("timestamp")) {
+        Value v[4];
+        v[0].p_val.long_val = document["timestamp"].GetInt64();
+        v[1].p_val.string_val = document["host"].GetString();
+        v[2].p_val.string_val = document["metricName"].GetString();
+        v[3].p_val.string_val = document["metricValue"].GetString();
+        for (int i = 0; i < 4; i++) {
+          r->write(out.fields.at(i), v[i]);
         }
-        r->write(f, v);
+        return r;
+      } else {
+        LOG(INFO) << "invalid data";
+        std::shared_ptr<mrow> p2(nullptr);
+        return p2;
       }
-      return r;
-    } else {
-      LOG(INFO) << "invalid data";
-      return nullptr;
-    }
-  });
+    });
+    auto partitioner = [](size_t key, int rank, int world) {
+      int base = world % 2 == 0 ? world - 1 : world;
+      int dest = key % base;
+      CHECK_GE(dest, 0);
+      CHECK_LT(dest, world);
+      return dest;
+    };
+    auto t3 = processors::shuffle(t1, schema_ptr->fields.at(2), partitioner);
+    t3->verifyShuffle(schema_ptr->fields.at(2), partitioner);
+
+    processors::compute(t3, [](std::shared_ptr<mtable> m) {
+      m->toColumnar();
+      return arrow::compute::Sum({ m->getArrowTable()->GetColumnByName("timestamp") });
+    });
+  }
   /**
    * @brief use arrow filter expressions
-   *  
+   *
    */
   /**
    * shuffle if needed
-  */
+   */
 }

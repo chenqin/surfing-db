@@ -126,6 +126,18 @@ KafkaConnector::KafkaConnector(std::shared_ptr<node> node_ptr, std::string topic
     return;
   }
 
+  /**
+   * @brief set linger.ms
+   *
+   */
+  if (rd_kafka_conf_set(conf, "linger.ms", "20",
+                        errstr, sizeof(errstr))
+      != RD_KAFKA_CONF_OK) {
+    LOG(ERROR) << errstr;
+    rd_kafka_conf_destroy(conf);
+    return;
+  }
+
   /* Set the consumer group id.
    * All consumers sharing the same group id will join the same
    * group, and the subscribed topic' partitions will be assigned
