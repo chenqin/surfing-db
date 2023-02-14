@@ -33,6 +33,12 @@ using namespace surfingdb::table;
 using namespace surfingdb::connector;
 using namespace std::chrono;
 
+volatile std::sig_atomic_t terminal_signal;
+void signal_handler(int signal) {
+  std::cout << "user exit program";
+  terminal_signal = signal;
+}
+
 /** run this program with
  * mpirun -np 12 ./MainTest
  * @return
@@ -51,10 +57,10 @@ int main(int argc, char** argv) {
   SchemaUtils::appendElements(r, "timestamp", RowType::LONG, 1);
   SchemaUtils::appendElements(r, "host", RowType::STRING, 1);
   SchemaUtils::appendElements(r, "metricName", RowType::STRING, 1);
-  SchemaUtils::appendElements(r, "metricValue", RowType::STRING, 1);
+  SchemaUtils::appendElements(r, "metricValue", RowType::DOUBLE, 1);
   const std::shared_ptr<mschema> schema_ptr = std::make_shared<mschema>(r);
 
-  int rows = 15000;
+  int rows = 300000;
   size_t total = 0;
   srand(std::time(nullptr));
 
@@ -66,12 +72,14 @@ int main(int argc, char** argv) {
   std::string brokers = "10.1.145.151:9092,10.1.145.239:9092,10.1.147.235:9092,10.1.148.60:9092";
   std::string group_id = "cqin-test";
 
+  std::signal(SIGTERM|SIGINT, signal_handler);
+
   auto consumer = KafkaConnector(node, kafka_topic, brokers, group_id);
-  while (true) {
+  while (terminal_signal == 0) {
     // simulate a delay to decode and handle kafka batch
     auto start = MPI_Wtime();
     // kafka consumer
-    auto t1 = consumer.consume_batch(rows, 100, schema_ptr, [](const char* payload, const mschema& out) {
+    auto t1 = consumer.consume_batch(rows, 1000, schema_ptr, [](const char* payload, const mschema& out) {
       auto r = std::make_shared<mrow>(std::make_shared<mschema>(out));
       rapidjson::Document document;
       bool err = document.Parse((const char*)payload).HasParseError();
@@ -80,7 +88,7 @@ int main(int argc, char** argv) {
         v[0].p_val.long_val = document["timestamp"].GetInt64();
         v[1].p_val.string_val = document["host"].GetString();
         v[2].p_val.string_val = document["metricName"].GetString();
-        v[3].p_val.string_val = document["metricValue"].GetString();
+        v[3].p_val.double_val = std::atof(document["metricValue"].GetString());
         for (int i = 0; i < 4; i++) {
           r->write(out.fields.at(i), v[i]);
         }
@@ -103,8 +111,16 @@ int main(int argc, char** argv) {
 
     processors::compute(t3, [](std::shared_ptr<mtable> m) {
       m->toColumnar();
-      return arrow::compute::Sum({ m->getArrowTable()->GetColumnByName("timestamp") });
+      return arrow::compute::Sum({ m->getArrowTable()->GetColumnByName("metricValue") });
     });
+    auto end = MPI_Wtime();
+    size_t local_row_count = t1->row_count;
+    size_t global_row_count = 0;
+    MPI_Allreduce(&local_row_count, &global_row_count, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
+    
+    if (node->rank == 0) {
+      std::cout << "iteration process " << global_row_count << " rows in " << end - start << " seconds" << std::endl;
+    }
   }
   /**
    * @brief use arrow filter expressions
@@ -113,4 +129,5 @@ int main(int argc, char** argv) {
   /**
    * shuffle if needed
    */
+  return terminal_signal;
 }
