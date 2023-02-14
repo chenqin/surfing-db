@@ -206,16 +206,17 @@ include(ext/Gtest_Ext.cmake)
 include(ext/Gflags_Ext.cmake)
 
 # add a dependency of glog
-include(ext/Glog_Ext.cmake)
-#find_package (glog REQUIRED)
+#include(ext/Glog_Ext.cmake)
+find_package (glog REQUIRED)
+set(GLOG_LIBRARY glog)
 
 # include utils
 include(ext/Gflatbuffers_Ext.cmake)
 include(ext/Json_Ext.cmake)
 include(ext/OPENSSL_Ext.cmake)
 
-set(PYTHON_INCLUDE_DIRS ${PYTHON_INCLUDE_DIRS} /home/chen/.local/lib/python3.10/site-packages/numpy/core/include)
-include_directories(include ${PYTHON_INCLUDE_DIRS})
+#set(PYTHON_INCLUDE_DIRS ${PYTHON_INCLUDE_DIRS} /home/chen/.local/lib/python3.10/site-packages/numpy/core/include)
+#include_directories(include ${PYTHON_INCLUDE_DIRS})
 
 #used by thrift
 find_package(Boost REQUIRED)
@@ -232,8 +233,10 @@ find_package(Python3 COMPONENTS Interpreter Development)
 # include ML libs
 include(ext/Sketches_Ext.cmake)
 include(ext/XGBoost_Ext.cmake)
-
+#find_package(lz4)
+#find_package(RdKafka)
 include(ext/Kafka_Ext.cmake)
+set(KAFKA_LIBRARY rdkafka)
 
 # set up directory to search for headers
 include_directories(include ${GTEST_INCLUDE_DIRS})
@@ -259,12 +262,10 @@ target_link_libraries(MainTest
         PRIVATE ${META}
         PRIVATE ${TABLE}
         PRIVATE ${CONNECTOR}
-        PRIVATE ${ARROW_LIBRARY}
-        PRIVATE ${Python3_LIBRARIES})
+        PRIVATE ${ARROW_LIBRARY})
 
 target_link_libraries(Test
         PRIVATE ${META}
         PRIVATE ${TABLE}
         PRIVATE ${CONNECTOR}
-        PRIVATE ${ARROW_LIBRARY}
-        PRIVATE ${Python3_LIBRARIES})
+        PRIVATE ${ARROW_LIBRARY})

@@ -17,24 +17,11 @@
 #ifndef SURFINGDB_PROCESSORS_H
 #define SURFINGDB_PROCESSORS_H
 
-#include <Python.h>
 #include <arrow/api.h>
 #include <arrow/compute/api.h>
-
 #include <iostream>
-// #include <arrow/python/api.h>
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-
-// #include <arrow/python/pyarrow.h>
-//  we might get duplicate decl error if we also include this
-//  #include <arrow/array/array_primitive.h>
-//  #include <arrow/type_fwd.h>
-// #include <arrow/array/builder_primitive.h>
 #include "mtable.h"
 #include "xgbop.h"
-
-namespace py = pybind11;
 
 #pragma once
 
