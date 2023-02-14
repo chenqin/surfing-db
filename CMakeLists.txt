@@ -27,7 +27,7 @@ set(SURFINGDB_SRC ${SURFINGDB_ROOT}/src)
 
 SET(CMAKE_C_FLAGS ${CMAKE_C_FLAGS} -fopenmp)
 
-include_directories(include ${SURFINGDB_SRC} ${MPI_CXX_INCLUDE_PATH} ${MPI_INCLUDE_PATH})
+include_directories(include ${glog_INCLUDE_DIRS} ${SURFINGDB_SRC} ${MPI_CXX_INCLUDE_PATH} ${MPI_INCLUDE_PATH})
 
 # a switch to use clang or g++
 # clang or g++
@@ -207,8 +207,11 @@ include(ext/Gflags_Ext.cmake)
 
 # add a dependency of glog
 #include(ext/Glog_Ext.cmake)
-find_package (glog REQUIRED)
-set(GLOG_LIBRARY glog)
+#find_package (Glog REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(glog REQUIRED libglog)
+
+set(GLOG_LIBRARY ${glog_LIBRARIES})
 
 # include utils
 include(ext/Gflatbuffers_Ext.cmake)
