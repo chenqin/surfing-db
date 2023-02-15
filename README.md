@@ -9,6 +9,7 @@ A efficient and powerful in memory kafka messages processor using MPI and Apache
 - user defined partioner decouple ingest workers from rest of workloads (aka map reduce, slice/dice rpc stages)
 # how to run
 - run install.sh for dependencies
+- mpirun --hostfile hostfile ./MainTest --mca oob_tcp_port_min_v4 <port> -mca btl_tcp_if_exclude lo,docker0
 
 # configuration
 - src/meta/schema.h 
