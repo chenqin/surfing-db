@@ -52,7 +52,7 @@ void mtable::flush_rma_memory(size_t rows) {
   key_dist->clear();
   key_groups->clear();
   placement_index->clear();
-  std::string filepath = FLUSH_DIR + std::to_string(node_ptr->rank) + "-" + std::to_string(omp_get_thread_num()) + ".flush_rma_memory";
+  std::string filepath = FLUSH_DIR + std::to_string(node_ptr->rank) + "-" + ".flush_rma_memory";
   this->flush(filepath, schedule, rows, rows * schema_ptr->rowSize());
   MPI_Free_mem(schedule);
   MPI_Win_free(&win);
@@ -121,7 +121,7 @@ void mtable::appendRow(mrow& row) {
 }
 
 void mtable::verifyShuffle(const Field& field, std::function<size_t(size_t, int, int)> partitioner) {
-  LOG(INFO) << "verify " << row_count << " rows" << omp_get_thread_num() << " " << node_ptr->rank;
+  LOG(INFO) << "verify " << row_count << " rows " << node_ptr->rank;
   for (size_t i = 0; i < row_count; i++) {
     auto r = this->readRow(i);
     Value v;
@@ -477,7 +477,6 @@ arrow::Status append(arrow::ArrayBuilder* builder, const Field& field, const PVa
     ARROW_RETURN_NOT_OK(list_builder->Append());
 
     auto e_builder = list_builder->value_builder();
-    Value v;
     Field lfield;
     lfield.type = field.list_type;
     for (auto m : v.list_value) {
@@ -489,7 +488,6 @@ arrow::Status append(arrow::ArrayBuilder* builder, const Field& field, const PVa
     ARROW_RETURN_NOT_OK(map_builder->Append());
     auto k_builder = map_builder->key_builder();
     auto v_builder = map_builder->value_builder();
-    Value v;
     Field kfield, vfield;
     kfield.type = field.map_key_type;
     vfield.type = field.map_value_type;
@@ -617,7 +615,7 @@ std::shared_ptr<mschema> mtable::getCompactSchema() {
     if (node_ptr->rank == 0) {
       for (int i = 1; i < node_ptr->world; i++) {
         size_t local_units[max_units.size()];
-        MPI_Recv(&local_units, max_size, MPI_UNSIGNED_LONG, i, omp_get_thread_num(), MPI_COMM_WORLD,
+        MPI_Recv(&local_units, max_size, MPI_UNSIGNED_LONG, i, 1, MPI_COMM_WORLD,
                  MPI_STATUS_IGNORE);
         for (int i = 0; i < max_size; i++) {
           global_units[i] = local_units[i] > global_units[i] ? local_units[i] : global_units[i];
@@ -625,11 +623,11 @@ std::shared_ptr<mschema> mtable::getCompactSchema() {
       }
       // broadcast with tag
       for (int i = 1; i < node_ptr->world; i++) {
-        MPI_Send(&global_units, max_size, MPI_UNSIGNED_LONG, i, omp_get_thread_num(), MPI_COMM_WORLD);
+        MPI_Send(&global_units, max_size, MPI_UNSIGNED_LONG, i, 1, MPI_COMM_WORLD);
       }
     } else {
-      MPI_Send(&max_units[0], max_size, MPI_UNSIGNED_LONG, 0, omp_get_thread_num(), MPI_COMM_WORLD);
-      MPI_Recv(&global_units, max_size, MPI_UNSIGNED_LONG, 0, omp_get_thread_num(), MPI_COMM_WORLD,
+      MPI_Send(&max_units[0], max_size, MPI_UNSIGNED_LONG, 0, 1, MPI_COMM_WORLD);
+      MPI_Recv(&global_units, max_size, MPI_UNSIGNED_LONG, 0, 1, MPI_COMM_WORLD,
                MPI_STATUS_IGNORE);
     }
   }

@@ -21,7 +21,6 @@ add_library(${TABLE} STATIC
 target_link_libraries(${TABLE}
         PUBLIC Threads::Threads
         PUBLIC MPI::MPI_CXX
-        PUBLIC OpenMP::OpenMP_CXX
         PUBLIC ${OPENSSL_LIBRARY}
         PUBLIC ${CRYPTO_LIBRARY}
         PUBLIC ${THRIFT_LIBRARY}

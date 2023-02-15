@@ -301,28 +301,5 @@ MPI_Datatype* mschema::schemaMPIType() {
   }
   return &_row_type;
 }
-/**
- * covert surfing-db schema type to duckdb schema
- * @param f
- * @return
- */
-inline std::string cloumnType(Field& f) {
-  if (f.type == RowType::STRING || f.type == RowType::LIST || f.type == RowType::MAP) {
-    return fmt::format("VARCHAR({})", SchemaUtils::getFieldSize(f));
-  }
-  if (f.type == RowType::INT) {
-    return "INTEGER";
-  }
-  if (f.type == RowType::DOUBLE) {
-    return "DOUBLE";
-  }
-  if (f.type == RowType::LONG) {
-    return "BIGINT";
-  }
-  if (f.type == RowType::BOOL) {
-    return "BOOLEAN";
-  }
-}
-
 } // namespace meta
 } // namespace surfingdb

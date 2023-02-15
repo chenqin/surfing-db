@@ -4,15 +4,6 @@ include(ExternalProject)
 # lib thrift name
 set(THRIFT_LIBRARY libthrift)
 # add_custom_target(copyConfig)
-
-if(APPLE)
-    # MacOs has problem to build thrift with libcrypto
-    # install thrift through brew
-    # "brew install thrift"
-    # thrift
-    set(THRIFT_INCLUDE_DIR /usr/local/opt/thrift@0.9/include)
-    set(THRIFT_LIBRARY_PATH /usr/local/opt/thrift@0.9/lib/libthrift.a)
-else()
     # build thrift
     SET(THRIFT_OPTS
             -DBUILD_TESTING=OFF
@@ -51,7 +42,6 @@ else()
     file(MAKE_DIRECTORY ${THRIFT_INCLUDE_DIR})
     set(THRIFT_LIBRARY_PATH ${BINARY_DIR}/lib/${CMAKE_FIND_LIBRARY_PREFIXES}thrift${CMAKE_STATIC_LIBRARY_SUFFIX})
     include_directories(include ${THRIFT_INCLUDE_DIR})
-endif()
 message(STATUS "THRIFT_INCLUDE_DIR=${THRIFT_INCLUDE_DIR}")
 
 add_library(${THRIFT_LIBRARY} UNKNOWN IMPORTED)

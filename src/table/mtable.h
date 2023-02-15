@@ -24,7 +24,6 @@
 #include <future>
 #include <math.h>
 #include <mpi.h>
-#include <omp.h>
 #include <stdio.h>
 #include <string.h>
 

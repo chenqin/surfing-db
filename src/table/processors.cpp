@@ -132,9 +132,8 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> input, Field
     transfered_row_index_rank[i] = (i == 0) ? 0 : recv_from_vec[i - 1] + transfered_row_index_rank[i - 1];
   }
   auto table = std::make_shared<mtable>(node_ptr, schema_ptr, recv_row_count * rowsize);
-  int mpi_buffer_size = (int)(recv_row_count * rowsize);
 
-  CHECK(mpi_buffer_size < MEM_PAGE_SIZE); // no more than given table size
+  CHECK_LT((recv_row_count * rowsize), MEM_PAGE_SIZE); // no more than given table size
 
   int send_count = 0, recv_count = 0;
 
@@ -188,7 +187,7 @@ std::shared_ptr<mtable> processors::shuffleRMA(std::shared_ptr<mtable> in, Field
   in->group(f, false);
   auto partitioner = [](size_t key, int rank, int world){
        int base =world % 2 == 0 ? world - 1 : world;
-       return key % base;
+       return (key  + rank) % base;
     };
   in->placement_sort(f, partitioner);
   CHECK(!in->placement_index->empty());

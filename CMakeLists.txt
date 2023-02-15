@@ -13,19 +13,50 @@ endif ()
 
 find_package(Threads REQUIRED)
 find_package(MPI REQUIRED)
-find_package(OpenMP REQUIRED)
+find_package(Boost REQUIRED)
+if(APPLE)
+    set(OPENSSL_ROOT_DIR /opt/homebrew/Cellar/openssl@3/3.0.8)
+    set(OPENSSL_LIBRARIES ${OPENSSL_ROOT_DIR}/lib)
+    set(OPENSSL_INCLUDE_DIR ${OPENSSL_ROOT_DIR}/include)
+    set(OPENSSL_CRYPTO_LIBRARY ${OPENSSL_ROOT_DIR}/lib)
+
+    set(BOOST_ROOT_DIR /opt/homebrew/Cellar/boost/1.81.0_1)
+    set(BOOST_INCLUDE_DIR /opt/homebrew/Cellar/boost/1.81.0_1/include/)
+    include_directories(/opt/homebrew/Cellar/boost/1.81.0_1/include/)
+    set(BOOST_LIBRARIES /opt/homebrew/Cellar/boost/1.81.0_1/lib/)
+
+    set(THRIFT_ROOT_DIR /opt/homebrew/Cellar/thrift@0.9/0.9.3.1)
+    set(THRIFT_INCLUDE_DIR /opt/homebrew/Cellar/thrift@0.9/0.9.3.1/include)
+    set(THRIFT_LIBRARY ${THRIFT_ROOT_DIR}/lib/libthrift.a)
+
+    set(glog_INCLUDE_DIR /opt/homebrew/Cellar/glog/0.6.0/include/)
+    set(GLOG_LIBRARY /opt/homebrew/Cellar/glog/0.6.0/lib/libglog.dylib)
+
+    #/opt/homebrew/Cellar/googletest/1.13.0
+else()
+    #used by thrift
+    include(ext/Thrift_Ext.cmake)
+    #find_package (Glog REQUIRED)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(glog REQUIRED libglog)
+
+    set(GLOG_LIBRARY ${glog_LIBRARIES})
+
+endif()
+
+#find_package(OpenMP REQUIRED)
 find_package(OpenSSL REQUIRED)
 #https://pybind11.readthedocs.io/en/stable/advanced/embedding.html
 find_package(pybind11 REQUIRED)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
 set(SURFINGDB_ROOT ${PROJECT_SOURCE_DIR})
 set(SURFINGDB_SRC ${SURFINGDB_ROOT}/src)
 
-SET(CMAKE_C_FLAGS ${CMAKE_C_FLAGS} -fopenmp)
+#SET(CMAKE_C_FLAGS ${CMAKE_C_FLAGS} -fopenmp)
 
 include_directories(include ${glog_INCLUDE_DIRS} ${SURFINGDB_SRC} ${MPI_CXX_INCLUDE_PATH} ${MPI_INCLUDE_PATH})
 
@@ -36,7 +67,7 @@ set(NC gcc)
 if (APPLE)
     set(NCXX /usr/bin/g++)
     set(NCC /usr/bin/gcc)
-    set(NCFLAGS "-Wall -Wextra -Werror -Wno-error=extern-c-compat -Wno-error=inconsistent-missing-override -Wno-error=nullability-completeness -Wno-error=sign-compare -Wno-error=unknown-warning-option")
+    set(NCFLAGS "-Wall -Wextra -Werror -Wno-deprecated -Wno-error=extern-c-compat -Wno-error=inconsistent-missing-override -Wno-error=nullability-completeness -Wno-error=sign-compare -Wno-error=unknown-warning-option")
     set(NCFLAGS_RELEASE "-O3")
 else ()
     if (${NC} STREQUAL "clang")
@@ -160,7 +191,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g -DNDBG")
 set(CMAKE_CXX_FLAGS_RELEASE ${NCFLAGS_RELEASE})
 
 # use openmp simd
-OPTION(USE_OpenMP "Use OpenMP" ON)
+OPTION(USE_OpenMP "Use OpenMP" OFF)
 
 IF (USE_OpenMP)
     message(STATUS "USE_OpenMP=${USE_OpenMP}")
@@ -207,11 +238,6 @@ include(ext/Gflags_Ext.cmake)
 
 # add a dependency of glog
 #include(ext/Glog_Ext.cmake)
-#find_package (Glog REQUIRED)
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(glog REQUIRED libglog)
-
-set(GLOG_LIBRARY ${glog_LIBRARIES})
 
 # include utils
 include(ext/Gflatbuffers_Ext.cmake)
@@ -221,9 +247,6 @@ include(ext/OPENSSL_Ext.cmake)
 #set(PYTHON_INCLUDE_DIRS ${PYTHON_INCLUDE_DIRS} /home/chen/.local/lib/python3.10/site-packages/numpy/core/include)
 #include_directories(include ${PYTHON_INCLUDE_DIRS})
 
-#used by thrift
-find_package(Boost REQUIRED)
-include(ext/Thrift_Ext.cmake)
 #arrow
 find_package(Arrow REQUIRED)
 set(ARROW_LIBRARY Arrow::arrow_shared)
@@ -244,10 +267,6 @@ set(KAFKA_LIBRARY rdkafka)
 # set up directory to search for headers
 include_directories(include ${GTEST_INCLUDE_DIRS})
 include_directories(include ${GMOCK_INCLUDE_DIRS})
-
-
-# build sql parser
-include(src/parser/parser.cmake)
 
 # build table representation
 include(src/meta/meta.cmake)

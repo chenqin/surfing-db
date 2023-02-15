@@ -43,3 +43,17 @@ pip install "pybind11[global]"
 # cleanup
 sudo apt autoremove
 
+
+
+#thrift@0.9 is keg-only, which means it was not symlinked into /opt/homebrew,
+#because this is an alternate version of another formula.
+
+#If you need to have thrift@0.9 first in your PATH, run:
+#  echo 'export PATH="/opt/homebrew/opt/thrift@0.9/bin:$PATH"' >> /Users/cqin/.bash_profile
+
+#For compilers to find thrift@0.9 you may need to set:
+#  export LDFLAGS="-L/opt/homebrew/opt/thrift@0.9/lib"
+#  export CPPFLAGS="-I/opt/homebrew/opt/thrift@0.9/include"
+
+#For pkg-config to find thrift@0.9 you may need to set:
+#  export PKG_CONFIG_PATH="/opt/homebrew/opt/thrift@0.9/lib/pkgconfig"
