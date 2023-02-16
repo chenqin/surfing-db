@@ -108,7 +108,7 @@ void mrow::write(const Field& f, const Value& v, const uint64_t& offset) {
 
     int64_t size = v.list_value.size();
     _pwrite(_header, &size, offset);
-    size_t list_offset = offset + sizeof(int64_t);
+    size_t list_offset = offset + sizeof(HEADER_SIZE);
 
     //  |size|string|
     Field listField;
@@ -128,22 +128,23 @@ void mrow::write(const Field& f, const Value& v, const uint64_t& offset) {
 
     int64_t size = v.map_value.size();
     _pwrite(_header, &size, offset);
-    size_t map_offset = offset + sizeof(int64_t);
+    size_t map_offset = offset + sizeof(HEADER_SIZE);
 
     Field keyField, valueField;
     keyField.type = f.map_key_type;
     valueField.type = f.map_value_type;
     keyField.max_unit_size = f.max_map_key_unit_size;
     valueField.max_unit_size = f.max_map_value_unit_size;
-
+    
     for (auto& pair : v.map_value) {
       Value key, value;
       key.p_val = pair.first;
       value.p_val = pair.second;
+      CHECK_LE(map_offset, row_size() - surfingdb::meta::SchemaUtils::getFieldSize(keyField) - surfingdb::meta::SchemaUtils::getFieldSize(keyField));
       write(keyField, key, map_offset);
-      map_offset += keyField.max_unit_size;
+      map_offset += surfingdb::meta::SchemaUtils::getFieldSize(keyField);
       write(valueField, value, map_offset);
-      map_offset += valueField.max_unit_size;
+      map_offset += surfingdb::meta::SchemaUtils::getFieldSize(keyField);
     }
     break;
   }
@@ -255,11 +256,9 @@ void mrow::_pwrite(const Field& f, const void* data, const uint64_t& offset) {
   case RowType::STRING: {
     // be careful here with truncation, char* requires extra char \0 to end
     char* str_ptr = (char*)data;
-
     size_t length = strlen(str_ptr);
-    memcpy((int64_t*)(_payload + offset), &(length), sizeof(int64_t));
-    memcpy((char*)(_payload + offset + sizeof(int64_t)), data, length + 1);
-    memset((char*)(_payload + offset + sizeof(int64_t) + length + 1), 0, f.max_unit_size - length - 1);
+    memset((char*)(_payload + offset), 0, MAX_STR_LEN);
+    memcpy((char*)(_payload + offset), data, length + 1);
     break;
   }
   case RowType::LIST: {
@@ -297,15 +296,11 @@ size_t mrow::_pread(const Field& f, void* dataptr, const uint64_t& offset) {
     return sizeof(DOUBLE_TYPE);
   }
   case RowType::STRING: {
-    // TODO(chenqin): use header
-    int64_t* len = (int64_t*)(_payload + offset);
-    char* char_ptr = (char*)(_payload + offset + sizeof(int64_t));
-    // avoid truncation
-    CHECK_EQ(*len, (int64_t)strlen(char_ptr));
-    size_t resid = f.max_unit_size - strlen(char_ptr) - 1; // leave extra byte'\0'
+    char* char_ptr = (char*)(_payload + offset);
+    size_t resid = MAX_STR_LEN - strlen(char_ptr) - 1; // leave extra byte'\0'
     CHECK_GE(resid, 0);
-    memcpy(dataptr, char_ptr, strlen(char_ptr));
-    return *len;
+    memcpy(dataptr, char_ptr, strlen(char_ptr) + 1);
+    return strlen(char_ptr) ;
   }
   case RowType::LIST: {
     assert(false);

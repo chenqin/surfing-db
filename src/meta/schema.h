@@ -36,7 +36,7 @@
 namespace surfingdb {
 namespace meta {
 
-#define MAX_STR_LEN 1024 
+#define MAX_STR_LEN 1024
 #define HEADER_SIZE sizeof(long)
 #define MEM_PAGE_SIZE 5368709120 // 5GB
 #define FLUSH_SIZE 10737418240   // 10GB
@@ -196,7 +196,15 @@ private:
   std::shared_ptr<arrow::Schema> arrowSchema;
 
 public:
+  /**
+   * @brief starting address of each field
+   *
+   */
   std::shared_ptr<std::unordered_map<Field, uint64_t, FieldHasher>> _offsets;
+  /**
+   * @brief max number of element in each field
+   *
+   */
   std::shared_ptr<std::unordered_map<Field, uint64_t, FieldHasher>> _max_unit;
   std::shared_ptr<std::unordered_map<Field, MPI_Datatype, FieldHasher>> _field_types;
 
@@ -219,12 +227,16 @@ public:
     _offsets = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
     _max_unit = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
     _field_types = std::make_shared<std::unordered_map<Field, MPI_Datatype, FieldHasher>>();
-    _size = sizeof(size_t); // store _schema_sig
+    _size = 0;
     for (size_t i = 0; i < fields.size(); i++) {
       // LOG(INFO) << fields.at(i).name;
       auto f = fields.at(i);
-      _offsets->emplace(f, _size);
       _max_unit->emplace(f, f.max_unit_size);
+      /**
+       * @brief for primitive types, it's f.max_unit_size * size_of(type)
+       *        for collective types, f.max_unit_size * size_of(single_pair)
+       *
+       */
       _size += SchemaUtils::getFieldSize(f);
     }
   }

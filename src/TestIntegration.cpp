@@ -145,11 +145,10 @@ int main(int argc, char** argv) {
       lval.push_back(p.p_val);
       p.list_value = lval;
       row->write(out.fields.at(3), p);
-
       PValue key;
       PValue value;
-      key.string_val = random_string(16);
-      value.string_val = random_string(16);
+      key.string_val = random_string(MAX_STR_LEN - 1);
+      value.string_val = random_string(MAX_STR_LEN - 1);
       std::pair<PValue, PValue> pair;
       pair.first = key;
       pair.second = value;

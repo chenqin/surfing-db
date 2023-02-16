@@ -61,26 +61,28 @@ size_t SchemaUtils::getFieldSize(const Field& f) {
   case RowType::DOUBLE: {
     return sizeof(DOUBLE_TYPE);
   }
-    //  |size|string|
   case RowType::STRING: {
-    // max support string column MAX_STR_LEN character
-    long str_size = f.max_unit_size < MAX_STR_LEN ? f.max_unit_size : MAX_STR_LEN;
-    return sizeof(char) * str_size + HEADER_SIZE;
+    return MAX_STR_LEN;
   }
     //  |size|array|
   case RowType::LIST: {
     Field l;
     l.type = f.list_type;
-    return getFieldSize(l) * f.max_unit_size + HEADER_SIZE;
+    size_t units = f.max_unit_size;
+    return getFieldSize(l) * units + HEADER_SIZE;
   }
     // | size | key val key val|
   case RowType::MAP: {
     Field k, v;
     k.type = f.map_key_type;
-    k.max_unit_size = f.max_map_key_unit_size;
     v.type = f.map_value_type;
-    v.max_unit_size = v.max_map_value_unit_size;
-    return getFieldSize(k) * f.max_unit_size + getFieldSize(v) * v.max_unit_size + HEADER_SIZE;
+    size_t units = f.max_unit_size;
+    /**
+     * @brief size of each key , value pair multiple by number of pairs in map 
+     * HEADER stores number of pairs
+     * 
+     */
+    return (getFieldSize(k) + getFieldSize(v)) * units + HEADER_SIZE;
   }
   }
   assert(false);
