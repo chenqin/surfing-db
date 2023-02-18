@@ -14,6 +14,9 @@ endif ()
 find_package(Threads REQUIRED)
 find_package(MPI REQUIRED)
 find_package(Boost REQUIRED)
+
+find_package(JNI REQUIRED)
+include_directories(${JNI_INCLUDE_DIRS})
 if(APPLE)
     set(OPENSSL_ROOT_DIR /opt/homebrew/Cellar/openssl@3/3.0.8)
     set(OPENSSL_LIBRARIES ${OPENSSL_ROOT_DIR}/lib)
@@ -250,6 +253,7 @@ include(ext/OPENSSL_Ext.cmake)
 #arrow
 find_package(Arrow REQUIRED)
 set(ARROW_LIBRARY Arrow::arrow_shared)
+find_package(ArrowCUDA REQUIRED)
 find_package(Parquet REQUIRED)
 set(PARQUET_LIBRARY Parquet::parquet_shared)
 
@@ -290,4 +294,5 @@ target_link_libraries(Test
         PRIVATE ${META}
         PRIVATE ${TABLE}
         PRIVATE ${CONNECTOR}
-        PRIVATE ${ARROW_LIBRARY})
+        PRIVATE ${ARROW_LIBRARY}
+        PRIVATE ${JNI_LIBRARIES})

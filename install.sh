@@ -43,6 +43,9 @@ pip install "pybind11[global]"
 # cleanup
 sudo apt autoremove
 
+#cuda optional
+#sudo apt install nvidia-cuda-toolkit
+
 
 
 #thrift@0.9 is keg-only, which means it was not symlinked into /opt/homebrew,

@@ -2,3 +2,7 @@
 .vscode
 cmake-build-debug
 build
+
+*/idea/*
+cpptojava/target
+cpptojava.jar
