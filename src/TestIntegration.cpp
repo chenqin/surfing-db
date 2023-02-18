@@ -136,55 +136,18 @@ int main(int argc, char** argv) {
     return dest;
   };
 
-  JNIEnv* env;
   JavaVM* jvm;
-  env = CreateVM(&jvm);
-  if (env == nullptr) return EXIT_FAILURE;
-  jclass javaClassToBeCalledByCpp = env->FindClass("ToBeCalledByCpp");
-  if (javaClassToBeCalledByCpp != nullptr) {
-    jmethodID fillVector = env->GetStaticMethodID(javaClassToBeCalledByCpp,
-                                                  "fillVector",
-                                                  "(JJ)V");
-    if (fillVector != nullptr) {
-      struct ArrowSchema arrowSchema;
-      struct ArrowArray arrowArray;
-      std::cout << "\n<<<<< C++ to Java for Arrays >>>>>\n"
-                << std::endl;
-      env->CallStaticVoidMethod(javaClassToBeCalledByCpp, fillVector,
-                                static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchema)),
-                                static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArray)));
-      auto resultImportArray = arrow::ImportArray(&arrowArray, &arrowSchema);
-      std::shared_ptr<arrow::Array> array = resultImportArray.ValueOrDie();
-      std::cout << "[C++] Array: " << array->ToString() << std::endl;
-    } else {
-      std::cerr << "Could not find fillVector method\n"
-                << std::endl;
-      return EXIT_FAILURE;
-    }
-    jmethodID fillVectorSchemaRoot = env->GetStaticMethodID(javaClassToBeCalledByCpp,
-                                                            "fillVectorSchemaRoot",
-                                                            "(JJ)V");
-    if (fillVectorSchemaRoot != nullptr) {
-      struct ArrowSchema arrowSchema;
-      struct ArrowArray arrowArray;
-      std::cout << "\n<<<<< C++ to Java for RecordBatch >>>>>\n"
-                << std::endl;
-      env->CallStaticVoidMethod(javaClassToBeCalledByCpp, fillVectorSchemaRoot,
-                                static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchema)),
-                                static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArray)));
-      auto resultImportVectorSchemaRoot = arrow::ImportRecordBatch(&arrowArray, &arrowSchema);
-      std::shared_ptr<arrow::RecordBatch> recordBatch = resultImportVectorSchemaRoot.ValueOrDie();
-      std::cout << "[C++] RecordBatch: " << recordBatch->ToString() << std::endl;
-    } else {
-      std::cerr << "Could not find fillVectorSchemaRoot method\n"
-                << std::endl;
-      return EXIT_FAILURE;
-    }
-  } else {
-    std::cout << "Could not find ToBeCalledByCpp class\n"
-              << std::endl;
-    return EXIT_FAILURE;
-  }
+  JNIEnv* env = CreateVM(&jvm);
+  CHECK_NOTNULL(env);
+  const jclass javaClassToBeCalledByCpp = env->FindClass("ToBeCalledByCpp");
+  CHECK_NOTNULL(javaClassToBeCalledByCpp);
+  struct ArrowSchema arrowSchema;
+  struct ArrowArray arrowArray;
+  const jmethodID fillVectorSchemaRoot = env->GetStaticMethodID(javaClassToBeCalledByCpp,
+                                                                "fillVectorSchemaRoot",
+                                                                "(JJ)V");
+  CHECK_NOTNULL(fillVectorSchemaRoot);
+
   while (terminal_signal == 0) {
     /**
      * @brief import pyarrow
@@ -256,12 +219,16 @@ int main(int argc, char** argv) {
     auto t5 = processors::shuffle(t4, ptr->fields.at(4), partitioner);
     t5->verifyShuffle(ptr->fields.at(4), partitioner);
 
-    // auto pytable = arrow::py::wrap_table(t4->getArrowTable());
     /**
-     * store post paritioned columnar table
+     * @brief read data from java
+     *
      */
-    // tables.push_back(t3->getArrowTable());
-    size_t r_row_count = t4->row_count;
+    env->CallStaticVoidMethod(javaClassToBeCalledByCpp, fillVectorSchemaRoot,
+                              static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchema)),
+                              static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArray)));
+    const auto resultImportVectorSchemaRoot = arrow::ImportRecordBatch(&arrowArray, &arrowSchema);
+    std::shared_ptr<arrow::RecordBatch> recordBatch = resultImportVectorSchemaRoot.ValueOrDie();
+    CHECK_GT(recordBatch->num_rows(), 0);
   }
   jvm->DestroyJavaVM();
   return terminal_signal;

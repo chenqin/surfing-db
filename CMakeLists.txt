@@ -284,6 +284,11 @@ include(src/connector/connector.cmake)
 add_executable(MainTest src/main.cpp)
 add_executable(Test src/TestIntegration.cpp)
 
+# mvn clean install latest java stub
+execute_process(
+    COMMAND mvn clean install -f ${CMAKE_SOURCE_DIR}/cpptojava/pom.xml
+    COMMAND cp ${CMAKE_SOURCE_DIR}/cpptojava/target/cpptojava-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_SOURCE_DIR}/cpptojava.jar)
+
 target_link_libraries(MainTest
         PRIVATE ${META}
         PRIVATE ${TABLE}
