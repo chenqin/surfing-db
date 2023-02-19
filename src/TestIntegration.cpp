@@ -30,6 +30,7 @@
 
 #define FLUSH_DIR "/tmp/"
 #define BATCH_SIZE 2250
+#define SURFRING_DB_JAVA_PATH "../surfing-db-java.jar"
 
 using namespace surfingdb::meta;
 using namespace surfingdb::table::schema;
@@ -41,7 +42,7 @@ JNIEnv* CreateVM(JavaVM** jvm) {
   JNIEnv* env;
   JavaVMInitArgs vm_args;
   JavaVMOption options[2];
-  options[0].optionString = "-Djava.class.path=/home/chen/surfing-db/cpptojava.jar";
+  options[0].optionString = "-Djava.class.path=../surfing-db-java.jar";
   options[1].optionString = "-DXcheck:jni:pedantic";
   vm_args.version = JNI_VERSION_1_8;
   vm_args.nOptions = 2;

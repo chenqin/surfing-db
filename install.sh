@@ -1,5 +1,8 @@
 sudo apt update
 
+#force use jdk 8 for JNI hardcode and JAVA_HOME
+sudo apt install -y -V openjdk-8-jdk
+
 # install needed dependencies
 sudo apt install -y -V g++ 
 sudo apt install -y -V cmake
@@ -10,7 +13,9 @@ sudo apt install -y -V libssl-dev
 sudo apt install -y -V libboost-dev
 sudo apt install  -y -V pybind11-dev
 sudo apt install  -y -V libgoogle-glog-dev
-sudp apt install  -y -V flex bison
+#thrift build
+sudp apt install  -y -V flex 
+sudp apt install  -y -V bison
 sudo apt install  -y -V libunwind-dev
 
 #https://arrow.apache.org/install/
@@ -25,12 +30,6 @@ sudo apt install -y -V libarrow-dataset-dev # For Apache Arrow Dataset C++
 sudo apt install -y -V libarrow-dataset-glib-dev # For Apache Arrow Dataset GLib (C)
 sudo apt install -y -V libarrow-flight-dev # For Apache Arrow Flight C++
 sudo apt install -y -V libarrow-flight-glib-dev # For Apache Arrow Flight GLib (C)
-# Notes for Plasma related packages:
-#   * You need to enable "non-free" component on Debian GNU/Linux
-#   * You need to enable "multiverse" component on Ubuntu
-#   * You can use Plasma related packages only on amd64
-#sudo apt install -y -V libplasma-dev # For Plasma C++
-#sudo apt install -y -V libplasma-glib-dev # For Plasma GLib (C)
 sudo apt install -y -V libgandiva-dev # For Gandiva C++
 sudo apt install -y -V libgandiva-glib-dev # For Gandiva GLib (C)
 sudo apt install -y -V libparquet-dev # For Apache Parquet C++

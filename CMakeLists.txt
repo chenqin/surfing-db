@@ -3,6 +3,8 @@
 cmake_minimum_required(VERSION 3.16)
 project(surfingdb LANGUAGES CXX VERSION 0.1)
 
+find_package(Java 1.8 REQUIRED)
+set($ENV{JAVA_HOME} "/usr/lib/jvm/java-8-openjdk-amd64/")
 
 if (linux)
     project(Treads)
@@ -284,10 +286,18 @@ include(src/connector/connector.cmake)
 add_executable(MainTest src/main.cpp)
 add_executable(Test src/TestIntegration.cpp)
 
-# mvn clean install latest java stub
+# mvn clean install latest java stub cpp call java
 execute_process(
-    COMMAND mvn clean install -f ${CMAKE_SOURCE_DIR}/cpptojava/pom.xml
-    COMMAND cp ${CMAKE_SOURCE_DIR}/cpptojava/target/cpptojava-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_SOURCE_DIR}/cpptojava.jar)
+    COMMAND mvn clean install -Darrow.version=${ARROW_VERSION} -f ${CMAKE_SOURCE_DIR}/surfing-db-java/pom.xml
+    COMMAND cp ${CMAKE_SOURCE_DIR}/surfing-db-java/target/surfing-deb-java-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_SOURCE_DIR}/surfing-db-java.jar)
+
+# java call cpp
+execute_process(
+    COMMAND cd ${CMAKE_SOURCE_DIR}/surfing-db-java/src/main/java/
+    COMMAND javac -cp javacpp-1.5.8.jar CDataJavaConfig.java
+    COMMAND java -jar javacpp-1.5.8.jar CDataJavaConfig.java
+    COMMAND java -jar javacpp-1.5.8.jar CDataJavaToCppExample.java
+    COMMAND cd ${CMAKE_BINARY_DIR})
 
 target_link_libraries(MainTest
         PRIVATE ${META}

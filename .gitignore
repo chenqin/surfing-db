@@ -4,5 +4,8 @@ cmake-build-debug
 build
 
 */idea/*
-cpptojava/target
-cpptojava.jar
+surfing-db-java/target
+surfing-db-java.jar
+
+surfing-db-java/.idea/compiler.xml
+surfing-db-java/.idea/workspace.xml
