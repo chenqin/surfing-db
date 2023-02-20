@@ -174,7 +174,7 @@ int main(int argc, char** argv) {
     start = MPI_Wtime();
     auto t4 = processors::shuffle(t2, ptr->fields.at(2), partitioner);
     auto end = MPI_Wtime();
-    std::cout << " shuffle time = " << (end - start) << " rank = " << node->rank << " ingestor = " << node->getissubscriber() << std::endl;
+    //std::cout << " shuffle time = " << (end - start) << " rank = " << node->rank << " ingestor = " << node->getissubscriber() << std::endl;
     start = MPI_Wtime();
     /**
      * verify shuffle row placement to right worker (aka MPI rank)

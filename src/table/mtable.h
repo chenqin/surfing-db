@@ -57,7 +57,7 @@ private:
   /**
    * define columnar table ptr
    */
-  std::shared_ptr<arrow::Table> table_ptr;
+  std::shared_ptr<arrow::RecordBatch> record_ptr;
 
 public:
   MPI_Win win;
@@ -100,11 +100,7 @@ public:
   /**
    * convert row based table into columnar table in arrow format
    */
-  std::shared_ptr<arrow::Table> getArrowTable();
-  /**
-   * convert mtable to arrow columar format
-   */
-  arrow::Status toColumnar();
+  std::shared_ptr<arrow::RecordBatch> getRecordBatch();
   std::shared_ptr<arrow::Schema> getArrowSchema();
 
   void print();

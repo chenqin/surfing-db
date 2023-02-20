@@ -85,8 +85,7 @@ TEST(TableTest, testCompact) {
   auto compact = t.compactTable();
   EXPECT_LT(compact->getSchema()->rowSize(), tpr->rowSize());
 
-  CHECK(arrow::Status::OK() == t.toColumnar());
-  auto q = t.getArrowTable();
+  auto q = t.getRecordBatch();
   CHECK_EQ(q->num_rows(), 1);
   CHECK_EQ(q->num_columns(), r.fields.size());
 }

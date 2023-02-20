@@ -499,11 +499,8 @@ arrow::Status append(arrow::ArrayBuilder* builder, const Field& field, const PVa
   return arrow::Status::OK();
 }
 
-std::shared_ptr<arrow::Table> mtable::getArrowTable() {
-  return this->table_ptr;
-}
-
-arrow::Status mtable::toColumnar() {
+std::shared_ptr<arrow::RecordBatch> mtable::getRecordBatch() {
+  if(this->record_ptr != nullptr) return this->record_ptr;
   /**
    * Build list of builders to append
    */
@@ -537,21 +534,17 @@ arrow::Status mtable::toColumnar() {
       auto builder_ptr = builders.at(k);
       Value v;
       r->read(field, v);
-      ARROW_RETURN_NOT_OK(append(builder_ptr.get(), field, v.p_val, v));
+      append(builder_ptr.get(), field, v.p_val, v);
     }
   }
 
   for (auto b : builders) {
     std::shared_ptr<arrow::Array> _array;
-    ARROW_RETURN_NOT_OK(b->Finish(&_array));
+    b->Finish(&_array);
     arrays.push_back(_array);
   }
-  this->table_ptr = arrow::Table::Make(this->getArrowSchema(), arrays);
-  /**
-   * release mtable vector
-   */
-  release();
-  return arrow::Status::OK();
+  this->record_ptr = arrow::RecordBatch::Make(this->getArrowSchema(), arrays.size(), arrays);
+  return this->record_ptr;
 }
 
 std::shared_ptr<mschema> mtable::getCompactSchema() {

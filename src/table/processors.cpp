@@ -194,10 +194,12 @@ const std::shared_ptr<mtable> processors::java(std::shared_ptr<mtable> input, st
   node->env->CallStaticVoidMethod(javaClassToBeCalledByCpp, fillVectorSchemaRoot,
                                   static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchema)),
                                   static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArray)));
+  //auto batch = input->getRecordBatch();
+  //CHECK(batch->num_rows() > 0);
+  //arrow::ExportRecordBatch(*batch.get(), &arrowArray, &arrowSchema);
   const auto resultImportVectorSchemaRoot = arrow::ImportRecordBatch(&arrowArray, &arrowSchema);
   std::shared_ptr<arrow::RecordBatch> recordBatch = resultImportVectorSchemaRoot.ValueOrDie();
   CHECK_NOTNULL(fillVectorSchemaRoot);
-
   return nullptr;
 }
 

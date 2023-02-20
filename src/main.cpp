@@ -110,8 +110,7 @@ int main(int argc, char** argv) {
     t3->verifyShuffle(schema_ptr->fields.at(2), partitioner);
 
     processors::compute(t3, [](std::shared_ptr<mtable> m) {
-      m->toColumnar();
-      return arrow::compute::Sum({ m->getArrowTable()->GetColumnByName("metricValue") });
+      return arrow::compute::Sum({ m->getRecordBatch()->GetColumnByName("metricValue") });
     });
     auto end = MPI_Wtime();
     size_t local_row_count = t1->row_count;
