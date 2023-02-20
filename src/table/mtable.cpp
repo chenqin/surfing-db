@@ -487,11 +487,12 @@ arrow::Status append(arrow::ArrayBuilder* builder, const Field& field, const PVa
     auto map_builder = (arrow::MapBuilder*)builder;
     ARROW_RETURN_NOT_OK(map_builder->Append());
     auto k_builder = map_builder->key_builder();
-    auto v_builder = map_builder->value_builder();
+    auto v_builder = map_builder->item_builder();
     Field kfield, vfield;
     kfield.type = field.map_key_type;
     vfield.type = field.map_value_type;
     for (auto n : v.map_value) {
+      std::cout << "map" << n.first.string_val << std::endl;
       ARROW_RETURN_NOT_OK(append(k_builder, kfield, n.first, v));
       ARROW_RETURN_NOT_OK(append(v_builder, vfield, n.second, v));
     }
@@ -500,7 +501,6 @@ arrow::Status append(arrow::ArrayBuilder* builder, const Field& field, const PVa
 }
 
 std::shared_ptr<arrow::RecordBatch> mtable::getRecordBatch() {
-  if(this->record_ptr != nullptr) return this->record_ptr;
   /**
    * Build list of builders to append
    */

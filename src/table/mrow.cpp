@@ -99,7 +99,7 @@ void mrow::write(const Field& f, const Value& v, const uint64_t& offset) {
     break;
   }
   case RowType::STRING: {
-    CHECK_LE(strlen(v.p_val.string_val.c_str()), f.max_unit_size - 1); // include extra \0
+    CHECK_LE(strlen(v.p_val.string_val.c_str()), MAX_STR_LEN - 1); // include extra \0
     _pwrite(f, v.p_val.string_val.c_str(), offset);
     break;
   }
@@ -128,7 +128,7 @@ void mrow::write(const Field& f, const Value& v, const uint64_t& offset) {
 
     int64_t size = v.map_value.size();
     _pwrite(_header, &size, offset);
-    size_t map_offset = offset + sizeof(HEADER_SIZE);
+    size_t map_offset = offset + HEADER_SIZE;
 
     Field keyField, valueField;
     keyField.type = f.map_key_type;
@@ -142,6 +142,8 @@ void mrow::write(const Field& f, const Value& v, const uint64_t& offset) {
       value.p_val = pair.second;
       CHECK_LE(map_offset, row_size() - surfingdb::meta::SchemaUtils::getFieldSize(keyField) - surfingdb::meta::SchemaUtils::getFieldSize(keyField));
       write(keyField, key, map_offset);
+      Value keyread;
+      //read(keyField, keyread, map_offset);
       map_offset += surfingdb::meta::SchemaUtils::getFieldSize(keyField);
       write(valueField, value, map_offset);
       map_offset += surfingdb::meta::SchemaUtils::getFieldSize(keyField);
@@ -175,7 +177,7 @@ size_t mrow::read(const Field& f, Value& v, const uint64_t& offset) {
     return 1;
   }
   case RowType::STRING: {
-    std::vector<char> buff(f.max_unit_size);
+    std::vector<char> buff(MAX_STR_LEN);
     size_t strlen = _pread(f, &buff[0], offset);
     buff.resize(strlen);
     v.p_val.string_val = std::string(buff.data());
@@ -208,7 +210,7 @@ size_t mrow::read(const Field& f, Value& v, const uint64_t& offset) {
     l.type = RowType::LONG;
     size_t len;
     _pread(l, &len, _offset);
-    _offset += sizeof(int64_t);
+    _offset += HEADER_SIZE;
 
     Field keyField, valueField;
     keyField.type = f.map_key_type;
