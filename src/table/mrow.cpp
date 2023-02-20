@@ -113,7 +113,7 @@ void mrow::write(const Field& f, const Value& v, const uint64_t& offset) {
     //  |size|string|
     Field listField;
     listField.type = f.list_type;
-    listField.max_unit_size = f.max_list_unit_size;
+    listField.max_unit_size = surfingdb::meta::SchemaUtils::getFieldSize(listField);
     for (auto pv : v.list_value) {
       // hard code
       Value item;
@@ -133,20 +133,20 @@ void mrow::write(const Field& f, const Value& v, const uint64_t& offset) {
     Field keyField, valueField;
     keyField.type = f.map_key_type;
     valueField.type = f.map_value_type;
-    keyField.max_unit_size = f.max_map_key_unit_size;
-    valueField.max_unit_size = f.max_map_value_unit_size;
+    keyField.max_unit_size = surfingdb::meta::SchemaUtils::getFieldSize(keyField);
+    valueField.max_unit_size = surfingdb::meta::SchemaUtils::getFieldSize(valueField);
     
     for (auto& pair : v.map_value) {
       Value key, value;
       key.p_val = pair.first;
       value.p_val = pair.second;
-      CHECK_LE(map_offset, row_size() - surfingdb::meta::SchemaUtils::getFieldSize(keyField) - surfingdb::meta::SchemaUtils::getFieldSize(keyField));
+      CHECK_LE(map_offset, row_size() - surfingdb::meta::SchemaUtils::getFieldSize(keyField) - surfingdb::meta::SchemaUtils::getFieldSize(valueField));
       write(keyField, key, map_offset);
       Value keyread;
       //read(keyField, keyread, map_offset);
       map_offset += surfingdb::meta::SchemaUtils::getFieldSize(keyField);
       write(valueField, value, map_offset);
-      map_offset += surfingdb::meta::SchemaUtils::getFieldSize(keyField);
+      map_offset += surfingdb::meta::SchemaUtils::getFieldSize(valueField);
     }
     break;
   }
@@ -190,11 +190,11 @@ size_t mrow::read(const Field& f, Value& v, const uint64_t& offset) {
     l.type = RowType::LONG;
     size_t len;
     _pread(l, &len, _offset);
-    _offset += sizeof(int64_t);
+    _offset += HEADER_SIZE;
 
     Field listField;
     listField.type = f.list_type;
-    listField.max_unit_size = f.max_list_unit_size;
+    listField.max_unit_size = surfingdb::meta::SchemaUtils::getFieldSize(listField);
     for (size_t i = 0; i < len; i++) {
       Value listVal;
       read(listField, listVal, _offset);
@@ -215,11 +215,12 @@ size_t mrow::read(const Field& f, Value& v, const uint64_t& offset) {
     Field keyField, valueField;
     keyField.type = f.map_key_type;
     valueField.type = f.map_value_type;
-    keyField.max_unit_size = f.max_map_key_unit_size;
-    valueField.max_unit_size = f.max_map_value_unit_size;
+    keyField.max_unit_size = surfingdb::meta::SchemaUtils::getFieldSize(keyField);
+    valueField.max_unit_size = surfingdb::meta::SchemaUtils::getFieldSize(valueField);
     for (size_t i = 0; i < len; i++) {
       Value keyVal, valueVal;
-      read(keyField, keyVal, offset);
+      read(keyField, keyVal, _offset);
+      //std::cout << " key read " << offset << keyVal.p_val.string_val << std::endl;
       _offset += keyField.max_unit_size;
       read(valueField, valueVal, offset);
       _offset += valueField.max_unit_size;
