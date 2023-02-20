@@ -45,6 +45,21 @@ node::node(int* argc, char*** argv) {
   processor = std::string(processor_name);
   stage = 0;
   LOG(INFO) << "cluster size " << world << " node rank " << rank << " alias " << processor;
+
+  JavaVMInitArgs vm_args;
+  JavaVMOption options[2];
+  options[0].optionString = "-Djava.class.path=../surfing-db-java.jar";
+  options[1].optionString = "-DXcheck:jni:pedantic";
+  vm_args.version = JNI_VERSION_1_8;
+  vm_args.nOptions = 2;
+  vm_args.options = options;
+  int status = JNI_CreateJavaVM(&jvm, (void**)&env, &vm_args);
+  if (status < 0) {
+    std::cerr << "\n<<<<< Unable to Launch JVM >>>>>\n"
+              << std::endl;
+    env = nullptr;
+  }
+  CHECK_NOTNULL(env);
 }
 
 /**

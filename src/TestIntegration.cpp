@@ -30,31 +30,12 @@
 
 #define FLUSH_DIR "/tmp/"
 #define BATCH_SIZE 2250
-#define SURFRING_DB_JAVA_PATH "../surfing-db-java.jar"
 
 using namespace surfingdb::meta;
 using namespace surfingdb::table::schema;
 using namespace surfingdb::table;
 using namespace surfingdb::connector;
 using namespace std;
-
-JNIEnv* CreateVM(JavaVM** jvm) {
-  JNIEnv* env;
-  JavaVMInitArgs vm_args;
-  JavaVMOption options[2];
-  options[0].optionString = "-Djava.class.path=../surfing-db-java.jar";
-  options[1].optionString = "-DXcheck:jni:pedantic";
-  vm_args.version = JNI_VERSION_1_8;
-  vm_args.nOptions = 2;
-  vm_args.options = options;
-  int status = JNI_CreateJavaVM(jvm, (void**)&env, &vm_args);
-  if (status < 0) {
-    std::cerr << "\n<<<<< Unable to Launch JVM >>>>>\n"
-              << std::endl;
-    return nullptr;
-  }
-  return env;
-}
 
 /**
  * https://stackoverflow.com/questions/440133/how-do-i-create-a-random-alpha-numeric-string-in-c
@@ -136,15 +117,11 @@ int main(int argc, char** argv) {
     CHECK_LT(dest, world);
     return dest;
   };
-
-  JavaVM* jvm;
-  JNIEnv* env = CreateVM(&jvm);
-  CHECK_NOTNULL(env);
-  const jclass javaClassToBeCalledByCpp = env->FindClass("ToBeCalledByCpp");
+  const jclass javaClassToBeCalledByCpp = node->env->FindClass("ToBeCalledByCpp");
   CHECK_NOTNULL(javaClassToBeCalledByCpp);
   struct ArrowSchema arrowSchema;
   struct ArrowArray arrowArray;
-  const jmethodID fillVectorSchemaRoot = env->GetStaticMethodID(javaClassToBeCalledByCpp,
+  const jmethodID fillVectorSchemaRoot = node->env->GetStaticMethodID(javaClassToBeCalledByCpp,
                                                                 "fillVectorSchemaRoot",
                                                                 "(JJ)V");
   CHECK_NOTNULL(fillVectorSchemaRoot);
@@ -224,13 +201,12 @@ int main(int argc, char** argv) {
      * @brief read data from java
      *
      */
-    env->CallStaticVoidMethod(javaClassToBeCalledByCpp, fillVectorSchemaRoot,
+    node->env->CallStaticVoidMethod(javaClassToBeCalledByCpp, fillVectorSchemaRoot,
                               static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchema)),
                               static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArray)));
     const auto resultImportVectorSchemaRoot = arrow::ImportRecordBatch(&arrowArray, &arrowSchema);
     std::shared_ptr<arrow::RecordBatch> recordBatch = resultImportVectorSchemaRoot.ValueOrDie();
     CHECK_GT(recordBatch->num_rows(), 0);
   }
-  jvm->DestroyJavaVM();
   return terminal_signal;
 }

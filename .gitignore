@@ -3,7 +3,7 @@
 cmake-build-debug
 build
 
-*/idea/*
+*/.idea/*
 surfing-db-java/target
 surfing-db-java.jar
 

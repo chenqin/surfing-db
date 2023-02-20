@@ -18,7 +18,8 @@ target_link_libraries(${META}
         PUBLIC ${JSON_LIBRARY}
         PUBLIC ${FMT_LIBRARY}
         PUBLIC ${DUCKDB_LIBRARY}
-        PUBLIC ${ARROW_LIBRARY})
+        PUBLIC ${ARROW_LIBRARY}
+        PUBLIC ${JNI_LIBRARIES})
 
 # discover all gtests in this module
 include(GoogleTest)

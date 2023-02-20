@@ -19,6 +19,7 @@
 #include <memory>
 #include <mpi.h>
 #include <vector>
+#include <jni.h>
 
 #ifndef SURFINGDB_NODE_H
 #define SURFINGDB_NODE_H
@@ -36,6 +37,10 @@ private:
 public:
   node(int* argc, char*** argv);
   node(int, int, std::string);
+  ~node(){
+    MPI_Finalize();
+    jvm->DestroyJavaVM();
+  }
   void setissubscriber(bool*);
   /**
    * @brief if node running data input
@@ -57,6 +62,8 @@ public:
    */
   long stage;
   std::string processor;
+  JavaVM* jvm;
+  JNIEnv* env;
 };
 } // namespace meta
 } // namespace surfingdb
