@@ -47,6 +47,8 @@ public:
 
   const static arrow::Datum compute(std::shared_ptr<mtable>, std::function<arrow::Result<arrow::Datum>(std::shared_ptr<mtable>)>);
 
+  const static std::shared_ptr<mtable> java(std::shared_ptr<mtable>, std::string class_name, std::string func_name);
+
   static void xgb(std::shared_ptr<mtable>, std::vector<Field>, Field&, const XGBParameters&);
 };
 } // namespace table

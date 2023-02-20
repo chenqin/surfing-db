@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <arrow/c/bridge.h>
 #include <chrono>
 #include <csignal>
 #include <fmt/core.h>
@@ -117,14 +116,6 @@ int main(int argc, char** argv) {
     CHECK_LT(dest, world);
     return dest;
   };
-  const jclass javaClassToBeCalledByCpp = node->env->FindClass("ToBeCalledByCpp");
-  CHECK_NOTNULL(javaClassToBeCalledByCpp);
-  struct ArrowSchema arrowSchema;
-  struct ArrowArray arrowArray;
-  const jmethodID fillVectorSchemaRoot = node->env->GetStaticMethodID(javaClassToBeCalledByCpp,
-                                                                "fillVectorSchemaRoot",
-                                                                "(JJ)V");
-  CHECK_NOTNULL(fillVectorSchemaRoot);
 
   while (terminal_signal == 0) {
     /**
@@ -201,12 +192,7 @@ int main(int argc, char** argv) {
      * @brief read data from java
      *
      */
-    node->env->CallStaticVoidMethod(javaClassToBeCalledByCpp, fillVectorSchemaRoot,
-                              static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchema)),
-                              static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArray)));
-    const auto resultImportVectorSchemaRoot = arrow::ImportRecordBatch(&arrowArray, &arrowSchema);
-    std::shared_ptr<arrow::RecordBatch> recordBatch = resultImportVectorSchemaRoot.ValueOrDie();
-    CHECK_GT(recordBatch->num_rows(), 0);
+    processors::java(t5, "ToBeCalledByCpp", "fillVectorSchemaRoot");
   }
   return terminal_signal;
 }

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "processors.h"
+#include <arrow/c/bridge.h>
 #include "mtable.h"
 #include "xgbop.h"
 
@@ -22,7 +23,7 @@ namespace table {
 
 /**
  * @brief scan through each row, apply transform function, append to output table if return true
- * 
+ *
  * @param in  input micro batch table
  * @param out_schema_ptr  output micro batch table schema
  * @param transform transform function with simple type
@@ -56,7 +57,6 @@ void processors::reduce(std::shared_ptr<mtable> in_ptr,
       r->read(field, key);
       val_list.push_back(std::move(r));
     }
-#pragma omp critical
     {
       if (result_ptr->find(key) == result_ptr->end()) {
         result_ptr->insert({ key, std::make_shared<mrow>(result_schema_ptr) });
@@ -182,13 +182,32 @@ const arrow::Datum processors::compute(std::shared_ptr<mtable> m, std::function<
   return result.ValueOrDie();
 }
 
+const std::shared_ptr<mtable> processors::java(std::shared_ptr<mtable> input, std::string class_name, std::string func_name) {
+  auto node = input->getNodePtr();
+  const jclass javaClassToBeCalledByCpp = node->env->FindClass(class_name.c_str());
+  CHECK_NOTNULL(javaClassToBeCalledByCpp);
+  struct ArrowSchema arrowSchema;
+  struct ArrowArray arrowArray;
+  const jmethodID fillVectorSchemaRoot = node->env->GetStaticMethodID(javaClassToBeCalledByCpp,
+                                                                      func_name.c_str(),
+                                                                      "(JJ)V");
+  node->env->CallStaticVoidMethod(javaClassToBeCalledByCpp, fillVectorSchemaRoot,
+                                  static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchema)),
+                                  static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArray)));
+  const auto resultImportVectorSchemaRoot = arrow::ImportRecordBatch(&arrowArray, &arrowSchema);
+  std::shared_ptr<arrow::RecordBatch> recordBatch = resultImportVectorSchemaRoot.ValueOrDie();
+  CHECK_NOTNULL(fillVectorSchemaRoot);
+
+  return nullptr;
+}
+
 std::shared_ptr<mtable> processors::shuffleRMA(std::shared_ptr<mtable> in, Field& f) {
   // #pragma omp critical
   in->group(f, false);
-  auto partitioner = [](size_t key, int rank, int world){
-       int base =world % 2 == 0 ? world - 1 : world;
-       return (key  + rank) % base;
-    };
+  auto partitioner = [](size_t key, int rank, int world) {
+    int base = world % 2 == 0 ? world - 1 : world;
+    return (key + rank) % base;
+  };
   in->placement_sort(f, partitioner);
   CHECK(!in->placement_index->empty());
   CHECK_NOTNULL(in->getSchema());
