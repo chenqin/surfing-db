@@ -112,6 +112,9 @@ int main(int argc, char** argv) {
     processors::compute(t3, [](std::shared_ptr<mtable> m) {
       return arrow::compute::Sum({ m->getRecordBatch()->GetColumnByName("metricValue") });
     });
+
+    processors::java(t3, "ToBeCalledByCpp", "fillVectorSchemaRoot");
+
     auto end = MPI_Wtime();
     size_t local_row_count = t1->row_count;
     size_t global_row_count = 0;

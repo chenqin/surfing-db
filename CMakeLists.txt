@@ -255,7 +255,7 @@ include(ext/OPENSSL_Ext.cmake)
 #arrow
 find_package(Arrow REQUIRED)
 set(ARROW_LIBRARY Arrow::arrow_shared)
-find_package(ArrowCUDA REQUIRED)
+#find_package(ArrowCUDA REQUIRED)
 find_package(Parquet REQUIRED)
 set(PARQUET_LIBRARY Parquet::parquet_shared)
 
