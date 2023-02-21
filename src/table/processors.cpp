@@ -186,20 +186,39 @@ const std::shared_ptr<mtable> processors::java(std::shared_ptr<mtable> input, st
   auto node = input->getNodePtr();
   const jclass javaClassToBeCalledByCpp = node->env->FindClass(class_name.c_str());
   CHECK_NOTNULL(javaClassToBeCalledByCpp);
-  struct ArrowSchema arrowSchema;
-  struct ArrowArray arrowArray;
+  struct ArrowSchema arrowSchemaIn, arrowSchemaOut;
+  struct ArrowArray arrowArrayIn, arrowArrayOut;
   const jmethodID fillVectorSchemaRoot = node->env->GetStaticMethodID(javaClassToBeCalledByCpp,
                                                                       func_name.c_str(),
-                                                                      "(JJ)V");
-  node->env->CallStaticVoidMethod(javaClassToBeCalledByCpp, fillVectorSchemaRoot,
-                                  static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchema)),
-                                  static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArray)));
-  //auto batch = input->getRecordBatch();
-  //CHECK(batch->num_rows() > 0);
-  //arrow::ExportRecordBatch(*batch.get(), &arrowArray, &arrowSchema);
-  const auto resultImportVectorSchemaRoot = arrow::ImportRecordBatch(&arrowArray, &arrowSchema);
-  std::shared_ptr<arrow::RecordBatch> recordBatch = resultImportVectorSchemaRoot.ValueOrDie();
+                                                                      "(JJJJ)V");
   CHECK_NOTNULL(fillVectorSchemaRoot);
+
+  /**
+   * @brief export schema and data
+   *
+   */
+
+  auto batch = input->getRecordBatch();
+  arrow::ExportSchema(*input->getArrowSchema().get(), &arrowSchemaIn);
+  arrow::ExportRecordBatch(*batch.get(), &arrowArrayIn, &arrowSchemaIn);
+  /**
+   * @brief invoke java method, passing pointers
+   *
+   */
+  node->env->CallStaticVoidMethod(javaClassToBeCalledByCpp, fillVectorSchemaRoot,
+                                  static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchemaIn)),
+                                  static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArrayIn)),
+                                  static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchemaOut)),
+                                  static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArrayOut))
+                                  );
+
+  /**
+   * @brief import schema and data from java
+   *
+   */
+  const auto resultImportVectorSchemaRoot = arrow::ImportRecordBatch(&arrowArrayOut, &arrowSchemaOut);
+  std::shared_ptr<arrow::RecordBatch> recordBatch = resultImportVectorSchemaRoot.ValueOrDie();
+
   return nullptr;
 }
 
