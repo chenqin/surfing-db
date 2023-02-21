@@ -192,7 +192,7 @@ int main(int argc, char** argv) {
      * @brief read data from java
      *
      */
-    processors::java(t5, "ToBeCalledByCpp", "fillVectorSchemaRoot");
+    processors::java(t5, "Bridge", "invoke");
   }
   return terminal_signal;
 }

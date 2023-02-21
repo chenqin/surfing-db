@@ -184,14 +184,12 @@ const arrow::Datum processors::compute(std::shared_ptr<mtable> m, std::function<
 
 const std::shared_ptr<mtable> processors::java(std::shared_ptr<mtable> input, std::string class_name, std::string func_name) {
   auto node = input->getNodePtr();
-  const jclass javaClassToBeCalledByCpp = node->env->FindClass(class_name.c_str());
-  CHECK_NOTNULL(javaClassToBeCalledByCpp);
+  const jclass bridge = node->env->FindClass(class_name.c_str());
+  CHECK_NOTNULL(bridge);
   struct ArrowSchema arrowSchemaIn, arrowSchemaOut;
   struct ArrowArray arrowArrayIn, arrowArrayOut;
-  const jmethodID fillVectorSchemaRoot = node->env->GetStaticMethodID(javaClassToBeCalledByCpp,
-                                                                      func_name.c_str(),
-                                                                      "(JJJJ)V");
-  CHECK_NOTNULL(fillVectorSchemaRoot);
+  const jmethodID invoke_method = node->env->GetStaticMethodID(bridge, func_name.c_str(), "(JJJJ)V");
+  CHECK_NOTNULL(invoke_method);
 
   /**
    * @brief export schema and data
@@ -205,12 +203,11 @@ const std::shared_ptr<mtable> processors::java(std::shared_ptr<mtable> input, st
    * @brief invoke java method, passing pointers
    *
    */
-  node->env->CallStaticVoidMethod(javaClassToBeCalledByCpp, fillVectorSchemaRoot,
+  node->env->CallStaticVoidMethod(bridge, invoke_method,
                                   static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchemaIn)),
                                   static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArrayIn)),
                                   static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchemaOut)),
-                                  static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArrayOut))
-                                  );
+                                  static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArrayOut)));
 
   /**
    * @brief import schema and data from java
