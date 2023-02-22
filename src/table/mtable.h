@@ -54,10 +54,6 @@ private:
   // defines the node row table bind to
   std::shared_ptr<node> node_ptr;
   std::shared_ptr<mschema> schema_ptr;
-  /**
-   * define columnar table ptr
-   */
-  std::shared_ptr<arrow::RecordBatch> record_ptr;
 
 public:
   MPI_Win win;
@@ -97,12 +93,6 @@ public:
   void readField(const Field& field, float* data);
   void writeField(const Field& field, const float* data);
   std::shared_ptr<node> getNodePtr();
-  /**
-   * convert row based table into columnar table in arrow format
-   */
-  std::shared_ptr<arrow::RecordBatch> getRecordBatch();
-  std::shared_ptr<arrow::Schema> getArrowSchema();
-
   void print();
 };
 

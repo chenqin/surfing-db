@@ -372,10 +372,6 @@ std::shared_ptr<mschema> mtable::getSchema() {
   return this->schema_ptr;
 }
 
-std::shared_ptr<arrow::Schema> mtable::getArrowSchema() {
-  return this->schema_ptr->getArrowSchema();
-}
-
 void mtable::print() {
   if (this->row_count == 0) return;
   CHECK(this->row_count > 0);
@@ -435,115 +431,6 @@ void mtable::writeField(const Field& field, const float* data) {
 
 std::shared_ptr<node> mtable::getNodePtr() {
   return this->node_ptr;
-}
-
-std::shared_ptr<arrow::ArrayBuilder> getBuilder(const RowType::type& type) {
-  if (type == RowType::BOOL) {
-    return std::make_shared<arrow::BooleanBuilder>();
-  }
-  if (type == RowType::INT) {
-    return std::make_shared<arrow::Int32Builder>();
-  }
-  if (type == RowType::LONG) {
-    return std::make_shared<arrow::Int64Builder>();
-  }
-  if (type == RowType::DOUBLE) {
-    return std::make_shared<arrow::DoubleBuilder>();
-  }
-  if (type == RowType::STRING) {
-    return std::make_shared<arrow::StringBuilder>();
-  }
-  return std::make_shared<arrow::NullBuilder>();
-}
-
-arrow::Status append(arrow::ArrayBuilder* builder, const Field& field, const PValue& p_val, const Value& v) {
-  if (field.type == RowType::BOOL) {
-    ARROW_RETURN_NOT_OK(((arrow::BooleanBuilder*)builder)->Append(p_val.bool_val));
-  }
-  if (field.type == RowType::INT) {
-    ARROW_RETURN_NOT_OK(((arrow::Int32Builder*)builder)->Append(p_val.int_val));
-  }
-  if (field.type == RowType::LONG) {
-    ARROW_RETURN_NOT_OK(((arrow::Int64Builder*)builder)->Append(p_val.long_val));
-  }
-  if (field.type == RowType::DOUBLE) {
-    ARROW_RETURN_NOT_OK(((arrow::DoubleBuilder*)builder)->Append(p_val.double_val));
-  }
-  if (field.type == RowType::STRING) {
-    ARROW_RETURN_NOT_OK(((arrow::StringBuilder*)builder)->Append(p_val.string_val));
-  }
-  if (field.type == RowType::LIST) {
-    auto list_builder = (arrow::ListBuilder*)builder;
-    ARROW_RETURN_NOT_OK(list_builder->Append());
-
-    auto e_builder = list_builder->value_builder();
-    Field lfield;
-    lfield.type = field.list_type;
-    for (auto m : v.list_value) {
-      ARROW_RETURN_NOT_OK(append(e_builder, lfield, m, v));
-    }
-  }
-  if (field.type == RowType::MAP) {
-    auto map_builder = (arrow::MapBuilder*)builder;
-    ARROW_RETURN_NOT_OK(map_builder->Append());
-    auto k_builder = map_builder->key_builder();
-    auto v_builder = map_builder->item_builder();
-    Field kfield, vfield;
-    kfield.type = field.map_key_type;
-    vfield.type = field.map_value_type;
-    for (auto n : v.map_value) {
-      ARROW_RETURN_NOT_OK(append(k_builder, kfield, n.first, v));
-      ARROW_RETURN_NOT_OK(append(v_builder, vfield, n.second, v));
-    }
-  }
-  return arrow::Status::OK();
-}
-
-std::shared_ptr<arrow::RecordBatch> mtable::getRecordBatch() {
-  /**
-   * Build list of builders to append
-   */
-  std::vector<std::shared_ptr<arrow::ArrayBuilder>> builders;
-  std::vector<std::shared_ptr<arrow::Array>> arrays;
-  arrow::MemoryPool* pool = arrow::default_memory_pool();
-  for (auto i = 0; i < this->getSchema()->fields.size(); i++) {
-    auto type = this->getSchema()->fields.at(i).type;
-    if (type == RowType::LIST) {
-      auto keytype = this->getSchema()->fields.at(i).list_type;
-      builders.push_back(std::make_shared<arrow::ListBuilder>(pool, getBuilder(keytype)));
-      continue;
-    }
-    if (type == RowType::MAP) {
-      auto keytype = this->getSchema()->fields.at(i).map_key_type;
-      auto valuetype = this->getSchema()->fields.at(i).map_value_type;
-      builders.push_back(std::make_shared<arrow::MapBuilder>(pool, getBuilder(keytype), getBuilder(valuetype)));
-      continue;
-    }
-    builders.push_back(getBuilder(type));
-  }
-
-  /**
-   * read each row and field value, append to corresponding builder, release mtable vector<mrow>
-   */
-  for (auto j = 0; j < row_count; j++) {
-    auto r = readRow(j);
-    CHECK(getSchema()->fields.size() == builders.size());
-    for (auto k = 0; k < getSchema()->fields.size(); k++) {
-      auto field = getSchema()->fields.at(k);
-      auto builder_ptr = builders.at(k);
-      Value v;
-      r->read(field, v);
-      append(builder_ptr.get(), field, v.p_val, v);
-    }
-  }
-
-  for (auto b : builders) {
-    std::shared_ptr<arrow::Array> _array;
-    b->Finish(&_array);
-    arrays.push_back(_array);
-  }
-  this->record_ptr = arrow::RecordBatch::Make(this->getArrowSchema(), arrays.size(), arrays);
-  return this->record_ptr;
 }
 
 std::shared_ptr<mschema> mtable::getCompactSchema() {

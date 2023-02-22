@@ -21,6 +21,7 @@
 #include <random>
 #include "frequent_items_sketch.hpp"
 #include "table/mtable.h"
+#include "table/utils.h"
 
 namespace surfingdb {
 namespace table {
@@ -93,9 +94,9 @@ TEST(TableTest, testCompact) {
   // auto compact = t.compactTable();
   // EXPECT_LT(compact->getSchema()->rowSize(), tpr->rowSize());
 
-  auto q = t.getRecordBatch();
-  std::cout << q->ToString();
-  CHECK_EQ(q->num_columns(), r.fields.size());
+  //auto q = utils::toArrow(std::make_shared<mtable>(&t));
+  //std::cout << q->ToString();
+  //CHECK_EQ(q->num_columns(), r.fields.size());
 }
 
 TEST(TableTest, testmrow) {

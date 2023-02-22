@@ -23,6 +23,7 @@
 #include <rapidjson/document.h>
 #include "connector/kafka.h"
 #include "meta/node.h"
+#include "table/utils.h"
 #include "table/processors.h"
 
 #define FLUSH_DIR "/tmp/"
@@ -110,10 +111,10 @@ int main(int argc, char** argv) {
     t3->verifyShuffle(schema_ptr->fields.at(2), partitioner);
 
     processors::compute(t3, [](std::shared_ptr<mtable> m) {
-      return arrow::compute::Sum({ m->getRecordBatch()->GetColumnByName("metricValue") });
+      return arrow::compute::Sum({ utils::toArrow(m)->GetColumnByName("metricValue") });
     });
 
-    processors::java(t3, "Bridge");
+    auto t4 = processors::java(t3, "Bridge");
 
     auto end = MPI_Wtime();
     size_t local_row_count = t1->row_count;

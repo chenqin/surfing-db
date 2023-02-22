@@ -185,29 +185,6 @@ void SchemaUtils::initMapField(Field& field, const std::string& name, const RowT
   checkStringLength(value_type, max_value_size);
 }
 
-/**
- * convert to arrow schema types
- */
-auto getArrowType(const RowType::type& type, const RowType::type& type1, const RowType::type& type2) {
-  if (type == RowType::BOOL) {
-    return arrow::boolean();
-  } else if (type == RowType::INT) {
-    return arrow::int32();
-  } else if (type == RowType::LONG) {
-    return arrow::int64();
-  } else if (type == RowType::DOUBLE) {
-    return arrow::float32();
-  } else if (type == RowType::STRING) {
-    return arrow::utf8();
-  } else if (type == RowType::LIST) {
-    return arrow::list(getArrowType(type1, RowType::VOID, RowType::VOID));
-  } else if (type == RowType::MAP) {
-    return arrow::map(getArrowType(type1, RowType::VOID, RowType::VOID), getArrowType(type2, RowType::VOID, RowType::VOID), true);
-  } else {
-    return arrow::null();
-  }
-}
-
 mschema::mschema(const RowSchema& schema) {
   _type_set = false;
   _offsets = std::make_shared<std::unordered_map<Field, uint64_t, FieldHasher>>();
@@ -237,30 +214,6 @@ mschema::mschema(const RowSchema& schema) {
     _max_unit->emplace(f, f.max_unit_size);
     _size += SchemaUtils::getFieldSize(f);
   }
-
-  /**
-   * arrow schema conversion
-   */
-  std::vector<std::shared_ptr<arrow::Field>> field_vector;
-  for (auto j = 0; j < schema.fields.size(); j++) {
-    auto fj = schema.fields.at(j);
-    std::shared_ptr<arrow::Field> afield;
-    if (fj.type == RowType::MAP) {
-      afield = arrow::field(fj.name, getArrowType(fj.type, fj.map_key_type, fj.map_value_type));
-    } else if (fj.type == RowType::LIST) {
-      afield = arrow::field(fj.name, getArrowType(fj.type, fj.list_type, RowType::VOID));
-    } else {
-      afield = arrow::field(fj.name, getArrowType(fj.type, RowType::VOID, RowType::VOID));
-    }
-    field_vector.push_back(afield);
-  }
-  arrowSchema = arrow::schema(field_vector);
-  CHECK(arrowSchema->num_fields() == schema.fields.size());
-}
-
-std::shared_ptr<arrow::Schema> mschema::getArrowSchema() {
-  CHECK(this->arrowSchema->fields().size() > 0);
-  return this->arrowSchema;
 }
 
 mschema::~mschema() {

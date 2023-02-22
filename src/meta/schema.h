@@ -190,10 +190,6 @@ private:
   MPI_Datatype _row_type; // type of entire row
   FieldHasher field_hasher;
   SchemaHasher schema_hasher;
-  /**
-   * arrow schema
-   */
-  std::shared_ptr<arrow::Schema> arrowSchema;
 
 public:
   /**
@@ -250,8 +246,6 @@ public:
     _type_set = false;
   }
   mschema(const RowSchema& schema);
-
-  std::shared_ptr<arrow::Schema> getArrowSchema();
 
   ~mschema();
 };

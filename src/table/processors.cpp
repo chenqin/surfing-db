@@ -16,6 +16,7 @@
 #include "processors.h"
 #include <arrow/c/bridge.h>
 #include "mtable.h"
+#include "utils.h"
 #include "xgbop.h"
 
 namespace surfingdb {
@@ -183,37 +184,37 @@ const arrow::Datum processors::compute(std::shared_ptr<mtable> m, std::function<
 }
 
 static void release_malloced_type(struct ArrowSchema* schema) {
-  if(schema->release == NULL) return;
-   int i;
-   for (i = 0; i < schema->n_children; ++i) {
-      struct ArrowSchema* child = schema->children[i];
-      if (child->release != NULL) {
-         child->release(child);
-      }
-   }
-   free(schema->children);
-   // Mark released
-   schema->release = NULL;
+  if (schema->release == NULL) return;
+  int i;
+  for (i = 0; i < schema->n_children; ++i) {
+    struct ArrowSchema* child = schema->children[i];
+    if (child->release != NULL) {
+      child->release(child);
+    }
+  }
+  free(schema->children);
+  // Mark released
+  schema->release = NULL;
 }
 
 static void release_malloced_array(struct ArrowArray* array) {
-  if(array->release == NULL) return;
-   int i;
-   // Free children
-   for (i = 0; i < array->n_children; ++i) {
-      struct ArrowArray* child = array->children[i];
-      if (child->release != NULL) {
-         child->release(child);
-      }
-   }
-   free(array->children);
-   // Free buffers
-   for (i = 0; i < array->n_buffers; ++i) {
-      free((void *) array->buffers[i]);
-   }
-   free(array->buffers);
-   // Mark released
-   array->release = NULL;
+  if (array->release == NULL) return;
+  int i;
+  // Free children
+  for (i = 0; i < array->n_children; ++i) {
+    struct ArrowArray* child = array->children[i];
+    if (child->release != NULL) {
+      child->release(child);
+    }
+  }
+  free(array->children);
+  // Free buffers
+  for (i = 0; i < array->n_buffers; ++i) {
+    free((void*)array->buffers[i]);
+  }
+  free(array->buffers);
+  // Mark released
+  array->release = NULL;
 }
 
 const std::shared_ptr<mtable> processors::java(std::shared_ptr<mtable> input, std::string class_name) {
@@ -229,9 +230,9 @@ const std::shared_ptr<mtable> processors::java(std::shared_ptr<mtable> input, st
    * @brief export schema and data
    *
    */
-
-  auto batch = input->getRecordBatch();
-  arrow::ExportSchema(*input->getArrowSchema().get(), &arrowSchemaIn);
+  auto batch = utils::toArrow(input);
+  auto schema_ptr = utils::toArrow(input->getSchema());
+  arrow::ExportSchema(*schema_ptr.get(), &arrowSchemaIn);
   arrow::ExportRecordBatch(*batch.get(), &arrowArrayIn, &arrowSchemaIn);
   /**
    * @brief invoke java method, passing pointers
