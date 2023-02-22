@@ -233,8 +233,6 @@ endif ()
 
 include(ext/FMT_Ext.cmake)
 
-include(ext/PGQuery_Ext.cmake)
-
 # add a basic gtest dependency
 include(ext/Gtest_Ext.cmake)
 
