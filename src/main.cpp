@@ -113,7 +113,7 @@ int main(int argc, char** argv) {
       return arrow::compute::Sum({ m->getRecordBatch()->GetColumnByName("metricValue") });
     });
 
-    processors::java(t3, "Bridge", "invoke");
+    processors::java(t3, "Bridge");
 
     auto end = MPI_Wtime();
     size_t local_row_count = t1->row_count;

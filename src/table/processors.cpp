@@ -182,13 +182,13 @@ const arrow::Datum processors::compute(std::shared_ptr<mtable> m, std::function<
   return result.ValueOrDie();
 }
 
-const std::shared_ptr<mtable> processors::java(std::shared_ptr<mtable> input, std::string class_name, std::string func_name) {
+const std::shared_ptr<mtable> processors::java(std::shared_ptr<mtable> input, std::string class_name) {
   auto node = input->getNodePtr();
   const jclass bridge = node->env->FindClass(class_name.c_str());
   CHECK_NOTNULL(bridge);
   struct ArrowSchema arrowSchemaIn, arrowSchemaOut;
   struct ArrowArray arrowArrayIn, arrowArrayOut;
-  const jmethodID invoke_method = node->env->GetStaticMethodID(bridge, func_name.c_str(), "(JJJJ)V");
+  const jmethodID invoke_method = node->env->GetStaticMethodID(bridge, std::string(BRIDGE_METHOD_NAME).c_str(), "(JJJJ)V");
   CHECK_NOTNULL(invoke_method);
 
   /**

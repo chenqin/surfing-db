@@ -5,7 +5,7 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>org.github</groupId>
-  <artifactId>surfing-deb-java</artifactId>
+  <artifactId>surfing-db-java</artifactId>
   <version>1.0-SNAPSHOT</version>
 
   <properties>
@@ -14,11 +14,6 @@
     <arrow.version>11.0.0</arrow.version>
   </properties>
   <dependencies>
-    <dependency>
-      <groupId>org.bytedeco</groupId>
-      <artifactId>javacpp</artifactId>
-      <version>1.5.8</version>
-    </dependency>
     <dependency>
       <groupId>org.apache.arrow</groupId>
       <artifactId>arrow-c-data</artifactId>
@@ -47,17 +42,6 @@
   </dependencies>
   <build>
     <plugins>
-      <plugin>
-        <artifactId>maven-surefire-plugin</artifactId>
-        <version>2.19.1</version>
-        <configuration>
-          <systemPropertyVariables>
-            <propertyName>java.library.path</propertyName>
-            <buildDirectory>/home/chen/surfing-db/surfing-db-java/src/main/java/linux-x86_64/</buildDirectory>
-          </systemPropertyVariables>
-        </configuration>
-      </plugin>
-
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-assembly-plugin</artifactId>

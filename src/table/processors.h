@@ -17,11 +17,13 @@
 #ifndef SURFINGDB_PROCESSORS_H
 #define SURFINGDB_PROCESSORS_H
 
+#define BRIDGE_METHOD_NAME "_internal_invoke"
 #include <arrow/api.h>
 #include <arrow/compute/api.h>
 #include <iostream>
 #include "mtable.h"
 #include "xgbop.h"
+
 
 #pragma once
 
@@ -47,7 +49,7 @@ public:
 
   const static arrow::Datum compute(std::shared_ptr<mtable>, std::function<arrow::Result<arrow::Datum>(std::shared_ptr<mtable>)>);
 
-  const static std::shared_ptr<mtable> java(std::shared_ptr<mtable>, std::string class_name, std::string func_name);
+  const static std::shared_ptr<mtable> java(std::shared_ptr<mtable>, std::string class_name);
 
   static void xgb(std::shared_ptr<mtable>, std::vector<Field>, Field&, const XGBParameters&);
 };

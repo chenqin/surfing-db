@@ -9,14 +9,15 @@ import org.apache.arrow.vector.VectorSchemaRoot;
  * user expect to override Bridge and implement thier own process function
  */
 public class Bridge {
-    final static BufferAllocator allocator = new RootAllocator();
+    static long total = 0;
+    protected final static BufferAllocator allocator = new RootAllocator();
     /**
      * Create a {@link VectorSchemaRoot} and export it via the C Data Interface
      * 
      * @param schemaAddress Schema memory address to wrap
      * @param arrayAddress  Array memory address to wrap
      */
-    public static void invoke(long schemaIn, long arrayIn, long schemaOut, long arrayOut) {
+    public static void _internal_invoke(long schemaIn, long arrayIn, long schemaOut, long arrayOut) {
         try (ArrowArray array_in = ArrowArray.wrap(arrayIn);
                 ArrowSchema schema_in = ArrowSchema.wrap(schemaIn); 
                 ArrowArray array_out = ArrowArray.wrap(arrayOut);
@@ -32,6 +33,8 @@ public class Bridge {
      * @return arrow memory pointer passing back to c++
      */
     protected static VectorSchemaRoot process(VectorSchemaRoot input) {
+        total += input.getRowCount();
+        System.out.println(total);
         return input;
     }
 }
