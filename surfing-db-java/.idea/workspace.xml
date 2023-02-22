@@ -5,14 +5,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="5399acee-9351-49d2-b1f6-217a679a85a0" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/src/main/java/ToBeCalledByCpp.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/../CMakeLists.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../cpptojava.jar" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/TestIntegration.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/../src/TestIntegration.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/table/processors.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/../src/table/processors.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/compiler.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/CDataJavaConfig.class" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/CDataJavaConfig.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/CDataJavaConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/CDataJavaConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/linux-x86_64/libjniCDataJavaToCppExample.so" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/linux-x86_64/libjniCDataJavaToCppExample.so" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/Bridge.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/Bridge.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

@@ -492,7 +492,6 @@ arrow::Status append(arrow::ArrayBuilder* builder, const Field& field, const PVa
     kfield.type = field.map_key_type;
     vfield.type = field.map_value_type;
     for (auto n : v.map_value) {
-      std::cout << "map" << n.first.string_val << std::endl;
       ARROW_RETURN_NOT_OK(append(k_builder, kfield, n.first, v));
       ARROW_RETURN_NOT_OK(append(v_builder, vfield, n.second, v));
     }

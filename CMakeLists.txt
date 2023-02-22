@@ -286,11 +286,9 @@ include(src/connector/connector.cmake)
 add_executable(MainTest src/main.cpp)
 add_executable(Test src/TestIntegration.cpp)
 
+message(STATUS "DIR=${CMAKE_SOURCE_DIR}/surfing-db-java")
 # mvn clean install latest java stub cpp call java
-execute_process(
-    COMMAND rm ${CMAKE_SOURCE_DIR}/surfing-db-java.jar
-    COMMAND mvn clean install -Darrow.version=${ARROW_VERSION} -f ${CMAKE_SOURCE_DIR}/surfing-db-java/pom.xml
-    COMMAND cp ${CMAKE_SOURCE_DIR}/surfing-db-java/target/surfing-db-java-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_SOURCE_DIR}/surfing-db-java.jar)
+#execute_process(COMMAND cd ${CMAKE_SOURCE_DIR}/surfing-db-java && mvn clean package -Darrow.version=${ARROW_VERSION} && cp ${CMAKE_SOURCE_DIR}/surfing-db-java/target/surfing-db-java-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_SOURCE_DIR}/surfing-db-java.jar)
 
 target_link_libraries(MainTest
         PRIVATE ${META}

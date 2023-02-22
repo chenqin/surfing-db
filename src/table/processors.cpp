@@ -182,6 +182,40 @@ const arrow::Datum processors::compute(std::shared_ptr<mtable> m, std::function<
   return result.ValueOrDie();
 }
 
+static void release_malloced_type(struct ArrowSchema* schema) {
+  if(schema->release == NULL) return;
+   int i;
+   for (i = 0; i < schema->n_children; ++i) {
+      struct ArrowSchema* child = schema->children[i];
+      if (child->release != NULL) {
+         child->release(child);
+      }
+   }
+   free(schema->children);
+   // Mark released
+   schema->release = NULL;
+}
+
+static void release_malloced_array(struct ArrowArray* array) {
+  if(array->release == NULL) return;
+   int i;
+   // Free children
+   for (i = 0; i < array->n_children; ++i) {
+      struct ArrowArray* child = array->children[i];
+      if (child->release != NULL) {
+         child->release(child);
+      }
+   }
+   free(array->children);
+   // Free buffers
+   for (i = 0; i < array->n_buffers; ++i) {
+      free((void *) array->buffers[i]);
+   }
+   free(array->buffers);
+   // Mark released
+   array->release = NULL;
+}
+
 const std::shared_ptr<mtable> processors::java(std::shared_ptr<mtable> input, std::string class_name) {
   auto node = input->getNodePtr();
   const jclass bridge = node->env->FindClass(class_name.c_str());
@@ -215,7 +249,10 @@ const std::shared_ptr<mtable> processors::java(std::shared_ptr<mtable> input, st
    */
   const auto resultImportVectorSchemaRoot = arrow::ImportRecordBatch(&arrowArrayOut, &arrowSchemaOut);
   std::shared_ptr<arrow::RecordBatch> recordBatch = resultImportVectorSchemaRoot.ValueOrDie();
-
+  release_malloced_array(&arrowArrayIn);
+  release_malloced_array(&arrowArrayOut);
+  release_malloced_type(&arrowSchemaIn);
+  release_malloced_type(&arrowSchemaOut);
   return nullptr;
 }
 

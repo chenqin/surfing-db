@@ -6,12 +6,12 @@
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
-        <module name="surfing-deb-java" />
+        <module name="surfing-db-java" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
       <module name="java-cdata-example" target="1.8" />
-      <module name="surfing-db-java" target="1.8" />
+      <module name="surfing-deb-java" target="1.8" />
     </bytecodeTargetLevel>
   </component>
 </project>
