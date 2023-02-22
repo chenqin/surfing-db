@@ -283,20 +283,26 @@ include(src/table/table.cmake)
 # build table representation
 include(src/connector/connector.cmake)
 # build test binary
-add_executable(MainTest src/main.cpp)
-add_executable(Test src/TestIntegration.cpp)
+add_executable(KafkaExample src/main.cpp)
+add_executable(DataGenExample src/TestIntegration.cpp)
 
-message(STATUS "DIR=${CMAKE_SOURCE_DIR}/surfing-db-java")
-# mvn clean install latest java stub cpp call java
-#execute_process(COMMAND cd ${CMAKE_SOURCE_DIR}/surfing-db-java && mvn clean package -Darrow.version=${ARROW_VERSION} && cp ${CMAKE_SOURCE_DIR}/surfing-db-java/target/surfing-db-java-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_SOURCE_DIR}/surfing-db-java.jar)
+# workaround make issue for now
+add_custom_command(TARGET KafkaExample PRE_BUILD
+        COMMAND make kafka
+        COMMAND make xgboost
+        COMMAND make thrift)
 
-target_link_libraries(MainTest
+add_custom_command(TARGET KafkaExample PRE_BUILD
+        COMMAND cd ${CMAKE_SOURCE_DIR}/surfing-db-java && mvn clean package -Darrow.version=${ARROW_VERSION} 
+        COMMAND cp ${CMAKE_SOURCE_DIR}/surfing-db-java/target/surfing-db-java-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_SOURCE_DIR}/surfing-db-java.jar)
+
+target_link_libraries(KafkaExample
         PRIVATE ${META}
         PRIVATE ${TABLE}
         PRIVATE ${CONNECTOR}
         PRIVATE ${ARROW_LIBRARY})
 
-target_link_libraries(Test
+target_link_libraries(DataGenExample
         PRIVATE ${META}
         PRIVATE ${TABLE}
         PRIVATE ${CONNECTOR}
