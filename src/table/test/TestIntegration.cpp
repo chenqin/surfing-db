@@ -199,13 +199,13 @@ TEST(TableTest, testmrow) {
   EXPECT_EQ(v77.map_value.size(), 1);
 
   // test point to temp table
-  mtable t(nullptr, tpr, MEM_PAGE_SIZE);
-  t.appendRow(s);
-  s = mrow(tpr, t.payload_ptr());
+  auto t = std::make_shared<mtable>(nullptr, tpr, MEM_PAGE_SIZE);
+  t->appendRow(s);
+  s = mrow(tpr, t->payload_ptr());
   s.read(field1, v11);
   EXPECT_EQ(v11.p_val.int_val, 3);
 
-  auto sptr = t.readRow(0);
+  auto sptr = t->readRow(0);
   sptr->read(field1, v11);
   sptr->read(field2, v22);
   sptr->read(field3, v33);
@@ -218,8 +218,8 @@ TEST(TableTest, testmrow) {
   EXPECT_EQ(v66.list_value.size(), 1);
   EXPECT_EQ(v77.map_value.size(), 1);
 
-  t.appendRow(s);
-  sptr = t.readRow(1);
+  t->appendRow(s);
+  sptr = t->readRow(1);
   sptr->read(field1, v77);
   sptr->read(field2, v22);
   sptr->read(field3, v33);
@@ -233,18 +233,23 @@ TEST(TableTest, testmrow) {
   EXPECT_EQ(v33.map_value.size(), 1);
 
   for (int i = 0; i < 10000; i++) {
-    t.appendRow(s);
+    t->appendRow(s);
   }
 
   // t.flush("/tmp/test1.bin");
   // t.load("/tmp/test1.bin");
-  sptr = t.readRow(1);
+  sptr = t->readRow(1);
   Value v;
   sptr->read(field7, v);
   EXPECT_EQ(v.map_value.size(), 1);
-  std::shared_ptr<mtable> ptr = t.compactTable();
+  std::shared_ptr<mtable> ptr = t->compactTable();
+
+  auto at = utils::toArrow(t);
+  auto ts = utils::toArrow(t->getSchema());
+  std::map<std::string, uint64_t> units{{"l", 3},{"m", 3}};
+  auto m = utils::fromArrow(ts, units);
   EXPECT_EQ(ptr->row_size(), 10002);
-  sptr = t.readRow(1);
+  sptr = t->readRow(1);
   Value vm;
   sptr->read(field7, vm);
   EXPECT_EQ(vm.map_value.size(), 1);

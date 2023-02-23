@@ -108,7 +108,7 @@ private:
   /**
    * convert to arrow schema types
    */
-  static auto getArrowType(const RowType::type& type, const RowType::type& type1, const RowType::type& type2) {
+  static auto getArrowType(const RowType::type& type, const RowType::type& type1, const RowType::type& type2, size_t units) {
     if (type == RowType::BOOL) {
       return arrow::boolean();
     } else if (type == RowType::INT) {
@@ -120,11 +120,30 @@ private:
     } else if (type == RowType::STRING) {
       return arrow::utf8();
     } else if (type == RowType::LIST) {
-      return arrow::list(getArrowType(type1, RowType::VOID, RowType::VOID));
+      return arrow::fixed_size_list(getArrowType(type1, RowType::VOID, RowType::VOID, 1), units);
     } else if (type == RowType::MAP) {
-      return arrow::map(getArrowType(type1, RowType::VOID, RowType::VOID), getArrowType(type2, RowType::VOID, RowType::VOID), true);
+      return arrow::map(getArrowType(type1, RowType::VOID, RowType::VOID, 1), getArrowType(type2, RowType::VOID, RowType::VOID, 1), true);
     } else {
       return arrow::null();
+    }
+  }
+
+  static RowType::type getRowType(std::shared_ptr<arrow::DataType> type) {
+    switch (type->id()) {
+    case arrow::Type::BOOL:
+      return RowType::BOOL;
+    case arrow::Type::INT32:
+    case arrow::Type::INT16:
+      return RowType::INT;
+    case arrow::Type::INT64:
+      return RowType::LONG;
+    case arrow::Type::FLOAT:
+    case arrow::Type::DOUBLE:
+      return RowType::DOUBLE;
+    case arrow::Type::STRING:
+      return RowType::STRING;
+    default:
+      return RowType::VOID;
     }
   }
 
@@ -136,21 +155,43 @@ public:
     std::vector<std::shared_ptr<arrow::Field>> field_vector;
     for (auto j = 0; j < schema->fields.size(); j++) {
       auto fj = schema->fields.at(j);
+      auto units = fj.max_unit_size;
       std::shared_ptr<arrow::Field> afield;
       if (fj.type == RowType::MAP) {
-        afield = arrow::field(fj.name, getArrowType(fj.type, fj.map_key_type, fj.map_value_type));
+        afield = arrow::field(fj.name, getArrowType(fj.type, fj.map_key_type, fj.map_value_type, units));
       } else if (fj.type == RowType::LIST) {
-        afield = arrow::field(fj.name, getArrowType(fj.type, fj.list_type, RowType::VOID));
+        afield = arrow::field(fj.name, getArrowType(fj.type, fj.list_type, RowType::VOID, units));
       } else {
-        afield = arrow::field(fj.name, getArrowType(fj.type, RowType::VOID, RowType::VOID));
+        afield = arrow::field(fj.name, getArrowType(fj.type, RowType::VOID, RowType::VOID, 1));
       }
       field_vector.push_back(afield);
     }
     return arrow::schema(field_vector);
   }
 
-  static std::shared_ptr<mschema> fromArrow(std::shared_ptr<arrow::Schema> schema, std::shared_ptr<node> node_ptr) {
-    return nullptr;
+  /**
+   * @brief convert arrow schema with unit size map as mschema
+   * 
+   * @param schema 
+   * @param units 
+   * @return std::shared_ptr<mschema> 
+   */
+  static std::shared_ptr<mschema> fromArrow(std::shared_ptr<arrow::Schema> schema, std::map<std::string, uint64_t>& units) {
+    RowSchema r;
+    for (int i = 0; i < schema->num_fields(); i++) {
+      auto field = schema->field(i);
+      auto id = field->type()->id();
+      if (id == arrow::Type::LIST) {
+        auto ltype = (arrow::ListType*)field->type().get();
+        SchemaUtils::appendElements(r, field->name(), getRowType(ltype->value_type()), units[field->name()]);
+      } else if (id == arrow::Type::MAP) {
+        auto mtype = (arrow::MapType*)field->type().get();
+        SchemaUtils::appendPairs(r, field->name(), getRowType(mtype->key_type()), getRowType(mtype->item_type()), units[field->name()]);
+      } else {
+        SchemaUtils::appendElements(r, field->name(), getRowType(field->type()), 1);
+      }
+    }
+    return std::make_shared<mschema>(r);
   }
 
   static std::shared_ptr<arrow::RecordBatch> toArrow(const std::shared_ptr<surfingdb::table::mtable> table) {
