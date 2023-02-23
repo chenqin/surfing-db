@@ -90,13 +90,13 @@ TEST(TableTest, testCompact) {
   t.appendRow(b);
   Value mapValue;
   t.readRow(0)->read(field7, mapValue);
-  
+
   // auto compact = t.compactTable();
   // EXPECT_LT(compact->getSchema()->rowSize(), tpr->rowSize());
 
-  //auto q = utils::toArrow(std::make_shared<mtable>(&t));
-  //std::cout << q->ToString();
-  //CHECK_EQ(q->num_columns(), r.fields.size());
+  // auto q = utils::toArrow(std::make_shared<mtable>(&t));
+  // std::cout << q->ToString();
+  // CHECK_EQ(q->num_columns(), r.fields.size());
 }
 
 TEST(TableTest, testmrow) {
@@ -244,15 +244,124 @@ TEST(TableTest, testmrow) {
   EXPECT_EQ(v.map_value.size(), 1);
   std::shared_ptr<mtable> ptr = t->compactTable();
 
-  auto at = utils::toArrow(t);
-  auto ts = utils::toArrow(t->getSchema());
-  std::map<std::string, uint64_t> units{{"l", 3},{"m", 3}};
-  auto m = utils::fromArrow(ts, units);
   EXPECT_EQ(ptr->row_size(), 10002);
   sptr = t->readRow(1);
   Value vm;
   sptr->read(field7, vm);
   EXPECT_EQ(vm.map_value.size(), 1);
+}
+
+TEST(TableTest, TestUtils) {
+  /**
+   * @brief build schema of table
+   *
+   */
+  RowSchema r;
+  r.fields = std::vector<surfingdb::table::schema::Field>();
+
+  Field field1, field2, field3, field4, field5, field6, field7;
+
+  SchemaUtils::initField(field1, "a", RowType::INT, sizeof(int));
+  SchemaUtils::initField(field2, "b", RowType::LONG, sizeof(long));
+  SchemaUtils::initField(field3, "c", RowType::BOOL, sizeof(bool));
+  SchemaUtils::initField(field4, "d", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
+  SchemaUtils::initField(field5, "e", RowType::STRING, MAX_STR_LEN);
+
+  SchemaUtils::initListField(field6, "l", RowType::DOUBLE, 3, sizeof(DOUBLE_TYPE));
+  SchemaUtils::initMapField(field7, "m", RowType::STRING, RowType::LONG, 3, MAX_STR_LEN, sizeof(long));
+
+  r.fields.push_back(field1);
+  r.fields.push_back(field2);
+  r.fields.push_back(field3);
+  r.fields.push_back(field4);
+  r.fields.push_back(field5);
+  r.fields.push_back(field6);
+  r.fields.push_back(field7);
+  std::shared_ptr<mschema> schema_ptr = std::make_shared<mschema>(r);
+  /**
+   * @brief write test datasets
+   *
+   */
+
+  Value v1, v2, v3, v4, v5, v6, v7;
+  v1.p_val.int_val = 3;
+
+  v2.p_val.long_val = 4;
+
+  v3.p_val.bool_val = true;
+
+  v4.p_val.double_val = 0.1f;
+
+  v5.p_val.string_val = "hello";
+  PValue p;
+  p.double_val = 0.1;
+  std::vector<PValue> lval;
+  lval.push_back(p);
+  v6.list_value = lval;
+  PValue key, value;
+  key.string_val = "hello";
+  value.long_val = 1l;
+  std::pair<PValue, PValue> pair;
+  pair.first = key;
+  pair.second = value;
+  v7.map_value.insert(pair);
+
+  surfingdb::table::mrow row(schema_ptr);
+  row.write(field1, v1);
+  row.write(field2, v2);
+  row.write(field3, v3);
+  row.write(field4, v4);
+  row.write(field5, v5);
+  row.write(field6, v6);
+  row.write(field7, v7);
+
+  /**
+   * @brief  row test mtable
+   *
+   */
+  auto table_ptr = std::make_shared<mtable>(nullptr, schema_ptr, schema_ptr->rowSize() * 2);
+  table_ptr->appendRow(row);
+  table_ptr->appendRow(row);
+  /**
+   * @brief convert to arrow from internal data structure
+   *
+   */
+  auto arrow_schema_ptr = utils::toArrow(schema_ptr);
+  auto arrow_table_ptr = utils::toArrow(table_ptr);
+  EXPECT_EQ(arrow_table_ptr->num_columns(), 7);
+  arrow_table_ptr->ValidateFull();
+  EXPECT_EQ(arrow_table_ptr->num_rows(), 2);
+  /**
+   * @brief check if schema conversion is correct
+   *
+   */
+  EXPECT_EQ(arrow_schema_ptr->fields().size(), schema_ptr->fields.size());
+  EXPECT_EQ(arrow_schema_ptr->fields().at(0)->type()->id(), arrow::Type::INT32);
+  EXPECT_EQ(arrow_schema_ptr->fields().at(5)->type()->id(), arrow::Type::LIST);
+  EXPECT_EQ(arrow_schema_ptr->fields().at(6)->type()->id(), arrow::Type::MAP);
+
+  /**
+   * @brief convert to internal data structure from arrow
+   *
+   */
+  std::map<std::string, uint64_t> units{ { "l", 3 }, { "m", 3 } };
+  auto new_schema_ptr = utils::fromArrow(arrow_schema_ptr, units);
+  EXPECT_EQ(new_schema_ptr->fields.at(0), schema_ptr->fields.at(0));
+  EXPECT_EQ(new_schema_ptr->fields.at(6).max_unit_size, schema_ptr->fields.at(6).max_unit_size);
+  EXPECT_EQ(new_schema_ptr->fields.at(6).max_map_key_unit_size, schema_ptr->fields.at(6).max_map_key_unit_size);
+
+  auto new_table_ptr = utils::fromArrow(arrow_table_ptr, units, nullptr);
+  EXPECT_EQ(table_ptr->row_count, new_table_ptr->row_count);
+  EXPECT_EQ(table_ptr->row_size(), new_table_ptr->row_size());
+  auto new_row = new_table_ptr->readRow(0);
+  Value newv7;
+  new_row->read(field7, newv7);
+
+  EXPECT_EQ(v7.map_value.size(), newv7.map_value.size());
+  for (auto& t : newv7.map_value) {
+    EXPECT_EQ(t.first.string_val, "hello");
+    EXPECT_EQ(t.second.long_val, 1l);
+  }
 }
 
 TEST(TableTest, TestXGBOperator) {

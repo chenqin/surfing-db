@@ -19,6 +19,7 @@
 #pragma once
 
 #include <arrow/api.h>
+#include <arrow/json/api.h>
 #include <cstdarg>
 #include <fcntl.h>
 #include <future>
@@ -120,7 +121,7 @@ private:
     } else if (type == RowType::STRING) {
       return arrow::utf8();
     } else if (type == RowType::LIST) {
-      return arrow::fixed_size_list(getArrowType(type1, RowType::VOID, RowType::VOID, 1), units);
+      return arrow::list(getArrowType(type1, RowType::VOID, RowType::VOID, 1));
     } else if (type == RowType::MAP) {
       return arrow::map(getArrowType(type1, RowType::VOID, RowType::VOID, 1), getArrowType(type2, RowType::VOID, RowType::VOID, 1), true);
     } else {
@@ -171,10 +172,10 @@ public:
 
   /**
    * @brief convert arrow schema with unit size map as mschema
-   * 
-   * @param schema 
-   * @param units 
-   * @return std::shared_ptr<mschema> 
+   *
+   * @param schema
+   * @param units
+   * @return std::shared_ptr<mschema>
    */
   static std::shared_ptr<mschema> fromArrow(std::shared_ptr<arrow::Schema> schema, std::map<std::string, uint64_t>& units) {
     RowSchema r;
@@ -183,15 +184,122 @@ public:
       auto id = field->type()->id();
       if (id == arrow::Type::LIST) {
         auto ltype = (arrow::ListType*)field->type().get();
-        SchemaUtils::appendElements(r, field->name(), getRowType(ltype->value_type()), units[field->name()]);
+        SchemaUtils::appendElements(r, field->name(), getRowType(ltype->value_type()), units.find(field->name()) == units.end() ? 1024 : units[field->name()]);
       } else if (id == arrow::Type::MAP) {
         auto mtype = (arrow::MapType*)field->type().get();
-        SchemaUtils::appendPairs(r, field->name(), getRowType(mtype->key_type()), getRowType(mtype->item_type()), units[field->name()]);
+        SchemaUtils::appendPairs(r, field->name(), getRowType(mtype->key_type()), getRowType(mtype->item_type()), units.find(field->name()) == units.end() ? 1024 : units[field->name()]);
       } else {
         SchemaUtils::appendElements(r, field->name(), getRowType(field->type()), 1);
       }
     }
     return std::make_shared<mschema>(r);
+  }
+
+  static std::shared_ptr<mtable> fromArrow(std::shared_ptr<arrow::RecordBatch> record_ptr, std::map<std::string, uint64_t>& units, std::shared_ptr<node> node_ptr) {
+    auto schema = fromArrow(record_ptr->schema(), units);
+    auto table = std::make_shared<mtable>(node_ptr, schema, record_ptr->num_rows() * schema->rowSize());
+    auto vc = record_ptr->columns();
+    /**
+     * @brief iterate all rows in arrow recordbatch
+     * 
+     * @param i 
+     */
+    for (auto i = 0; i < record_ptr->num_rows(); i++) {
+
+      mrow r(schema);
+      /**
+       * @brief iterate all fields in schema with j
+       * 
+       */
+      for (auto j = 0; j < vc.size(); j++) {
+        auto field = record_ptr->schema()->field(j);
+        auto col = record_ptr->column(j);
+
+        auto result = col->GetScalar(i).ValueOrDie();
+        Value v;
+        auto type = field->type()->id();
+
+        if (type == arrow::Type::BOOL) {
+          auto bc = (arrow::BooleanScalar*)result.get();
+          v.p_val.bool_val = bc->value;
+        }
+        if (type == arrow::Type::INT32) {
+          auto bc = (arrow::Int32Scalar*)result.get();
+          v.p_val.int_val = bc->value;
+        }
+        if (type == arrow::Type::INT64) {
+          auto bc = (arrow::Int64Scalar*)result.get();
+          v.p_val.long_val = bc->value;
+        }
+        if (type == arrow::Type::FLOAT) {
+          auto bc = (arrow::FloatScalar*)result.get();
+          v.p_val.double_val = bc->value;
+        }
+        if (type == arrow::Type::STRING) {
+          auto bc = (arrow::StringScalar*)result.get();
+          v.p_val.string_val = bc->ToString();
+        }
+        if (type == arrow::Type::LIST) {
+          auto bc = (arrow::ListScalar*)result.get();
+          auto list = bc->value;
+          for (int k = 0; k < list->length(); k++) {
+            auto item = list->GetScalar(k).ValueOrDie();
+            PValue pval;
+            writeV(pval, list->type_id(), item.get());
+            v.list_value.push_back(pval);
+          }
+        }
+        if (type == arrow::Type::MAP) {
+          auto bc = (arrow::MapScalar*)result.get();
+          auto counts = bc->value->length();
+          /**
+           * @brief insert number of items in map
+           * 
+           */
+          for (int k = 0; k < counts; k++) {
+            auto pairval = bc->value->GetScalar(k).ValueOrDie();
+            auto structval = (arrow::StructScalar*)pairval.get();
+            std::shared_ptr<arrow::Scalar> keyval = structval->field("key").ValueOrDie();
+            std::shared_ptr<arrow::Scalar> itemval = structval->field("value").ValueOrDie();
+            PValue keyp, valuep;
+            writeV(keyp, keyval->type->id(), keyval.get());
+            writeV(valuep, itemval->type->id(), itemval.get());
+            v.map_value.insert({ keyp, valuep });
+          }
+        }
+        /**
+         * @brief write j field to row
+         * 
+         */
+        r.write(schema->fields.at(j), v);
+      }
+      table->appendRow(r);
+    }
+    return table;
+  }
+
+  static void writeV(PValue& v, arrow::Type::type type, arrow::Scalar* s) {
+    if (s == nullptr) return;
+    if (type == arrow::Type::BOOL) {
+      auto bc = (arrow::BooleanScalar*)s;
+      v.bool_val = bc->value;
+    }
+    if (type == arrow::Type::INT32) {
+      auto bc = (arrow::Int32Scalar*)s;
+      v.int_val = bc->value;
+    }
+    if (type == arrow::Type::INT64) {
+      auto bc = (arrow::Int64Scalar*)s;
+      v.long_val = bc->value;
+    }
+    if (type == arrow::Type::FLOAT) {
+      auto bc = (arrow::FloatScalar*)s;
+      v.double_val = bc->value;
+    }
+    if (type == arrow::Type::STRING) {
+      auto bc = (arrow::StringScalar*)s;
+      v.string_val = bc->ToString();
+    }
   }
 
   static std::shared_ptr<arrow::RecordBatch> toArrow(const std::shared_ptr<surfingdb::table::mtable> table) {
@@ -237,11 +345,7 @@ public:
       b->Finish(&_array);
       arrays.push_back(_array);
     }
-    return arrow::RecordBatch::Make(toArrow(table->getSchema()), arrays.size(), arrays);
-  }
-
-  static std::shared_ptr<surfingdb::table::mtable> fromArrow(const std::shared_ptr<arrow::RecordBatch> table, std::shared_ptr<node> node_ptr) {
-    return nullptr;
+    return arrow::RecordBatch::Make(toArrow(table->getSchema()), table->row_count, arrays);
   }
 };
 
