@@ -181,6 +181,8 @@ int main(int argc, char** argv) {
      */
     t4->verifyShuffle(ptr->fields.at(2), partitioner);
 
+    auto t41 = processors::java(t4, "Bridge");
+
     /**
      * @brief shuffle again with another field with same partitioner
      *
@@ -192,7 +194,9 @@ int main(int argc, char** argv) {
      * @brief read data from java
      *
      */
-    processors::java(t5, "Bridge");
+    auto t51 = processors::java(t5, "MyBridge");
+
+
   }
   return terminal_signal;
 }

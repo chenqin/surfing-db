@@ -281,8 +281,8 @@ include(src/table/table.cmake)
 # build table representation
 include(src/connector/connector.cmake)
 # build test binary
-add_executable(KafkaExample src/main.cpp)
-add_executable(DataGenExample src/TestIntegration.cpp)
+add_executable(KafkaExample src/KafkaExample.cpp)
+add_executable(DataGenExample src/DataGenExample.cpp)
 
 # workaround make issue for now
 add_custom_command(TARGET KafkaExample PRE_BUILD
