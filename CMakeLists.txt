@@ -3,6 +3,8 @@
 cmake_minimum_required(VERSION 3.10)
 project(surfingdb LANGUAGES CXX VERSION 0.1)
 
+OPTION(USE_Cuda "USE CUDA" ON)
+
 find_package(Java 1.8 REQUIRED)
 set($ENV{JAVA_HOME} "/usr/lib/jvm/java-8-openjdk-amd64/")
 
@@ -54,6 +56,7 @@ find_package(OpenSSL REQUIRED)
 #https://pybind11.readthedocs.io/en/stable/advanced/embedding.html
 find_package(pybind11 REQUIRED)
 
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_VERBOSE_MAKEFILE ON)
@@ -70,8 +73,8 @@ include_directories(include ${glog_INCLUDE_DIRS} ${SURFINGDB_SRC} ${MPI_CXX_INCL
 # this switch only works on linux
 set(NC gcc)
 if (APPLE)
-    set(NCXX /usr/bin/g++)
-    set(NCC /usr/bin/gcc)
+    set(NCXX /usr/bin/g++-10)
+    set(NCC /usr/bin/gcc-10)
     set(NCFLAGS "-Wall -Wextra -Werror -Wno-deprecated -Wno-error=extern-c-compat -Wno-error=inconsistent-missing-override -Wno-error=nullability-completeness -Wno-error=sign-compare -Wno-error=unknown-warning-option")
     set(NCFLAGS_RELEASE "-O3")
 else ()
@@ -82,8 +85,8 @@ else ()
         set(NCFLAGS_RELEASE "-O3")
     else ()
         # this build branch is the final release version
-        set(NCXX /usr/bin/g++)
-        set(NCC /usr/bin/gcc)
+        set(NCXX /usr/bin/g++-10)
+        set(NCC /usr/bin/gcc-10)
         list(APPEND LNCFLAGS
                 "-Wall -Wextra -lstdc++ -lstdc++fs"
                 "-Wl,--no-as-needed -no-pie -ldl"
@@ -195,7 +198,6 @@ set(CMAKE_CXX_FLAGS ${NCFLAGS})
 set(CMAKE_CXX_FLAGS_DEBUG "-g -DNDBG")
 set(CMAKE_CXX_FLAGS_RELEASE ${NCFLAGS_RELEASE})
 
-# use openmp simd
 OPTION(USE_OpenMP "Use OpenMP" OFF)
 
 IF (USE_OpenMP)
@@ -213,7 +215,7 @@ IF (USE_OpenMP)
         target_link_libraries(OpenMP_TARGET INTERFACE Threads::Threads)
         target_link_libraries(OpenMP_TARGET INTERFACE ${OpenMP_CXX_FLAGS})
     endif ()
-ENDIF ()
+ENDIF (USE_OpenMP)
 
 
 find_package(MPI REQUIRED)
@@ -278,6 +280,8 @@ include(src/meta/meta.cmake)
 # build table representation
 include(src/table/table.cmake)
 
+#include(ext/PyTorch_Ext.cmake)
+
 # build table representation
 include(src/connector/connector.cmake)
 # build test binary
@@ -305,3 +309,22 @@ target_link_libraries(DataGenExample
         PRIVATE ${TABLE}
         PRIVATE ${CONNECTOR}
         PRIVATE ${ARROW_LIBRARY})
+
+IF (USE_Cuda)
+    SET(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -std=c++17")
+    find_package(CUDA REQUIRED)
+    enable_language(CUDA)
+    find_package(ArrowCUDA REQUIRED)
+    set(ARROW_CUDA_LIBRARY ArrowCUDA::arrow_cuda_shared)
+    
+    add_executable(HybridWorkload src/HybridWorkload.cu)
+    set_property(TARGET HybridWorkload 
+        PROPERTY CUDA_STANDARD 17)
+    target_link_libraries(HybridWorkload
+        PUBLIC ${FMT_LIBRARY}
+        PRIVATE ${META}
+        PRIVATE ${TABLE}
+        PRIVATE ${CONNECTOR}
+        PRIVATE ${ARROW_LIBRARY}
+        PRIVATE ${ARROW_CUDA_LIBRARY})
+ENDIF(USE_Cuda)

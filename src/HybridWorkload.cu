@@ -1,0 +1,217 @@
+#include <arrow/gpu/cuda_api.h>
+#include <chrono>
+#include <fmt/core.h>
+#include <future>
+#include <glog/logging.h>
+#include <iostream>
+#include <omp.h>
+#include <rapidjson/document.h>
+#include <stdio.h>
+#include "connector/datagen.h"
+#include "meta/node.h"
+#include "table/processors.h"
+#include "table/utils.h"
+
+#define BATCH_SIZE 2000
+
+using namespace surfingdb::meta;
+using namespace surfingdb::table::schema;
+using namespace surfingdb::table;
+using namespace surfingdb::connector;
+using namespace std;
+
+__global__ void saxpy(int n, float a, float* x, float* y) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i < n) y[i] = a * x[i] + y[i];
+}
+
+/**
+ * https://stackoverflow.com/questions/440133/how-do-i-create-a-random-alpha-numeric-string-in-c
+ */
+std::string random_string(size_t length) {
+  auto randchar = []() -> char {
+    const char charset[] =
+      "0123456789"
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+      "abcdefghijklmnopqrstuvwxyz";
+    const size_t max_index = (sizeof(charset) - 1);
+    return charset[rand() % max_index];
+  };
+  std::string str(length, 0);
+  std::generate_n(str.begin(), length, randchar);
+  return str;
+}
+
+volatile std::sig_atomic_t terminal_signal;
+void signal_handler(int signal) {
+  std::cout << "user exit program";
+  terminal_signal = signal;
+}
+
+std::shared_ptr<mtable> gpu(std::shared_ptr<mtable> input) {
+  int N = input->row_count;
+  Field f = input->getSchema()->fields.at(4);
+
+  float *x, *y, *d_x, *d_y;
+  x = (float*)malloc(N * sizeof(float));
+  y = (float*)malloc(N * sizeof(float));
+
+  cudaMalloc(&d_x, N * sizeof(float));
+  cudaMalloc(&d_y, N * sizeof(float));
+
+  for (int i = 0; i < N; i++) {
+    auto row = input->readRow(i);
+    Value v;
+    row->read(f, v);
+    x[i] = 0.1f;
+    y[i] = 0.2f;
+  }
+
+  cudaMemcpy(d_x, x, N * sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_y, y, N * sizeof(float), cudaMemcpyHostToDevice);
+
+  // Perform SAXPY on N elements
+  saxpy<<<(N + 255) / 256, 256>>>(N, 2.0f, d_x, d_y);
+
+  cudaMemcpy(y, d_y, N * sizeof(float), cudaMemcpyDeviceToHost);
+
+  float maxError = 0.0f;
+  for (int i = 0; i < N; i++)
+    maxError = max(maxError, abs(y[i] - 4.0f));
+  printf("Max error: %f\n", maxError);
+
+  cudaFree(d_x);
+  cudaFree(d_y);
+  free(x);
+  free(y);
+  return input;
+}
+
+int main(int argc, char** argv) {
+
+  google::InstallFailureSignalHandler();
+  google::InitGoogleLogging(argv[0]);
+  // define how data will be stored, as rows in a table
+  RowSchema r;
+  SchemaUtils::appendElements(r, "timestamp", RowType::LONG, 1);
+  SchemaUtils::appendElements(r, "host", RowType::STRING, 1);
+  SchemaUtils::appendElements(r, "metricName", RowType::STRING, 1);
+  // min, max of metricValue
+  SchemaUtils::appendElements(r, "metricValues", RowType::DOUBLE, 2);
+  // user defined meta data pair
+  SchemaUtils::appendPairs(r, "meta", RowType::STRING, RowType::STRING, 1);
+
+    /**
+   * @brief initial constructors
+   * node -> single executor binding to MPI rank, number of node determined by mpi processes
+   * mschema -> row based MPI friendly schema defined to encode/decode table/row in O(1) time
+   * con -> data connector ingess running on a number of nodes micro batching data pullers
+   */
+  const auto node = std::make_shared<surfingdb::meta::node>(&argc, &argv);
+  const auto ptr = std::make_shared<mschema>(r);
+  const auto con = std::make_unique<DataGenConnector>(node);
+  std::function<void(int, float, float*, float*)> func = saxpy;
+
+  std::signal(SIGTERM | SIGINT, signal_handler);
+
+   /**
+   * @brief
+   * show case consumer send data async to ranks not pulling data
+   * so that while other workers working on shuffle or post shuffle stages
+   * consumer ranks can async send data to other ranks
+   * jump to next iteration and get next batch ready
+   */
+  bool produce = node->rank % 2 == 0;
+  node->setissubscriber(&produce);
+  auto partitioner = [](size_t key, int rank, int world) {
+    int base = world % 2 == 0 ? world - 1 : world;
+    int dest = key % base;
+    /**
+     * @brief dest is subscriber to data ingestion
+     *
+     */
+    if (dest % 2 == 0) {
+      if (dest + 1 > world - 1) {
+        dest = dest - 1;
+      } else {
+        dest = dest + 1;
+      }
+    }
+    CHECK_GE(dest, 0);
+    CHECK_LT(dest, world);
+    return dest;
+  };
+
+    while (terminal_signal == 0) {
+    /**
+     * @brief import pyarrow
+     */
+    // arrow::py::import_pyarrow();
+
+    const size_t intial_row_count = node->rank * BATCH_SIZE;
+    size_t total_row_count = intial_row_count;
+    double start = MPI_Wtime();
+    // ingest, copy rows to local table memory with fixed offsets
+    const auto t1 = con->consume_batch(intial_row_count, 1000, ptr, [](const char* payload, const mschema& out) {
+      auto row = std::make_shared<mrow>(std::make_shared<mschema>(out));
+      Value p;
+
+      p.p_val.long_val = 1;
+      row->write(out.fields.at(0), p);
+
+      p.p_val.string_val = "hello_host";
+      row->write(out.fields.at(1), p);
+
+      p.p_val.string_val = random_string(16);
+      row->write(out.fields.at(2), p);
+
+      p.p_val.double_val = 0.1;
+      std::vector<PValue> lval;
+      lval.push_back(p.p_val);
+      lval.push_back(p.p_val);
+      p.list_value = lval;
+      row->write(out.fields.at(3), p);
+      PValue key;
+      PValue value;
+      key.string_val = random_string(MAX_STR_LEN - 1);
+      value.string_val = random_string(MAX_STR_LEN - 1);
+      std::pair<PValue, PValue> pair;
+      pair.first = key;
+      pair.second = value;
+      p.map_value.insert(pair);
+      row->write(out.fields.at(4), p);
+      return row;
+    });
+
+    /**
+     * pass each row in mtable, if return true, add to new table with schema ptr
+     * release t1 mtable in the end
+     */
+    auto t2 = processors::map(t1, ptr, [](mrow& in, mrow& out, const mschema& out_schema) {
+      for (const auto& f : out_schema.fields) {
+        Value v;
+        in.read(f, v);
+        out.write(f, v);
+      }
+      return true;
+    });
+
+    start = MPI_Wtime();
+    auto t4 = processors::shuffle(t2, ptr->fields.at(2), partitioner);
+    auto end = MPI_Wtime();
+    //std::cout << " shuffle time = " << (end - start) << " rank = " << node->rank << " ingestor = " << node->getissubscriber() << std::endl;
+    start = MPI_Wtime();
+    /**
+     * verify shuffle row placement to right worker (aka MPI rank)
+     */
+    t4->verifyShuffle(ptr->fields.at(2), partitioner);
+
+    auto t41 = processors::java(t4, "Bridge");
+    /**
+     * @brief pass data to gpu
+     * 
+     */
+    auto t5 = gpu(t4);
+  }
+  return terminal_signal;
+}
