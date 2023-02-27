@@ -76,3 +76,8 @@ export CXX=/usr/bin/g++-11
 export CUDA_ROOT=/usr/local/cuda
 sudo ln -s /usr/bin/gcc-11 $CUDA_ROOT/bin/gcc
 sudo ln -s /usr/bin/g++-11 $CUDA_ROOT/bin/g++
+
+mkdir build
+cd build
+wget https://download.pytorch.org/libtorch/cu117/libtorch-cxx11-abi-shared-with-deps-1.13.1%2Bcu117.zip
+unzip libtorch-cxx11-abi-shared-with-deps-1.13.1+cu117.zip

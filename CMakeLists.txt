@@ -311,8 +311,10 @@ target_link_libraries(DataGenExample
         PRIVATE ${ARROW_LIBRARY})
 
 IF (USE_Cuda)
-    SET(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -std=c++17")
     SET(CMAKE_CUDA_COMPILER "/usr/local/cuda-11.8/bin/nvcc")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
+    list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/build/libtorch")
+    find_package(Torch REQUIRED)
     find_package(CUDA REQUIRED)
     enable_language(CUDA)
     find_package(ArrowCUDA REQUIRED)
@@ -322,7 +324,8 @@ IF (USE_Cuda)
     set_property(TARGET HybridWorkload 
         PROPERTY CUDA_STANDARD 17)
     target_link_libraries(HybridWorkload
-        PUBLIC ${FMT_LIBRARY}
+        PRIVATE ${TORCH_LIBRARIES}
+        PRIVATE ${FMT_LIBRARY}
         PRIVATE ${META}
         PRIVATE ${TABLE}
         PRIVATE ${CONNECTOR}

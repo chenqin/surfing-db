@@ -7,6 +7,8 @@
 #include <omp.h>
 #include <rapidjson/document.h>
 #include <stdio.h>
+#include <torch/torch.h>
+#include <c10/cuda/CUDAStream.h>
 #include "connector/datagen.h"
 #include "meta/node.h"
 #include "table/processors.h"
@@ -19,6 +21,7 @@ using namespace surfingdb::table::schema;
 using namespace surfingdb::table;
 using namespace surfingdb::connector;
 using namespace std;
+using namespace torch;
 
 __global__ void saxpy(int n, float a, float* x, float* y) {
   int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -48,7 +51,30 @@ void signal_handler(int signal) {
   terminal_signal = signal;
 }
 
-std::shared_ptr<mtable> gpu(std::shared_ptr<mtable> input) {
+/**
+ * @brief example that calls pytorch cuda streams api as well as calling cuda low level API
+ * 
+ * @param input 
+ * @return std::shared_ptr<mtable> 
+ */
+std::shared_ptr<mtable> pytorch(std::shared_ptr<mtable> input) {
+  if (!torch::cuda::is_available()) return nullptr;
+
+  Tensor tensor0 = torch::ones({ 2, 2 }, torch::device(torch::kCUDA));
+  // get a new CUDA stream from CUDA stream pool on device 0
+  at::cuda::CUDAStream myStream = at::cuda::getStreamFromPool();
+  // set current CUDA stream from default stream to `myStream` on device 0
+  at::cuda::setCurrentCUDAStream(myStream);
+  // sum() on tensor0 uses `myStream` as current CUDA stream
+  tensor0.sum();
+
+  // get the default CUDA stream on device 0
+  at::cuda::CUDAStream defaultStream = at::cuda::getDefaultCUDAStream();
+  // set current CUDA stream back to default CUDA stream on device 0
+  at::cuda::setCurrentCUDAStream(defaultStream);
+  // sum() on tensor0 uses `defaultStream` as current CUDA stream
+  tensor0.sum();
+
   int N = input->row_count;
   Field f = input->getSchema()->fields.at(4);
 
@@ -91,6 +117,7 @@ int main(int argc, char** argv) {
 
   google::InstallFailureSignalHandler();
   google::InitGoogleLogging(argv[0]);
+
   // define how data will be stored, as rows in a table
   RowSchema r;
   SchemaUtils::appendElements(r, "timestamp", RowType::LONG, 1);
@@ -101,7 +128,7 @@ int main(int argc, char** argv) {
   // user defined meta data pair
   SchemaUtils::appendPairs(r, "meta", RowType::STRING, RowType::STRING, 1);
 
-    /**
+  /**
    * @brief initial constructors
    * node -> single executor binding to MPI rank, number of node determined by mpi processes
    * mschema -> row based MPI friendly schema defined to encode/decode table/row in O(1) time
@@ -114,7 +141,7 @@ int main(int argc, char** argv) {
 
   std::signal(SIGTERM | SIGINT, signal_handler);
 
-   /**
+  /**
    * @brief
    * show case consumer send data async to ranks not pulling data
    * so that while other workers working on shuffle or post shuffle stages
@@ -142,7 +169,7 @@ int main(int argc, char** argv) {
     return dest;
   };
 
-    while (terminal_signal == 0) {
+  while (terminal_signal == 0) {
     const size_t intial_row_count = node->rank * BATCH_SIZE;
     size_t total_row_count = intial_row_count;
     double start = MPI_Wtime();
@@ -185,7 +212,7 @@ int main(int argc, char** argv) {
     t4->verifyShuffle(ptr->fields.at(2), partitioner);
     auto t41 = processors::java(t4, "Bridge");
 
-    auto t5 = gpu(t4);
+    auto t5 = pytorch(t4);
   }
   return terminal_signal;
 }
