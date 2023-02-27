@@ -143,11 +143,6 @@ int main(int argc, char** argv) {
   };
 
     while (terminal_signal == 0) {
-    /**
-     * @brief import pyarrow
-     */
-    // arrow::py::import_pyarrow();
-
     const size_t intial_row_count = node->rank * BATCH_SIZE;
     size_t total_row_count = intial_row_count;
     double start = MPI_Wtime();
@@ -155,16 +150,12 @@ int main(int argc, char** argv) {
     const auto t1 = con->consume_batch(intial_row_count, 1000, ptr, [](const char* payload, const mschema& out) {
       auto row = std::make_shared<mrow>(std::make_shared<mschema>(out));
       Value p;
-
       p.p_val.long_val = 1;
       row->write(out.fields.at(0), p);
-
       p.p_val.string_val = "hello_host";
       row->write(out.fields.at(1), p);
-
       p.p_val.string_val = random_string(16);
       row->write(out.fields.at(2), p);
-
       p.p_val.double_val = 0.1;
       std::vector<PValue> lval;
       lval.push_back(p.p_val);
@@ -182,11 +173,6 @@ int main(int argc, char** argv) {
       row->write(out.fields.at(4), p);
       return row;
     });
-
-    /**
-     * pass each row in mtable, if return true, add to new table with schema ptr
-     * release t1 mtable in the end
-     */
     auto t2 = processors::map(t1, ptr, [](mrow& in, mrow& out, const mschema& out_schema) {
       for (const auto& f : out_schema.fields) {
         Value v;
@@ -195,22 +181,10 @@ int main(int argc, char** argv) {
       }
       return true;
     });
-
-    start = MPI_Wtime();
     auto t4 = processors::shuffle(t2, ptr->fields.at(2), partitioner);
-    auto end = MPI_Wtime();
-    //std::cout << " shuffle time = " << (end - start) << " rank = " << node->rank << " ingestor = " << node->getissubscriber() << std::endl;
-    start = MPI_Wtime();
-    /**
-     * verify shuffle row placement to right worker (aka MPI rank)
-     */
     t4->verifyShuffle(ptr->fields.at(2), partitioner);
-
     auto t41 = processors::java(t4, "Bridge");
-    /**
-     * @brief pass data to gpu
-     * 
-     */
+
     auto t5 = gpu(t4);
   }
   return terminal_signal;

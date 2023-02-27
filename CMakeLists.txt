@@ -312,6 +312,7 @@ target_link_libraries(DataGenExample
 
 IF (USE_Cuda)
     SET(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -std=c++17")
+    SET(CMAKE_CUDA_COMPILER "/usr/local/cuda-11.8/bin/nvcc")
     find_package(CUDA REQUIRED)
     enable_language(CUDA)
     find_package(ArrowCUDA REQUIRED)
