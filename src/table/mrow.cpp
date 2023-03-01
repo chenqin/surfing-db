@@ -25,8 +25,10 @@ mrow::mrow(std::shared_ptr<meta::mschema> schemaptr) {
   this->schema_ptr = schemaptr;
   _schema_sig = schemaptr->signature();
   CHECK_GT(schemaptr->rowSize(), 0);
-  _vpayload.resize(schemaptr->rowSize());
-  _payload = (uint8_t*)&_vpayload[0];
+  auto maybe_buffer = arrow::AllocateBuffer(schemaptr->rowSize());
+  CHECK(maybe_buffer.ok());
+  _buffer = *std::move(maybe_buffer);
+  _payload = _buffer->mutable_data();
 }
 
 mrow::mrow(std::shared_ptr<meta::mschema> schemaptr, uint8_t* payloadptr) {
@@ -37,15 +39,11 @@ mrow::mrow(std::shared_ptr<meta::mschema> schemaptr, uint8_t* payloadptr) {
   _schema_sig = schemaptr->signature();
   CHECK_GT(schemaptr->rowSize(), 0);
   CHECK_NE(payloadptr, _payload);
-  _vpayload.clear();
-  _vpayload.shrink_to_fit();
   _payload = payloadptr;
 }
 
 mrow::~mrow() {
   _payload = nullptr;
-  _vpayload.clear();
-  _vpayload.shrink_to_fit();
 }
 
 size_t mrow::row_size() {
@@ -135,7 +133,7 @@ void mrow::write(const Field& f, const Value& v, const uint64_t& offset) {
     valueField.type = f.map_value_type;
     keyField.max_unit_size = surfingdb::meta::SchemaUtils::getFieldSize(keyField);
     valueField.max_unit_size = surfingdb::meta::SchemaUtils::getFieldSize(valueField);
-    
+
     for (auto& pair : v.map_value) {
       Value key, value;
       key.p_val = pair.first;
@@ -143,7 +141,7 @@ void mrow::write(const Field& f, const Value& v, const uint64_t& offset) {
       CHECK_LE(map_offset, row_size() - surfingdb::meta::SchemaUtils::getFieldSize(keyField) - surfingdb::meta::SchemaUtils::getFieldSize(valueField));
       write(keyField, key, map_offset);
       Value keyread;
-      //read(keyField, keyread, map_offset);
+      // read(keyField, keyread, map_offset);
       map_offset += surfingdb::meta::SchemaUtils::getFieldSize(keyField);
       write(valueField, value, map_offset);
       map_offset += surfingdb::meta::SchemaUtils::getFieldSize(valueField);
@@ -220,7 +218,7 @@ size_t mrow::read(const Field& f, Value& v, const uint64_t& offset) {
     for (size_t i = 0; i < len; i++) {
       Value keyVal, valueVal;
       read(keyField, keyVal, _offset);
-      //std::cout << " key read " << offset << keyVal.p_val.string_val << std::endl;
+      // std::cout << " key read " << offset << keyVal.p_val.string_val << std::endl;
       _offset += keyField.max_unit_size;
       read(valueField, valueVal, offset);
       _offset += valueField.max_unit_size;
@@ -303,7 +301,7 @@ size_t mrow::_pread(const Field& f, void* dataptr, const uint64_t& offset) {
     size_t resid = MAX_STR_LEN - strlen(char_ptr) - 1; // leave extra byte'\0'
     CHECK_GE(resid, 0);
     memcpy(dataptr, char_ptr, strlen(char_ptr) + 1);
-    return strlen(char_ptr) ;
+    return strlen(char_ptr);
   }
   case RowType::LIST: {
     assert(false);

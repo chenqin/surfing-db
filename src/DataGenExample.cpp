@@ -15,6 +15,9 @@
  */
 
 #include <chrono>
+#include <arrow/device.h>
+#include <arrow/gpu/cuda_api.h>
+#include <arrow/gpu/cuda_context.h>
 #include <csignal>
 #include <fmt/core.h>
 #include <future>
@@ -35,6 +38,8 @@ using namespace surfingdb::table::schema;
 using namespace surfingdb::table;
 using namespace surfingdb::connector;
 using namespace std;
+using namespace arrow::cuda;
+using namespace arrow;
 
 /**
  * https://stackoverflow.com/questions/440133/how-do-i-create-a-random-alpha-numeric-string-in-c
@@ -174,7 +179,7 @@ int main(int argc, char** argv) {
     start = MPI_Wtime();
     auto t4 = processors::shuffle(t2, ptr->fields.at(2), partitioner);
     auto end = MPI_Wtime();
-    //std::cout << " shuffle time = " << (end - start) << " rank = " << node->rank << " ingestor = " << node->getissubscriber() << std::endl;
+    // std::cout << " shuffle time = " << (end - start) << " rank = " << node->rank << " ingestor = " << node->getissubscriber() << std::endl;
     start = MPI_Wtime();
     /**
      * verify shuffle row placement to right worker (aka MPI rank)
@@ -195,6 +200,19 @@ int main(int argc, char** argv) {
      *
      */
     auto t51 = processors::java(t5, "MyBridge");
+
+    CudaDeviceManager* manager_;
+    std::shared_ptr<CudaDevice> device_;
+    std::shared_ptr<CudaMemoryManager> mm_;
+    std::shared_ptr<CudaContext> context_;
+    std::shared_ptr<arrow::Device> cpu_device_;
+    std::shared_ptr<MemoryManager> cpu_mm_;
+    manager_ = CudaDeviceManager::Instance().ValueOrDie();
+    device_ = manager_->GetDevice(0).ValueOrDie();
+    context_ = device_->GetContext().ValueOrDie();
+    mm_ = AsCudaMemoryManager(device_->default_memory_manager()).ValueOrDie();
+    cpu_device_ = arrow::CPUDevice::Instance();
+    cpu_mm_ = cpu_device_->default_memory_manager();
 
 
   }

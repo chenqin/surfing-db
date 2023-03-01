@@ -56,10 +56,15 @@ private:
   std::shared_ptr<mschema> schema_ptr;
 
 public:
+  /**
+   * @brief expose current offset and buffer to construct mrow in table buffer
+   */
+  size_t offset = 0;    // current offset position
+  std::shared_ptr<arrow::Buffer> buffer;
+
   MPI_Win win;
   uint8_t* schedule;
   size_t row_count = 0; // number of rows in table
-  size_t offset = 0;    // current offset position
   // partition field
   std::unique_ptr<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>> key_dist; // key hash and per node counts
   std::unique_ptr<std::map<size_t, std::vector<size_t>, std::less<size_t>>> key_groups;               // local key, offsets map

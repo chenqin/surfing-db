@@ -18,6 +18,8 @@
 #define SURFINGDB_ROW_H
 
 #include "meta/schema.h"
+#include <arrow/buffer.h>
+#include <arrow/buffer_builder.h>
 #pragma once
 
 namespace surfingdb {
@@ -49,7 +51,11 @@ private:
    * 
    */
   uint8_t* _payload;
-  std::vector<char> _vpayload;
+  /**
+   * @brief use buffer builder to allocate flexible sized rows
+   * 
+   */
+  std::shared_ptr<arrow::Buffer> _buffer;
 
   void _pwrite(const Field& f, const void* data, const uint64_t& offset);
 

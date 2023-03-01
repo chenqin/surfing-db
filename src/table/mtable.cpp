@@ -24,7 +24,6 @@ namespace surfingdb {
 namespace table {
 
 mtable::~mtable() {
-  free((void*)payload);
   capacity = 0;
   key_dist->clear();
   key_groups->clear();
@@ -37,8 +36,10 @@ mtable::mtable(const std::shared_ptr<node> node_ptr, const std::shared_ptr<msche
   this->capacity = capacity;
   this->schema_ptr = schema_ptr;
   this->node_ptr = node_ptr;
-  payload = (uint8_t*)aligned_alloc(64, capacity);
-  CHECK(payload != NULL);
+  auto maybe_buffer = arrow::AllocateBuffer(capacity);
+  CHECK(maybe_buffer.ok());
+  buffer = *std::move(maybe_buffer);
+  payload = buffer->mutable_data();
   schedule_size = -1;
   key_dist = std::make_unique<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>>();
   key_groups = std::make_unique<std::map<size_t, std::vector<size_t>, std::less<size_t>>>();

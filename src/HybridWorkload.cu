@@ -1,4 +1,7 @@
+#include <arrow/device.h>
 #include <arrow/gpu/cuda_api.h>
+#include <arrow/gpu/cuda_context.h>
+#include <c10/cuda/CUDAStream.h>
 #include <chrono>
 #include <fmt/core.h>
 #include <future>
@@ -7,8 +10,8 @@
 #include <omp.h>
 #include <rapidjson/document.h>
 #include <stdio.h>
+#include <thrift/protocol/TBinaryProtocol.h>
 #include <torch/torch.h>
-#include <c10/cuda/CUDAStream.h>
 #include "connector/datagen.h"
 #include "meta/node.h"
 #include "table/processors.h"
@@ -22,6 +25,8 @@ using namespace surfingdb::table;
 using namespace surfingdb::connector;
 using namespace std;
 using namespace torch;
+using namespace arrow::cuda;
+using namespace arrow;
 
 __global__ void saxpy(int n, float a, float* x, float* y) {
   int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -53,30 +58,32 @@ void signal_handler(int signal) {
 
 /**
  * @brief example that calls pytorch cuda streams api as well as calling cuda low level API
- * 
- * @param input 
- * @return std::shared_ptr<mtable> 
+ *
+ * @param input
+ * @return std::shared_ptr<mtable>
  */
 std::shared_ptr<mtable> pytorch(std::shared_ptr<mtable> input) {
   if (!torch::cuda::is_available()) return nullptr;
+  ;
+  /*
+    Tensor tensor0 = torch::ones({ 2, 2 }, torch::device(torch::kCUDA));
+    // get a new CUDA stream from CUDA stream pool on device 0
+    at::cuda::CUDAStream myStream = at::cuda::getStreamFromPool();
+    // set current CUDA stream from default stream to `myStream` on device 0
+    at::cuda::setCurrentCUDAStream(myStream);
+    // sum() on tensor0 uses `myStream` as current CUDA stream
+    tensor0.sum();
 
-  Tensor tensor0 = torch::ones({ 2, 2 }, torch::device(torch::kCUDA));
-  // get a new CUDA stream from CUDA stream pool on device 0
-  at::cuda::CUDAStream myStream = at::cuda::getStreamFromPool();
-  // set current CUDA stream from default stream to `myStream` on device 0
-  at::cuda::setCurrentCUDAStream(myStream);
-  // sum() on tensor0 uses `myStream` as current CUDA stream
-  tensor0.sum();
-
-  // get the default CUDA stream on device 0
-  at::cuda::CUDAStream defaultStream = at::cuda::getDefaultCUDAStream();
-  // set current CUDA stream back to default CUDA stream on device 0
-  at::cuda::setCurrentCUDAStream(defaultStream);
-  // sum() on tensor0 uses `defaultStream` as current CUDA stream
-  tensor0.sum();
+    // get the default CUDA stream on device 0
+    at::cuda::CUDAStream defaultStream = at::cuda::getDefaultCUDAStream();
+    // set current CUDA stream back to default CUDA stream on device 0
+    at::cuda::setCurrentCUDAStream(defaultStream);
+    // sum() on tensor0 uses `defaultStream` as current CUDA stream
+    tensor0.sum();
+  */
 
   int N = input->row_count;
-  Field f = input->getSchema()->fields.at(4);
+  surfingdb::meta::Field f = input->getSchema()->fields.at(4);
 
   float *x, *y, *d_x, *d_y;
   x = (float*)malloc(N * sizeof(float));
@@ -213,6 +220,19 @@ int main(int argc, char** argv) {
     auto t41 = processors::java(t4, "Bridge");
 
     auto t5 = pytorch(t4);
+
+    CudaDeviceManager* manager_;
+    std::shared_ptr<CudaDevice> device_;
+    std::shared_ptr<CudaMemoryManager> mm_;
+    std::shared_ptr<CudaContext> context_;
+    std::shared_ptr<arrow::Device> cpu_device_;
+    std::shared_ptr<MemoryManager> cpu_mm_;
+    manager_ = CudaDeviceManager::Instance().ValueOrDie();
+    device_ = manager_->GetDevice(0).ValueOrDie();
+    context_ = device_->GetContext().ValueOrDie();
+    mm_ = AsCudaMemoryManager(device_->default_memory_manager()).ValueOrDie();
+    cpu_device_ = arrow::CPUDevice::Instance();
+    cpu_mm_ = cpu_device_->default_memory_manager();
   }
   return terminal_signal;
 }

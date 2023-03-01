@@ -304,12 +304,6 @@ target_link_libraries(KafkaExample
         PRIVATE ${CONNECTOR}
         PRIVATE ${ARROW_LIBRARY})
 
-target_link_libraries(DataGenExample
-        PRIVATE ${META}
-        PRIVATE ${TABLE}
-        PRIVATE ${CONNECTOR}
-        PRIVATE ${ARROW_LIBRARY})
-
 IF (USE_Cuda)
     SET(CMAKE_CUDA_COMPILER "/usr/local/cuda-11.8/bin/nvcc")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
@@ -319,7 +313,14 @@ IF (USE_Cuda)
     enable_language(CUDA)
     find_package(ArrowCUDA REQUIRED)
     set(ARROW_CUDA_LIBRARY ArrowCUDA::arrow_cuda_shared)
-    
+
+    target_link_libraries(DataGenExample
+        PRIVATE ${META}
+        PRIVATE ${TABLE}
+        PRIVATE ${CONNECTOR}
+        PRIVATE ${ARROW_LIBRARY}
+        PRIVATE ${ARROW_CUDA_LIBRARY})
+
     add_executable(HybridWorkload src/HybridWorkload.cu)
     set_property(TARGET HybridWorkload 
         PROPERTY CUDA_STANDARD 17)
