@@ -25,10 +25,15 @@ mrow::mrow(std::shared_ptr<meta::mschema> schemaptr) {
   this->schema_ptr = schemaptr;
   _schema_sig = schemaptr->signature();
   CHECK_GT(schemaptr->rowSize(), 0);
-  auto maybe_buffer = arrow::AllocateBuffer(schemaptr->rowSize());
+  /**
+   * @brief allocate header store size of row
+   * |header|payload|
+   */
+  auto maybe_buffer = arrow::AllocateBuffer(sizeof(HEADER_SIZE) + schemaptr->rowSize());
   CHECK(maybe_buffer.ok());
   _buffer = *std::move(maybe_buffer);
-  _payload = _buffer->mutable_data();
+  _actual_row_size = (size_t*) _buffer->mutable_data();
+  _payload = _buffer->mutable_data() + sizeof(HEADER_SIZE);
 }
 
 mrow::mrow(std::shared_ptr<meta::mschema> schemaptr, uint8_t* payloadptr) {
@@ -38,6 +43,8 @@ mrow::mrow(std::shared_ptr<meta::mschema> schemaptr, uint8_t* payloadptr) {
   this->schema_ptr = schemaptr;
   _schema_sig = schemaptr->signature();
   CHECK_GT(schemaptr->rowSize(), 0);
+  size_t max_capacity  = schemaptr->rowSize();
+  _actual_row_size = (size_t*) &max_capacity;
   CHECK_NE(payloadptr, _payload);
   _payload = payloadptr;
 }
@@ -46,7 +53,22 @@ mrow::~mrow() {
   _payload = nullptr;
 }
 
-size_t mrow::row_size() {
+/**
+ * @brief actual used buffer size
+ * 
+ * @return size_t 
+ */
+size_t mrow::size() {
+  CHECK(_actual_row_size != nullptr);
+  CHECK(*_actual_row_size <= capacity());
+  return *_actual_row_size;
+}
+/**
+ * @brief max buffer size from schema
+ * 
+ * @return size_t 
+ */
+size_t mrow::capacity() {
   return this->schema_ptr->rowSize();
 }
 
@@ -138,7 +160,7 @@ void mrow::write(const Field& f, const Value& v, const uint64_t& offset) {
       Value key, value;
       key.p_val = pair.first;
       value.p_val = pair.second;
-      CHECK_LE(map_offset, row_size() - surfingdb::meta::SchemaUtils::getFieldSize(keyField) - surfingdb::meta::SchemaUtils::getFieldSize(valueField));
+      CHECK_LE(map_offset, capacity() - surfingdb::meta::SchemaUtils::getFieldSize(keyField) - surfingdb::meta::SchemaUtils::getFieldSize(valueField));
       write(keyField, key, map_offset);
       Value keyread;
       // read(keyField, keyread, map_offset);

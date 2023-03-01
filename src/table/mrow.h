@@ -51,6 +51,7 @@ private:
    * 
    */
   uint8_t* _payload;
+  size_t* _actual_row_size;
   /**
    * @brief use buffer builder to allocate flexible sized rows
    * 
@@ -81,7 +82,13 @@ public:
 
   size_t schema_sig();
 
-  size_t row_size();
+  /**
+   * @brief row size and capacity 
+   * 
+   * @return size_t 
+   */
+  size_t size();
+  size_t capacity();
 
   uint8_t* payload_ptr();
 

@@ -113,10 +113,10 @@ uint8_t* mtable::payload_ptr() {
 
 void mtable::appendRow(mrow& row) {
   CHECK_EQ(row.schema_sig(), schema_ptr->signature()); // check schema signature
-  CHECK_EQ(schema_ptr->rowSize(), row.row_size());     // check row size
-  CHECK_LE(row.row_size() + offset, capacity);         // check capacity of temp table
-  memcpy(&payload[offset], row.payload_ptr(), row.row_size());
-  offset += row.row_size();
+  CHECK_EQ(schema_ptr->rowSize(), row.capacity());     // check row size
+  CHECK_LE(row.capacity() + offset, capacity);         // check capacity of temp table
+  memcpy(&payload[offset], row.payload_ptr(), row.capacity());
+  offset += row.capacity();
   row_count++;
   CHECK_LE(offset, capacity);
 }

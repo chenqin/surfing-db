@@ -112,6 +112,7 @@ TEST(TableTest, testCompact) {
   Value mapValue2;
   t.readRow(1)->read(field7, mapValue2);
   CHECK_EQ(mapValue.map_value.size(), mapValue2.map_value.size());
+  CHECK_LE(shaddow.size(), shaddow.capacity());
 
   // auto compact = t.compactTable();
   // EXPECT_LT(compact->getSchema()->rowSize(), tpr->rowSize());
