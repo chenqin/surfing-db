@@ -67,15 +67,13 @@ sudo apt autoremove
 sudo apt install -y -V build-essential
 sudo wget -O /etc/apt/preferences.d/cuda-repository-pin-600 https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-ubuntu2004.pin
 sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/3bf863cc.pub
-sudo add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/ /
+sudo add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/ /"
 sudo apt update
 sudo apt install -y -V cuda-11-8
 
-export CC=/usr/bin/gcc-11
-export CXX=/usr/bin/g++-11
 export CUDA_ROOT=/usr/local/cuda
-sudo ln -s /usr/bin/gcc-11 $CUDA_ROOT/bin/gcc
-sudo ln -s /usr/bin/g++-11 $CUDA_ROOT/bin/g++
+sudo ln -s /usr/bin/gcc $CUDA_ROOT/bin/gcc
+sudo ln -s /usr/bin/g++ $CUDA_ROOT/bin/g++
 
 mkdir build
 cd build
