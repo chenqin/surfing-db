@@ -34,11 +34,29 @@ std::shared_ptr<mtable> processors::map(std::shared_ptr<mtable> in, std::shared_
   auto out = std::make_shared<mtable>(in->getNodePtr(), out_schema_ptr, in->row_count * out_schema_ptr->rowSize());
   for (size_t i = 0; i < in->row_count; i++) {
     auto in_row = in->readRow(i);
-    mrow out_row(out->getSchema());
-    bool append = transform(*in_row.get(), out_row, *out_schema_ptr.get());
-    CHECK_EQ(out_row.schema_sig(), out->getSchema()->signature());
+    /**
+     * @brief use out table memory to avoid memcpy
+     */
+    mrow shaddlow_out(out->getSchema(), out->buffer->mutable_data() + out->offset);
+    bool append = transform(*in_row.get(), shaddlow_out, *out_schema_ptr.get());
+    CHECK_EQ(shaddlow_out.schema_sig(), out_schema_ptr->signature());
 
-    if (append) { out->appendRow(out_row); }
+    /**
+     * @brief update offset and row_count
+     *
+     */
+    if (append) {
+      out->row_count++;
+      out->offset += out->getSchema()->rowSize();
+      CHECK_LE(out->row_count, in->row_count);
+      CHECK_LE(out->offset, in->row_count * out_schema_ptr->rowSize());
+    } else {
+      /**
+       * @brief reset memory
+       * 
+       */
+      memset(shaddlow_out.payload_ptr(), 0, out->getSchema()->rowSize());
+    }
   }
   return out;
 }

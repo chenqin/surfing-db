@@ -90,6 +90,28 @@ TEST(TableTest, testCompact) {
   t.appendRow(b);
   Value mapValue;
   t.readRow(0)->read(field7, mapValue);
+  /**
+   * @brief borrow table memory
+   * 
+   */
+  mrow shaddow(tpr, t.buffer->mutable_data() + t.offset);
+  shaddow.write(field1, v1);
+  shaddow.write(field2, v2);
+  shaddow.write(field3, v3);
+  shaddow.write(field4, v4);
+  shaddow.write(field5, v5);
+  shaddow.write(field6, v6);
+  shaddow.write(field7, v7);
+  /**
+   * @brief shaddow row must manually update table offsets and counts
+   * 
+   */
+  t.row_count++;
+  t.offset+= tpr->rowSize();
+  CHECK_EQ(t.row_count, 2);
+  Value mapValue2;
+  t.readRow(1)->read(field7, mapValue2);
+  CHECK_EQ(mapValue.map_value.size(), mapValue2.map_value.size());
 
   // auto compact = t.compactTable();
   // EXPECT_LT(compact->getSchema()->rowSize(), tpr->rowSize());

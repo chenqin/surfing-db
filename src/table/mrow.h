@@ -62,12 +62,18 @@ private:
   size_t _pread(const Field& f, void* dataptr, const uint64_t& offset);
 
 public:
+  /**
+   * @brief build dedicated buffer managed by row instance lifecycle
+   * 
+   * @param schemaptr 
+   */
   mrow(std::shared_ptr<meta::mschema> schemaptr);
 
   /**
-   * only used in Temptable point to piece map memory to readRow/append fields
-   * @param schema
-   * @param payload
+   * @brief point to starting offset of memory
+   * 
+   * @param schemaptr 
+   * @param payloadptr 
    */
   mrow(std::shared_ptr<meta::mschema> schemaptr, uint8_t* payloadptr);
 
