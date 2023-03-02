@@ -297,12 +297,6 @@ add_custom_command(TARGET KafkaExample PRE_BUILD
         COMMAND cd ${CMAKE_SOURCE_DIR}/surfing-db-java && mvn clean package -Darrow.version=${ARROW_VERSION} 
         COMMAND cp ${CMAKE_SOURCE_DIR}/surfing-db-java/target/surfing-db-java-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_SOURCE_DIR}/surfing-db-java.jar)
 
-target_link_libraries(KafkaExample
-        PRIVATE ${META}
-        PRIVATE ${TABLE}
-        PRIVATE ${CONNECTOR}
-        PRIVATE ${ARROW_LIBRARY})
-
 target_link_libraries(DataGenExample
         PRIVATE ${META}
         PRIVATE ${TABLE}
@@ -332,4 +326,11 @@ IF (USE_CUDA)
         PRIVATE ${CONNECTOR}
         PRIVATE ${ARROW_LIBRARY}
         PRIVATE ${ARROW_CUDA_LIBRARY})
+
+    target_link_libraries(KafkaExample
+        PRIVATE ${META}
+        PRIVATE ${TABLE}
+        PRIVATE ${CONNECTOR}
+        PRIVATE ${ARROW_LIBRARY}
+        PRIVATE ${TORCH_LIBRARIES})
 ENDIF(USE_CUDA)
