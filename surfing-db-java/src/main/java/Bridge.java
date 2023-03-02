@@ -45,8 +45,6 @@ public class Bridge {
      */
     protected static VectorSchemaRoot process(VectorSchemaRoot input) {
         total += input.getRowCount();
-        System.out.println(total);
-        
         BitVector bitVector = new BitVector("boolean", allocator);
         VarCharVector varCharVector = new VarCharVector("varchar", allocator);
         bitVector.allocateNew();

@@ -35,7 +35,6 @@ using namespace surfingdb::table::schema;
 using namespace surfingdb::table;
 using namespace surfingdb::connector;
 using namespace std;
-using namespace arrow::cuda;
 using namespace arrow;
 
 /**

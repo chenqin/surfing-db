@@ -101,8 +101,7 @@ int main(int argc, char** argv) {
       }
     });
     auto partitioner = [](size_t key, int rank, int world) {
-      int base = world % 2 == 0 ? world - 1 : world;
-      int dest = key % base;
+      int dest = key % world;
       CHECK_GE(dest, 0);
       CHECK_LT(dest, world);
       return dest;
