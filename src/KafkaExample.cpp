@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
     // simulate a delay to decode and handle kafka batch
     auto start = MPI_Wtime();
     // kafka consumer
-    auto t1 = consumer.consume_batch(rows, 1000, schema_ptr, [](const char* payload, const mschema& out) {
+    auto t1 = consumer.consume_batch(rows, 100, schema_ptr, [](const char* payload, const mschema& out) {
       auto r = std::make_shared<mrow>(std::make_shared<mschema>(out));
       rapidjson::Document document;
       bool err = document.Parse((const char*)payload).HasParseError();

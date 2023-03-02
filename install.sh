@@ -4,9 +4,8 @@ sudo apt update
 sudo apt install -y -V openjdk-8-jdk
 
 # install needed dependencies
-sudo apt install -y -V gcc-10
-sudo apt install -y -V g++-10
-sudo apt install -y -V cmake
+sudo apt install -y -V gcc
+sudo apt install -y -V g++
 sudo apt install -y -V libomp-dev
 sudo apt install -y -V libopenmpi-dev
 sudo apt install -y -V libstdc++12
@@ -14,7 +13,6 @@ sudo apt install -y -V libssl-dev
 sudo apt install -y -V libboost-dev
 sudo apt install  -y -V pybind11-dev
 sudo apt install  -y -V libgoogle-glog-dev
-#thrift build
 sudp apt install  -y -V flex 
 sudp apt install  -y -V bison
 sudo apt install  -y -V libunwind-dev
@@ -25,7 +23,9 @@ wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr '
 sudo apt install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
 rm ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
 
+sudo apt install -y -V libcudnn8-dev
 sudo apt install -y -V libarrow-dev # For C++
+sudo apt install -y -V libarrow-cuda-dev #For GPU
 sudo apt install -y -V libarrow-glib-dev # For GLib (C)
 sudo apt install -y -V libarrow-dataset-dev # For Apache Arrow Dataset C++
 sudo apt install -y -V libarrow-dataset-glib-dev # For Apache Arrow Dataset GLib (C)
@@ -43,25 +43,6 @@ pip install "pybind11[global]"
 # cleanup
 sudo apt autoremove
 
-#cuda optional
-#sudo apt install nvidia-cuda-toolkit
-
-
-
-#thrift@0.9 is keg-only, which means it was not symlinked into /opt/homebrew,
-#because this is an alternate version of another formula.
-
-#If you need to have thrift@0.9 first in your PATH, run:
-#  echo 'export PATH="/opt/homebrew/opt/thrift@0.9/bin:$PATH"' >> /Users/cqin/.bash_profile
-
-#For compilers to find thrift@0.9 you may need to set:
-#  export LDFLAGS="-L/opt/homebrew/opt/thrift@0.9/lib"
-#  export CPPFLAGS="-I/opt/homebrew/opt/thrift@0.9/include"
-
-#For pkg-config to find thrift@0.9 you may need to set:
-#  export PKG_CONFIG_PATH="/opt/homebrew/opt/thrift@0.9/lib/pkgconfig"
-
-
 #sudo apt install libtorch-dev
 #https://linuxhint.com/install-cuda-ubuntu-2004/ follow this tutorial
 sudo apt install -y -V build-essential
@@ -75,7 +56,17 @@ export CUDA_ROOT=/usr/local/cuda
 sudo ln -s /usr/bin/gcc $CUDA_ROOT/bin/gcc
 sudo ln -s /usr/bin/g++ $CUDA_ROOT/bin/g++
 
-mkdir build
-cd build
+# libtorch
 wget https://download.pytorch.org/libtorch/cu117/libtorch-cxx11-abi-shared-with-deps-1.13.1%2Bcu117.zip
 unzip libtorch-cxx11-abi-shared-with-deps-1.13.1+cu117.zip
+
+# cmake 3.22 works for me
+wget https://github.com/Kitware/CMake/releases/download/v3.22.6/cmake-3.22.6-linux-x86_64.tar.gz ~
+tar vzxf ~/cmake-3.22.6-linux-x86_64.tar.gz 
+
+#write to env
+echo 'export CMAKE_HOME=~/cmake-3.22.6-linux-x86_64' >> ~/.bashrc 
+echo 'export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64' >> ~/.bashrc 
+echo 'export PATH=$PATH:$CMAKE_HOME/bin:$JAVA_HOME/bin' >> ~/.bashrc 
+echo 'export CUDA_ROOT=/usr/local/cuda' >> ~/.bashrc 
+source ~/.bashrc

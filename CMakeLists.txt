@@ -3,10 +3,9 @@
 cmake_minimum_required(VERSION 3.10)
 project(surfingdb LANGUAGES CXX VERSION 0.1)
 
-OPTION(USE_Cuda "USE CUDA" ON)
+OPTION(USE_CUDA "USE CUDA" ON)
 
 find_package(Java 1.8 REQUIRED)
-set($ENV{JAVA_HOME} "/usr/lib/jvm/java-8-openjdk-amd64/")
 
 if (linux)
     project(Treads)
@@ -304,22 +303,23 @@ target_link_libraries(KafkaExample
         PRIVATE ${CONNECTOR}
         PRIVATE ${ARROW_LIBRARY})
 
-IF (USE_Cuda)
-    SET(CMAKE_CUDA_COMPILER "/usr/local/cuda-11.8/bin/nvcc")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
-    list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/build/libtorch")
-    find_package(Torch REQUIRED)
-    find_package(CUDA REQUIRED)
-    enable_language(CUDA)
-    find_package(ArrowCUDA REQUIRED)
-    set(ARROW_CUDA_LIBRARY ArrowCUDA::arrow_cuda_shared)
-
-    target_link_libraries(DataGenExample
+target_link_libraries(DataGenExample
         PRIVATE ${META}
         PRIVATE ${TABLE}
         PRIVATE ${CONNECTOR}
-        PRIVATE ${ARROW_LIBRARY}
-        PRIVATE ${ARROW_CUDA_LIBRARY})
+        PRIVATE ${ARROW_LIBRARY})
+
+IF (USE_CUDA)
+    SET(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
+    list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/libtorch")
+    find_package(CUDA REQUIRED)
+    #find_package(CUDAToolkit REQUIRED)
+    enable_language(CUDA)
+
+    find_package(Torch REQUIRED)
+    find_package(ArrowCUDA REQUIRED)
+    set(ARROW_CUDA_LIBRARY ArrowCUDA::arrow_cuda_shared)
 
     add_executable(HybridWorkload src/HybridWorkload.cu)
     set_property(TARGET HybridWorkload 
@@ -332,4 +332,4 @@ IF (USE_Cuda)
         PRIVATE ${CONNECTOR}
         PRIVATE ${ARROW_LIBRARY}
         PRIVATE ${ARROW_CUDA_LIBRARY})
-ENDIF(USE_Cuda)
+ENDIF(USE_CUDA)

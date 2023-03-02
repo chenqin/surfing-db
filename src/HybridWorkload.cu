@@ -233,6 +233,7 @@ int main(int argc, char** argv) {
     mm_ = AsCudaMemoryManager(device_->default_memory_manager()).ValueOrDie();
     cpu_device_ = arrow::CPUDevice::Instance();
     cpu_mm_ = cpu_device_->default_memory_manager();
+
   }
   return terminal_signal;
 }
