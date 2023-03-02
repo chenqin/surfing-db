@@ -3,15 +3,15 @@
 cmake_minimum_required(VERSION 3.10)
 project(surfingdb LANGUAGES CXX VERSION 0.1)
 
-OPTION(USE_CUDA "USE CUDA" ON)
-
 find_package(Java 1.8 REQUIRED)
 
 if (linux)
     project(Treads)
-    #set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -std=gnu++2a -pthread" )
     set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
     set(THREADS_PREFER_PTHREAD_FLAG TRUE)
+    set(CMAKE_CXX_STANDARD 17)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    set(CMAKE_VERBOSE_MAKEFILE ON)
 endif ()
 
 find_package(Threads REQUIRED)
@@ -20,6 +20,7 @@ find_package(Boost REQUIRED)
 
 find_package(JNI REQUIRED)
 include_directories(${JNI_INCLUDE_DIRS})
+
 if(APPLE)
     set(OPENSSL_ROOT_DIR /opt/homebrew/Cellar/openssl@3/3.0.8)
     set(OPENSSL_LIBRARIES ${OPENSSL_ROOT_DIR}/lib)
@@ -45,20 +46,13 @@ else()
     #find_package (Glog REQUIRED)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(glog REQUIRED libglog)
-
     set(GLOG_LIBRARY ${glog_LIBRARIES})
-
 endif()
 
 #find_package(OpenMP REQUIRED)
 find_package(OpenSSL REQUIRED)
 #https://pybind11.readthedocs.io/en/stable/advanced/embedding.html
 find_package(pybind11 REQUIRED)
-
-
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_VERBOSE_MAKEFILE ON)
 
 set(SURFINGDB_ROOT ${PROJECT_SOURCE_DIR})
 set(SURFINGDB_SRC ${SURFINGDB_ROOT}/src)
@@ -303,34 +297,20 @@ target_link_libraries(DataGenExample
         PRIVATE ${CONNECTOR}
         PRIVATE ${ARROW_LIBRARY})
 
-IF (USE_CUDA)
-    SET(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
-    list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/libtorch")
-    find_package(CUDA REQUIRED)
-    #find_package(CUDAToolkit REQUIRED)
-    enable_language(CUDA)
+SET(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/libtorch")
+find_package(CUDA REQUIRED)
+#find_package(CUDAToolkit REQUIRED)
+enable_language(CUDA)
 
-    find_package(Torch REQUIRED)
-    find_package(ArrowCUDA REQUIRED)
-    set(ARROW_CUDA_LIBRARY ArrowCUDA::arrow_cuda_shared)
+find_package(Torch REQUIRED)
+find_package(ArrowCUDA REQUIRED)
+set(ARROW_CUDA_LIBRARY ArrowCUDA::arrow_cuda_shared)
 
-    add_executable(HybridWorkload src/HybridWorkload.cu)
-    set_property(TARGET HybridWorkload 
-        PROPERTY CUDA_STANDARD 17)
-    target_link_libraries(HybridWorkload
-        PRIVATE ${TORCH_LIBRARIES}
-        PRIVATE ${FMT_LIBRARY}
-        PRIVATE ${META}
-        PRIVATE ${TABLE}
-        PRIVATE ${CONNECTOR}
-        PRIVATE ${ARROW_LIBRARY}
-        PRIVATE ${ARROW_CUDA_LIBRARY})
-
-    target_link_libraries(KafkaExample
-        PRIVATE ${META}
-        PRIVATE ${TABLE}
-        PRIVATE ${CONNECTOR}
-        PRIVATE ${ARROW_LIBRARY}
-        PRIVATE ${TORCH_LIBRARIES})
-ENDIF(USE_CUDA)
+target_link_libraries(KafkaExample
+    PRIVATE ${META}
+    PRIVATE ${TABLE}
+    PRIVATE ${CONNECTOR}
+    PRIVATE ${ARROW_LIBRARY}
+    PRIVATE ${TORCH_LIBRARIES})

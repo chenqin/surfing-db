@@ -95,6 +95,7 @@ void linear_regression(std::shared_ptr<mtable> shuffled_training_dataset, int ra
                 "], Loss: " << loss.item<double>() << "\n";
         }
     }
+    torch::NoGradGuard no_grad_guard;
     //std::cout << "Training finished!\n";
 }
 
@@ -122,7 +123,7 @@ int main(int argc, char** argv) {
   /**
    * features 
   */
-  int batch = 50000;
+  int batch = 200000;
   int interval = 300;
   int world = node->world;
 
