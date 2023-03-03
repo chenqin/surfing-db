@@ -119,6 +119,7 @@ int main(int argc, char** argv) {
   };
 
   while (terminal_signal == 0) {
+    if(node->rank == 0) std::cout << "iteration" << std::endl;
     /**
      * @brief import pyarrow
      */

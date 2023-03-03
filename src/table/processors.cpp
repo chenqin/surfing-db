@@ -53,7 +53,7 @@ std::shared_ptr<mtable> processors::map(std::shared_ptr<mtable> in, std::shared_
     } else {
       /**
        * @brief reset memory
-       * 
+       *
        */
       memset(shaddlow_out.payload_ptr(), 0, out->getSchema()->rowSize());
     }

@@ -29,11 +29,10 @@ mrow::mrow(std::shared_ptr<meta::mschema> schemaptr) {
    * @brief allocate header store size of row
    * |header|payload|
    */
-  auto maybe_buffer = arrow::AllocateBuffer(sizeof(HEADER_SIZE) + schemaptr->rowSize());
+  auto maybe_buffer = arrow::AllocateBuffer(HEADER_SIZE + schemaptr->rowSize());
   CHECK(maybe_buffer.ok());
   _buffer = *std::move(maybe_buffer);
-  _actual_row_size = (size_t*) _buffer->mutable_data();
-  _payload = _buffer->mutable_data() + sizeof(HEADER_SIZE);
+  _payload = _buffer->mutable_data() + HEADER_SIZE;
 }
 
 mrow::mrow(std::shared_ptr<meta::mschema> schemaptr, uint8_t* payloadptr) {
@@ -43,8 +42,7 @@ mrow::mrow(std::shared_ptr<meta::mschema> schemaptr, uint8_t* payloadptr) {
   this->schema_ptr = schemaptr;
   _schema_sig = schemaptr->signature();
   CHECK_GT(schemaptr->rowSize(), 0);
-  size_t max_capacity  = schemaptr->rowSize();
-  _actual_row_size = (size_t*) &max_capacity;
+  size_t max_capacity = schemaptr->rowSize();
   CHECK_NE(payloadptr, _payload);
   _payload = payloadptr;
 }
@@ -52,21 +50,10 @@ mrow::mrow(std::shared_ptr<meta::mschema> schemaptr, uint8_t* payloadptr) {
 mrow::~mrow() {
   _payload = nullptr;
 }
-
-/**
- * @brief actual used buffer size
- * 
- * @return size_t 
- */
-size_t mrow::size() {
-  CHECK(_actual_row_size != nullptr);
-  CHECK(*_actual_row_size <= capacity());
-  return *_actual_row_size;
-}
 /**
  * @brief max buffer size from schema
- * 
- * @return size_t 
+ *
+ * @return size_t
  */
 size_t mrow::capacity() {
   return this->schema_ptr->rowSize();
@@ -85,50 +72,51 @@ size_t mrow::read(const Field& f, Value& v) {
   CHECK_GE(schema_ptr->_offsets->size(), 0);
   CHECK(schema_ptr->_offsets->find(f) != schema_ptr->_offsets->end());
   uint64_t offset = schema_ptr->_offsets->at(f);
-  size_t unit = read(f, v, offset);
-  CHECK_LE(unit, schema_ptr->_max_unit->at(f));
-  return unit;
+  size_t mem_size = read(f, v, offset);
+  return mem_size;
 }
 
-void mrow::write(const Field& f, const Value& v) {
+size_t mrow::write(const Field& f, const Value& v) {
   uint64_t offset = schema_ptr->_offsets->at(f);
   CHECK_GT(offset, 0);
-  write(f, v, offset);
+  return write(f, v, offset);
 }
 
-void mrow::write(const Field& f, const Value& v, const uint64_t& offset) {
+size_t mrow::write(const Field& f, const Value& v, const uint64_t& offset) {
   switch (f.type) {
   case surfingdb::meta::schema::RowType::VOID: {
     assert(false);
+    return 0;
   }
   case surfingdb::meta::schema::RowType::INT: {
     _pwrite(f, &v.p_val.int_val, offset);
-    break;
+    return sizeof(int);
   }
   case surfingdb::meta::schema::RowType::BOOL: {
     _pwrite(f, &v.p_val.bool_val, offset);
-    break;
+    return sizeof(bool);
   }
   case RowType::LONG: {
     _pwrite(f, &v.p_val.long_val, offset);
-    break;
+    return sizeof(long);
   }
   case RowType::DOUBLE: {
     DOUBLE_TYPE dv = (DOUBLE_TYPE)v.p_val.double_val;
     _pwrite(f, &dv, offset);
-    break;
+    return sizeof(DOUBLE_TYPE);
   }
   case RowType::STRING: {
     CHECK_LE(strlen(v.p_val.string_val.c_str()), MAX_STR_LEN - 1); // include extra \0
     _pwrite(f, v.p_val.string_val.c_str(), offset);
-    break;
+    return strlen(v.p_val.string_val.c_str()) + 1 + HEADER_SIZE;
   }
   case RowType::LIST: {
     CHECK_LE(v.list_value.size(), (size_t)f.max_unit_size);
+    size_t mem_size = HEADER_SIZE;
 
     int64_t size = v.list_value.size();
     _pwrite(_header, &size, offset);
-    size_t list_offset = offset + sizeof(HEADER_SIZE);
+    size_t list_offset = offset + HEADER_SIZE;
 
     //  |size|string|
     Field listField;
@@ -138,14 +126,14 @@ void mrow::write(const Field& f, const Value& v, const uint64_t& offset) {
       // hard code
       Value item;
       item.p_val = pv;
-      write(listField, item, list_offset);
+      mem_size += write(listField, item, list_offset);
       list_offset += listField.max_unit_size;
     }
-    break;
+    return mem_size;
   }
   case RowType::MAP: {
     CHECK_LE(v.map_value.size(), (size_t)f.max_unit_size);
-
+    size_t mem_size = HEADER_SIZE;
     int64_t size = v.map_value.size();
     _pwrite(_header, &size, offset);
     size_t map_offset = offset + HEADER_SIZE;
@@ -161,95 +149,98 @@ void mrow::write(const Field& f, const Value& v, const uint64_t& offset) {
       key.p_val = pair.first;
       value.p_val = pair.second;
       CHECK_LE(map_offset, capacity() - surfingdb::meta::SchemaUtils::getFieldSize(keyField) - surfingdb::meta::SchemaUtils::getFieldSize(valueField));
-      write(keyField, key, map_offset);
+      mem_size += write(keyField, key, map_offset);
       Value keyread;
-      // read(keyField, keyread, map_offset);
       map_offset += surfingdb::meta::SchemaUtils::getFieldSize(keyField);
-      write(valueField, value, map_offset);
+      mem_size += write(valueField, value, map_offset);
       map_offset += surfingdb::meta::SchemaUtils::getFieldSize(valueField);
     }
-    break;
+    return mem_size;
   }
   }
 }
 
 size_t mrow::read(const Field& f, Value& v, const uint64_t& offset) {
   switch (f.type) {
-  case surfingdb::meta::schema::RowType::VOID: {
-    return 0;
-  }
-  case surfingdb::meta::schema::RowType::INT: {
-    _pread(f, &v.p_val.int_val, offset);
-    return 1;
-  }
-  case surfingdb::meta::schema::RowType::BOOL: {
-    _pread(f, &v.p_val.bool_val, offset);
-    return 1;
-  }
-  case RowType::LONG: {
-    _pread(f, &v.p_val.long_val, offset);
-    return 1;
-  }
-  case RowType::DOUBLE: {
-    DOUBLE_TYPE dv;
-    _pread(f, &dv, offset);
-    v.p_val.double_val = (double)dv;
-    return 1;
-  }
-  case RowType::STRING: {
-    std::vector<char> buff(MAX_STR_LEN);
-    size_t strlen = _pread(f, &buff[0], offset);
-    buff.resize(strlen);
-    v.p_val.string_val = std::string(buff.data());
-    return strlen;
-  }
-  case RowType::LIST: {
-    v.list_value.clear();
-    size_t _offset = offset;
-    Field l;
-    l.type = RowType::LONG;
-    size_t len;
-    _pread(l, &len, _offset);
-    _offset += HEADER_SIZE;
-
-    Field listField;
-    listField.type = f.list_type;
-    listField.max_unit_size = surfingdb::meta::SchemaUtils::getFieldSize(listField);
-    for (size_t i = 0; i < len; i++) {
-      Value listVal;
-      read(listField, listVal, _offset);
-      v.list_value.push_back(listVal.p_val);
-      _offset += listField.max_unit_size;
+    case surfingdb::meta::schema::RowType::VOID: {
+      return 0;
     }
-    return len;
-  }
-  case RowType::MAP: {
-    v.map_value.clear();
-    size_t _offset = offset;
-    Field l;
-    l.type = RowType::LONG;
-    size_t len;
-    _pread(l, &len, _offset);
-    _offset += HEADER_SIZE;
-
-    Field keyField, valueField;
-    keyField.type = f.map_key_type;
-    valueField.type = f.map_value_type;
-    keyField.max_unit_size = surfingdb::meta::SchemaUtils::getFieldSize(keyField);
-    valueField.max_unit_size = surfingdb::meta::SchemaUtils::getFieldSize(valueField);
-    for (size_t i = 0; i < len; i++) {
-      Value keyVal, valueVal;
-      read(keyField, keyVal, _offset);
-      // std::cout << " key read " << offset << keyVal.p_val.string_val << std::endl;
-      _offset += keyField.max_unit_size;
-      read(valueField, valueVal, offset);
-      _offset += valueField.max_unit_size;
-      v.map_value.insert({ keyVal.p_val, valueVal.p_val });
+    case surfingdb::meta::schema::RowType::INT: {
+      _pread(f, &v.p_val.int_val, offset);
+      return sizeof(int);
     }
-    return len;
+    case surfingdb::meta::schema::RowType::BOOL: {
+      _pread(f, &v.p_val.bool_val, offset);
+      return sizeof(bool);
+    }
+    case RowType::LONG: {
+      _pread(f, &v.p_val.long_val, offset);
+      return sizeof(long);
+    }
+    case RowType::DOUBLE: {
+      DOUBLE_TYPE dv;
+      _pread(f, &dv, offset);
+      v.p_val.double_val = (double)dv;
+      return sizeof(DOUBLE_TYPE);
+    }
+    case RowType::STRING: {
+      std::vector<char> buff(MAX_STR_LEN);
+      size_t strlen = _pread(f, &buff[0], offset);
+      buff.resize(strlen);
+      v.p_val.string_val = std::string(buff.data());
+      return HEADER_SIZE + strlen + 1;
+    }
+    case RowType::LIST: {
+      v.list_value.clear();
+      size_t listsize = 0;
+      size_t _offset = offset;
+      Field l;
+      l.type = RowType::LONG;
+      size_t len;
+      _pread(l, &len, _offset);
+      listsize += HEADER_SIZE;
+      _offset += HEADER_SIZE;
+
+      Field listField;
+      listField.type = f.list_type;
+      listField.max_unit_size = surfingdb::meta::SchemaUtils::getFieldSize(listField);
+      for (size_t i = 0; i < len; i++) {
+        Value listVal;
+        listsize += read(listField, listVal, _offset);
+        v.list_value.push_back(listVal.p_val);
+        _offset += listField.max_unit_size;
+      }
+      return listsize;
+    }
+    case RowType::MAP: {
+      v.map_value.clear();
+      size_t mapsize = 0;
+      size_t _offset = offset;
+      Field l;
+      l.type = RowType::LONG;
+      size_t len;
+      _pread(l, &len, _offset);
+      _offset += HEADER_SIZE;
+      mapsize += HEADER_SIZE;
+
+      Field keyField, valueField;
+      keyField.type = f.map_key_type;
+      valueField.type = f.map_value_type;
+      keyField.max_unit_size = surfingdb::meta::SchemaUtils::getFieldSize(keyField);
+      valueField.max_unit_size = surfingdb::meta::SchemaUtils::getFieldSize(valueField);
+      for (size_t i = 0; i < len; i++) {
+        Value keyVal, valueVal;
+        mapsize += read(keyField, keyVal, _offset);
+        _offset += keyField.max_unit_size;
+        mapsize += read(valueField, valueVal, offset);
+        _offset += valueField.max_unit_size;
+        v.map_value.insert({ keyVal.p_val, valueVal.p_val });
+      }
+      return mapsize;
+    }
+    default:
+      return 0;
   }
-  }
-  return -1;
 }
 
 void mrow::_pwrite(const Field& f, const void* data, const uint64_t& offset) {

@@ -52,7 +52,6 @@ private:
    * 
    */
   uint8_t* _payload;
-  size_t* _actual_row_size;
   /**
    * @brief use buffer builder to allocate flexible sized rows
    * 
@@ -83,12 +82,6 @@ public:
 
   size_t schema_sig();
 
-  /**
-   * @brief row size and capacity 
-   * 
-   * @return size_t 
-   */
-  size_t size();
   size_t capacity();
 
   uint8_t* payload_ptr();
@@ -101,11 +94,11 @@ public:
   size_t read(const Field& f, Value& v);
   std::vector<size_t> readLen(const Field& f, size_t offset);
   /**
-   * copy value into row buffer
+   * apply field value to buffer based on schema 
    * @param f
    * @param v
    */
-  void write(const Field& f, const Value& v);
+  size_t write(const Field& f, const Value& v);
 
   /**
    * allow append to list and map elements
@@ -113,7 +106,7 @@ public:
    * @param v
    * @param offset
    */
-  void write(const Field& f, const Value& v, const uint64_t& offset);
+  size_t write(const Field& f, const Value& v, const uint64_t& offset);
 
   size_t read(const Field& f, Value& v, const uint64_t& offset);
 };

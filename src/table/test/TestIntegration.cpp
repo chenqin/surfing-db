@@ -79,20 +79,20 @@ TEST(TableTest, testCompact) {
   // build continuous buffer with fixed fields offsets
   std::shared_ptr<mschema> tpr = std::make_shared<mschema>(r);
   surfingdb::table::mrow b(tpr);
-  b.write(field1, v1);
-  b.write(field2, v2);
-  b.write(field3, v3);
-  b.write(field4, v4);
-  b.write(field5, v5);
-  b.write(field6, v6);
-  b.write(field7, v7);
+  CHECK_EQ(b.write(field1, v1), sizeof(int));
+  CHECK_EQ(b.write(field2, v2), sizeof(long));
+  CHECK_EQ(b.write(field3, v3), sizeof(bool));
+  CHECK_EQ(b.write(field4, v4), sizeof(DOUBLE_TYPE));
+  CHECK_EQ(b.write(field5, v5), 6 + HEADER_SIZE);
+  CHECK_EQ(b.write(field6, v6), HEADER_SIZE + 1 * sizeof(DOUBLE_TYPE));
+  CHECK_EQ(b.write(field7, v7), HEADER_SIZE + 1 * ( HEADER_SIZE + 6 + sizeof(long)));
   mtable t(nullptr, tpr, MEM_PAGE_SIZE);
   t.appendRow(b);
   Value mapValue;
   t.readRow(0)->read(field7, mapValue);
   /**
    * @brief borrow table memory
-   * 
+   *
    */
   mrow shaddow(tpr, t.buffer->mutable_data() + t.offset);
   shaddow.write(field1, v1);
@@ -104,15 +104,29 @@ TEST(TableTest, testCompact) {
   shaddow.write(field7, v7);
   /**
    * @brief shaddow row must manually update table offsets and counts
-   * 
+   *
    */
   t.row_count++;
-  t.offset+= tpr->rowSize();
+  t.offset += tpr->rowSize();
   CHECK_EQ(t.row_count, 2);
   Value mapValue2;
   t.readRow(1)->read(field7, mapValue2);
   CHECK_EQ(mapValue.map_value.size(), mapValue2.map_value.size());
-  CHECK_LE(shaddow.size(), shaddow.capacity());
+
+  /**
+   * @brief test writting tightly compact row in buffer
+   */
+  size_t tight_offset = 0;
+  // |HEADER|field1|field2|...
+  mrow s1(tpr, t.buffer->mutable_data() + tight_offset + HEADER_SIZE);
+  tight_offset += s1.write(field1, v1);
+  tight_offset += s1.write(field2, v2);
+  tight_offset += s1.write(field3, v3);
+  tight_offset += s1.write(field4, v4);
+  tight_offset += s1.write(field5, v5);
+  tight_offset += s1.write(field6, v6);
+  tight_offset += s1.write(field7, v7);
+  CHECK_LT(tight_offset, tpr->rowSize());
 
   // auto compact = t.compactTable();
   // EXPECT_LT(compact->getSchema()->rowSize(), tpr->rowSize());
