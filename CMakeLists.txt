@@ -66,8 +66,8 @@ include_directories(include ${glog_INCLUDE_DIRS} ${SURFINGDB_SRC} ${MPI_CXX_INCL
 # this switch only works on linux
 set(NC gcc)
 if (APPLE)
-    set(NCXX /usr/bin/g++-10)
-    set(NCC /usr/bin/gcc-10)
+    set(NCXX /usr/bin/g++)
+    set(NCC /usr/bin/gcc)
     set(NCFLAGS "-Wall -Wextra -Werror -Wno-deprecated -Wno-error=extern-c-compat -Wno-error=inconsistent-missing-override -Wno-error=nullability-completeness -Wno-error=sign-compare -Wno-error=unknown-warning-option")
     set(NCFLAGS_RELEASE "-O3")
 else ()
@@ -78,8 +78,8 @@ else ()
         set(NCFLAGS_RELEASE "-O3")
     else ()
         # this build branch is the final release version
-        set(NCXX /usr/bin/g++-10)
-        set(NCC /usr/bin/gcc-10)
+        set(NCXX /usr/bin/g++)
+        set(NCC /usr/bin/gcc)
         list(APPEND LNCFLAGS
                 "-Wall -Wextra -lstdc++ -lstdc++fs"
                 "-Wl,--no-as-needed -no-pie -ldl"

@@ -6,6 +6,7 @@ build
 */.idea/*
 surfing-db-java/target
 surfing-db-java.jar
+cmake-3.22.6-linux-x86_64.tar.gz
 libtorch-cxx11-abi-shared-with-deps-1.13.1+cu117.zip
 libtorch/
 surfing-db-java/.idea/compiler.xml

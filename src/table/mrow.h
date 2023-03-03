@@ -45,6 +45,7 @@ private:
    */
   Field _header;
   std::shared_ptr<meta::mschema> schema_ptr;
+  std::map<Field, size_t> field_sizes;
   size_t _schema_sig;
   /**
    * @brief use duo pointer to avoid double free when random fetch a mrow in mtable
