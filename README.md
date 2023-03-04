@@ -17,4 +17,7 @@ mpirun --hostfile hostfile KafkaExample --mca oob_tcp_port_min_v4 7337 -mca btl_
 -- MAX_STR_LEN defines max size of string before truncate (lower is better for perf)
 -- MEM_PAGE_SIZE defines mtable pre allocated memory
 
+# schema definition
+- row size can be optimized by giving conservation max_unit_size of string fields
+
 created @Maui, Hawaii, U.S.A since 2021

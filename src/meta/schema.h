@@ -105,6 +105,14 @@ struct ValueHasher {
 };
 
 class SchemaUtils {
+private:
+  static void checkStringLength(const RowType::type type,
+                                const uint64_t& max_size) {
+    if (type == RowType::STRING) {
+      CHECK_LE(max_size, MAX_STR_LEN);
+    }
+  }
+
 public:
   /**
    * valid if schema is accepted
@@ -113,30 +121,6 @@ public:
   static void validSchema(const RowSchema& rowSchema);
 
   static size_t getFieldSize(const Field& f);
-
-  static void checkStringLength(const RowType::type type,
-                                const uint64_t& max_size) {
-    if (type == RowType::STRING) {
-      CHECK_LE(max_size, MAX_STR_LEN);
-    }
-  }
-  /// @brief public API, append 1 or N schema;imitive typed data as last column in schema
-  /// @param r
-  /// @param name
-  /// @param type
-  /// @param max_size
-  /// @return size of columns in schema
-  static int16_t appendElements(RowSchema& r, const std::string& name, const RowType::type type, const uint64_t& max_element);
-
-  /// @brief public API, append 1 or N primitive typed data pair as last column in schema
-  /// @param r
-  /// @param name
-  /// @param key_type
-  /// @param val_type
-  /// @param max_element
-  /// @return size of columns in schema
-  static int16_t appendPairs(RowSchema& r, const std::string& name, const RowType::type key_type, const RowType::type val_type, const uint64_t& max_element);
-
   /**
    * helper function to init a primitive field
    * @param field
@@ -144,10 +128,7 @@ public:
    * @param type
    * @param max_size
    */
-  static void initField(Field& field,
-                        const std::string& name,
-                        const RowType::type type,
-                        const uint64_t& max_size);
+  static Field initField(RowSchema& r, const std::string& name, const RowType::type type, const uint64_t& max_size);
 
   /**
    * helper function to init a list field
@@ -156,11 +137,7 @@ public:
    * @param type
    * @param max_size
    */
-  static void initListField(Field& field,
-                            const std::string& name,
-                            const RowType::type list_type,
-                            const uint64_t& max_list_size,
-                            const uint64_t& max_element_size);
+  static Field initListField(RowSchema& r, const std::string& name, const RowType::type list_type, const uint64_t& max_list_size, const uint64_t& max_element_size);
 
   /**
    * helper function to init a map field
@@ -172,13 +149,7 @@ public:
    * @param max_key_size
    * @param max_value_size
    */
-  static void initMapField(Field& field,
-                           const std::string& name,
-                           const RowType::type key_type,
-                           const RowType::type value_type,
-                           const uint64_t& max_map_size,
-                           const uint64_t& max_key_size,
-                           const uint64_t& max_value_size);
+  static Field initMapField(RowSchema& r, const std::string& name, const RowType::type key_type, const RowType::type value_type, const uint64_t& max_pair_count, const uint64_t& max_key_size, const uint64_t& max_value_size);
 };
 
 class mschema : public RowSchema {

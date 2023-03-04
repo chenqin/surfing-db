@@ -172,7 +172,7 @@ public:
 
   /**
    * @brief convert arrow schema with unit size map as mschema
-   *
+   * //TODO: fix me
    * @param schema
    * @param units
    * @return std::shared_ptr<mschema>
@@ -182,14 +182,17 @@ public:
     for (int i = 0; i < schema->num_fields(); i++) {
       auto field = schema->field(i);
       auto id = field->type()->id();
+      auto max_unit = units.find(field->name()) == units.end() ? MAX_STR_LEN : units[field->name()];
       if (id == arrow::Type::LIST) {
         auto ltype = (arrow::ListType*)field->type().get();
-        SchemaUtils::appendElements(r, field->name(), getRowType(ltype->value_type()), units.find(field->name()) == units.end() ? 1024 : units[field->name()]);
+        auto type = getRowType(ltype->value_type());
+        SchemaUtils::initListField(r, field->name(), type, 1024, max_unit);
       } else if (id == arrow::Type::MAP) {
         auto mtype = (arrow::MapType*)field->type().get();
-        SchemaUtils::appendPairs(r, field->name(), getRowType(mtype->key_type()), getRowType(mtype->item_type()), units.find(field->name()) == units.end() ? 1024 : units[field->name()]);
+        SchemaUtils::initMapField(r, field->name(), getRowType(mtype->key_type()), getRowType(mtype->item_type()), max_unit, MAX_STR_LEN, MAX_STR_LEN);
       } else {
-        SchemaUtils::appendElements(r, field->name(), getRowType(field->type()), 1);
+        auto type = getRowType( field->type());
+        SchemaUtils::initField(r, field->name(), type, max_unit);
       }
     }
     return std::make_shared<mschema>(r);
@@ -201,15 +204,15 @@ public:
     auto vc = record_ptr->columns();
     /**
      * @brief iterate all rows in arrow recordbatch
-     * 
-     * @param i 
+     *
+     * @param i
      */
     for (auto i = 0; i < record_ptr->num_rows(); i++) {
 
       mrow r(schema);
       /**
        * @brief iterate all fields in schema with j
-       * 
+       *
        */
       for (auto j = 0; j < vc.size(); j++) {
         auto field = record_ptr->schema()->field(j);
@@ -254,7 +257,7 @@ public:
           auto counts = bc->value->length();
           /**
            * @brief insert number of items in map
-           * 
+           *
            */
           for (int k = 0; k < counts; k++) {
             auto pairval = bc->value->GetScalar(k).ValueOrDie();
@@ -269,7 +272,7 @@ public:
         }
         /**
          * @brief write j field to row
-         * 
+         *
          */
         r.write(schema->fields.at(j), v);
       }

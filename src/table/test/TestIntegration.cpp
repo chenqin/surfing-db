@@ -33,26 +33,16 @@ namespace test {
  */
 TEST(TableTest, testCompact) {
   RowSchema r;
-  r.fields = std::vector<surfingdb::table::schema::Field>();
-
   Field field1, field2, field3, field4, field5, field6, field7;
 
-  SchemaUtils::initField(field1, "a", RowType::INT, sizeof(int));
-  SchemaUtils::initField(field2, "b", RowType::LONG, sizeof(long));
-  SchemaUtils::initField(field3, "c", RowType::BOOL, sizeof(bool));
-  SchemaUtils::initField(field4, "d", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
-  SchemaUtils::initField(field5, "e", RowType::STRING, 64);
+  field1 = SchemaUtils::initField(r, "a", RowType::INT, sizeof(int));
+  field2 = SchemaUtils::initField(r, "b", RowType::LONG, sizeof(long));
+  field3 = SchemaUtils::initField(r, "c", RowType::BOOL, sizeof(bool));
+  field4 = SchemaUtils::initField(r, "d", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
+  field5 = SchemaUtils::initField(r, "e", RowType::STRING, 64);
 
-  SchemaUtils::initListField(field6, "l", RowType::DOUBLE, 3, sizeof(DOUBLE_TYPE));
-  SchemaUtils::initMapField(field7, "m", RowType::STRING, RowType::LONG, 3, MAX_STR_LEN, sizeof(long));
-
-  r.fields.push_back(field1);
-  r.fields.push_back(field2);
-  r.fields.push_back(field3);
-  r.fields.push_back(field4);
-  r.fields.push_back(field5);
-  r.fields.push_back(field6);
-  r.fields.push_back(field7);
+  field6 = SchemaUtils::initListField(r, "l", RowType::DOUBLE, 3, sizeof(DOUBLE_TYPE));
+  field7 = SchemaUtils::initMapField(r, "m", RowType::STRING, RowType::LONG, 3, MAX_STR_LEN, sizeof(long));
   Value v1, v2, v3, v4, v5, v6, v7;
   v1.p_val.int_val = 3;
 
@@ -142,22 +132,13 @@ TEST(TableTest, testmrow) {
 
   Field field1, field2, field3, field4, field5, field6, field7;
 
-  SchemaUtils::initField(field1, "a", RowType::INT, sizeof(int));
-  SchemaUtils::initField(field2, "b", RowType::LONG, sizeof(long));
-  SchemaUtils::initField(field3, "c", RowType::BOOL, sizeof(bool));
-  SchemaUtils::initField(field4, "d", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
-  SchemaUtils::initField(field5, "e", RowType::STRING, MAX_STR_LEN);
-
-  SchemaUtils::initListField(field6, "l", RowType::DOUBLE, 3, sizeof(DOUBLE_TYPE));
-  SchemaUtils::initMapField(field7, "m", RowType::STRING, RowType::LONG, 3, MAX_STR_LEN, sizeof(long));
-
-  r.fields.push_back(field1);
-  r.fields.push_back(field2);
-  r.fields.push_back(field3);
-  r.fields.push_back(field4);
-  r.fields.push_back(field5);
-  r.fields.push_back(field6);
-  r.fields.push_back(field7);
+  field1 = SchemaUtils::initField(r, "a", RowType::INT, sizeof(int));
+  field2 = SchemaUtils::initField(r, "b", RowType::LONG, sizeof(long));
+  field3 = SchemaUtils::initField(r, "c", RowType::BOOL, sizeof(bool));
+  field4 = SchemaUtils::initField(r, "d", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
+  field5 = SchemaUtils::initField(r, "e", RowType::STRING, MAX_STR_LEN);
+  field6 = SchemaUtils::initListField(r, "l", RowType::DOUBLE, 3, sizeof(DOUBLE_TYPE));
+  field7 = SchemaUtils::initMapField(r, "m", RowType::STRING, RowType::LONG, 3, MAX_STR_LEN, sizeof(long));
 
   Value v1, v2, v3, v4, v5, v6, v7;
   v1.p_val.int_val = 3;
@@ -294,26 +275,18 @@ TEST(TableTest, TestUtils) {
    *
    */
   RowSchema r;
-  r.fields = std::vector<surfingdb::table::schema::Field>();
 
   Field field1, field2, field3, field4, field5, field6, field7;
 
-  SchemaUtils::initField(field1, "a", RowType::INT, sizeof(int));
-  SchemaUtils::initField(field2, "b", RowType::LONG, sizeof(long));
-  SchemaUtils::initField(field3, "c", RowType::BOOL, sizeof(bool));
-  SchemaUtils::initField(field4, "d", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
-  SchemaUtils::initField(field5, "e", RowType::STRING, MAX_STR_LEN);
+  field1 = SchemaUtils::initField(r, "a", RowType::INT, sizeof(int));
+  field2 = SchemaUtils::initField(r, "b", RowType::LONG, sizeof(long));
+  field3 = SchemaUtils::initField(r, "c", RowType::BOOL, sizeof(bool));
+  field4 = SchemaUtils::initField(r, "d", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
+  field5 = SchemaUtils::initField(r, "e", RowType::STRING, MAX_STR_LEN);
 
-  SchemaUtils::initListField(field6, "l", RowType::DOUBLE, 3, sizeof(DOUBLE_TYPE));
-  SchemaUtils::initMapField(field7, "m", RowType::STRING, RowType::LONG, 3, MAX_STR_LEN, sizeof(long));
+  field6 = SchemaUtils::initListField(r, "l", RowType::DOUBLE, 3, sizeof(DOUBLE_TYPE));
+  field7 = SchemaUtils::initMapField(r, "m", RowType::STRING, RowType::LONG, 3, MAX_STR_LEN, sizeof(long));
 
-  r.fields.push_back(field1);
-  r.fields.push_back(field2);
-  r.fields.push_back(field3);
-  r.fields.push_back(field4);
-  r.fields.push_back(field5);
-  r.fields.push_back(field6);
-  r.fields.push_back(field7);
   std::shared_ptr<mschema> schema_ptr = std::make_shared<mschema>(r);
   /**
    * @brief write test datasets
@@ -402,10 +375,8 @@ TEST(TableTest, TestUtils) {
 }
 
 TEST(TableTest, TestXGBOperator) {
-  Field f;
-  SchemaUtils::initField(f, "test", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
-  std::vector<Field> features;
-  features.push_back(f);
+  RowSchema r;
+  Field f = SchemaUtils::initField(r, "test", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
   XGBParameters parameters;
   parameters.tree_method = "hist";
   parameters.objective = "binary:logistic";
@@ -414,7 +385,7 @@ TEST(TableTest, TestXGBOperator) {
   parameters.max_depth = 1;
   parameters.verbosity = true;
   parameters.eval_metric = "error";
-  xgbop op(features, f, parameters, 0, 1);
+  xgbop op(r.fields, f, parameters, 0, 1);
   const float data1[] = { 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0,
                           0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 };
   const float label1[] = { 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0,

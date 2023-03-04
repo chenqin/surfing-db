@@ -22,25 +22,6 @@ namespace meta {
 
 void SchemaUtils::validSchema(const RowSchema& rowSchema) {
   CHECK_GT(rowSchema.fields.size(), 0);
-  std::set<std::string> name_set;
-  // force memory layout put primitive types before collective types
-  bool enterCollectiveFields = false;
-  for (auto& field : rowSchema.fields) {
-    CHECK(name_set.find(field.name) == name_set.end());
-
-    name_set.insert(field.name);
-
-    if (field.type == RowType::LIST || field.type == RowType::MAP) {
-      CHECK(field.list_type != RowType::LIST);
-      CHECK(field.list_type != RowType::MAP);
-      enterCollectiveFields = true;
-    } else {
-      CHECK(field.list_type == RowType::VOID);
-      CHECK(field.map_key_type == RowType::VOID);
-      CHECK(field.map_value_type == RowType::VOID);
-      CHECK(!enterCollectiveFields);
-    }
-  }
 }
 
 size_t SchemaUtils::getFieldSize(const Field& f) {
@@ -78,9 +59,9 @@ size_t SchemaUtils::getFieldSize(const Field& f) {
     v.type = f.map_value_type;
     size_t units = f.max_unit_size;
     /**
-     * @brief size of each key , value pair multiple by number of pairs in map 
+     * @brief size of each key , value pair multiple by number of pairs in map
      * HEADER stores number of pairs
-     * 
+     *
      */
     return (getFieldSize(k) + getFieldSize(v)) * units + HEADER_SIZE;
   }
@@ -106,59 +87,20 @@ uint64_t getTypeSize(const RowType::type type) {
   }
 }
 
-int16_t SchemaUtils::appendElements(RowSchema& r, const std::string& name, const RowType::type type, const uint64_t& max_element) {
-  if (r.fields.size() == 0) {
-    r.fields = std::vector<Field>();
-  }
-
-  // avoid duplicated name
-  for (size_t i = 0; i < r.fields.size(); i++) {
-    Field field = r.fields.at(i);
-    CHECK(field.name != name);
-  }
-
-  uint64_t element_max = getTypeSize(type);
-
-  Field f;
-  // more than one element as list
-  if (max_element > 1) {
-    initListField(f, name, type, max_element, element_max);
-  } else {
-    initField(f, name, type, element_max);
-  }
-  r.fields.push_back(f);
-  return r.fields.size();
-}
-
-int16_t SchemaUtils::appendPairs(RowSchema& r, const std::string& name, const RowType::type key_type, const RowType::type val_type, const uint64_t& max_element) {
-  if (r.fields.size() == 0) {
-    r.fields = std::vector<Field>();
-  }
-  // avoid duplicated name
-  for (size_t i = 0; i < r.fields.size(); i++) {
-    Field field = r.fields.at(i);
-    CHECK(field.name != name);
-  }
-
-  uint64_t key_element_max = getTypeSize(key_type);
-  uint64_t val_element_max = getTypeSize(val_type);
-  Field f;
-  initMapField(f, name, key_type, val_type, max_element, key_element_max, val_element_max);
-  r.fields.push_back(f);
-  return r.fields.size();
-}
-
-void SchemaUtils::initField(Field& field, const std::string& name, const RowType::type type, const uint64_t& max_size) {
+Field SchemaUtils::initField(RowSchema& r, const std::string& name, const RowType::type type, const uint64_t& max_size) {
+  Field field;
   field.name = name;
   field.type = type;
   field.max_unit_size = max_size;
-  // IF string should check max_size no more than MAX_STR_LEN
   CHECK(type != RowType::LIST);
   CHECK(type != RowType::MAP);
   checkStringLength(type, max_size);
+  r.fields.push_back(field);
+  return field;
 }
 
-void SchemaUtils::initListField(Field& field, const std::string& name, const RowType::type list_type, const uint64_t& max_list_size, const uint64_t& max_element_size) {
+Field SchemaUtils::initListField(RowSchema& r, const std::string& name, const RowType::type list_type, const uint64_t& max_list_size, const uint64_t& max_element_size) {
+  Field field;
   field.name = name;
   field.type = RowType::LIST;
   field.list_type = list_type;
@@ -167,14 +109,17 @@ void SchemaUtils::initListField(Field& field, const std::string& name, const Row
   CHECK(list_type != RowType::LIST);
   CHECK(list_type != RowType::MAP);
   checkStringLength(list_type, max_element_size);
+  r.fields.push_back(field);
+  return field;
 }
 
-void SchemaUtils::initMapField(Field& field, const std::string& name, const RowType::type key_type, const RowType::type value_type, const uint64_t& max_map_size, const uint64_t& max_key_size, const uint64_t& max_value_size) {
+Field SchemaUtils::initMapField(RowSchema& r, const std::string& name, const RowType::type key_type, const RowType::type value_type, const uint64_t& max_pair_count, const uint64_t& max_key_size, const uint64_t& max_value_size) {
+  Field field;
   field.name = name;
   field.type = RowType::MAP;
   field.map_key_type = key_type;
   field.map_value_type = value_type;
-  field.max_unit_size = max_map_size;
+  field.max_unit_size = max_pair_count;
   field.max_map_key_unit_size = max_key_size;
   field.max_map_value_unit_size = max_value_size;
   CHECK(key_type != RowType::LIST);
@@ -183,6 +128,8 @@ void SchemaUtils::initMapField(Field& field, const std::string& name, const RowT
   CHECK(value_type != RowType::MAP);
   checkStringLength(key_type, max_key_size);
   checkStringLength(value_type, max_value_size);
+  r.fields.push_back(field);
+  return field;
 }
 
 mschema::mschema(const RowSchema& schema) {

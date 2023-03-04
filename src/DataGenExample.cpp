@@ -70,13 +70,11 @@ int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   // define how data will be stored, as rows in a table
   RowSchema r;
-  SchemaUtils::appendElements(r, "timestamp", RowType::LONG, 1);
-  SchemaUtils::appendElements(r, "host", RowType::STRING, 1);
-  SchemaUtils::appendElements(r, "metricName", RowType::STRING, 1);
-  // min, max of metricValue
-  SchemaUtils::appendElements(r, "metricValues", RowType::DOUBLE, 2);
-  // user defined meta data pair
-  SchemaUtils::appendPairs(r, "meta", RowType::STRING, RowType::STRING, 1);
+  SchemaUtils::initField(r, "timestamp", RowType::LONG, sizeof(long));
+  SchemaUtils::initField(r, "host", RowType::STRING, 64);
+  SchemaUtils::initField(r, "metricName", RowType::STRING, MAX_STR_LEN);
+  SchemaUtils::initListField(r, "metricValues", RowType::DOUBLE, 2, sizeof(DOUBLE_TYPE));
+  SchemaUtils::initMapField(r, "meta", RowType::STRING, RowType::STRING, 1, 32, 64);
 
   /**
    * @brief initial constructors
@@ -85,7 +83,7 @@ int main(int argc, char** argv) {
    * con -> data connector ingess running on a number of nodes micro batching data pullers
    */
   const auto node = std::make_shared<surfingdb::meta::node>(&argc, &argv);
-  const auto ptr = std::make_shared<mschema>(r);
+  const auto schema_ptr = std::make_shared<mschema>(r);
   const auto con = std::make_unique<DataGenConnector>(node);
 
   std::signal(SIGTERM | SIGINT, signal_handler);
@@ -119,7 +117,7 @@ int main(int argc, char** argv) {
   };
 
   while (terminal_signal == 0) {
-    if(node->rank == 0) std::cout << "iteration" << std::endl;
+    if (node->rank == 0) std::cout << "iteration" << std::endl;
     /**
      * @brief import pyarrow
      */
@@ -129,7 +127,7 @@ int main(int argc, char** argv) {
     size_t total_row_count = intial_row_count;
     double start = MPI_Wtime();
     // ingest, copy rows to local table memory with fixed offsets
-    const auto t1 = con->consume_batch(intial_row_count, 1000, ptr, [](const char* payload, const mschema& out) {
+    const auto t1 = con->consume_batch(intial_row_count, 1000, schema_ptr, [](const char* payload, const mschema& out) {
       auto row = std::make_shared<mrow>(std::make_shared<mschema>(out));
       Value p;
 
@@ -164,7 +162,7 @@ int main(int argc, char** argv) {
      * pass each row in mtable, if return true, add to new table with schema ptr
      * release t1 mtable in the end
      */
-    auto t2 = processors::map(t1, ptr, [](mrow& in, mrow& out, const mschema& out_schema) {
+    auto t2 = processors::map(t1, schema_ptr, [](mrow& in, mrow& out, const mschema& out_schema) {
       for (const auto& f : out_schema.fields) {
         Value v;
         in.read(f, v);
@@ -174,14 +172,14 @@ int main(int argc, char** argv) {
     });
 
     start = MPI_Wtime();
-    auto t4 = processors::shuffle(t2, ptr->fields.at(2), partitioner);
+    auto t4 = processors::shuffle(t2, schema_ptr->fields.at(2), partitioner);
     auto end = MPI_Wtime();
     // std::cout << " shuffle time = " << (end - start) << " rank = " << node->rank << " ingestor = " << node->getissubscriber() << std::endl;
     start = MPI_Wtime();
     /**
      * verify shuffle row placement to right worker (aka MPI rank)
      */
-    t4->verifyShuffle(ptr->fields.at(2), partitioner);
+    t4->verifyShuffle(schema_ptr->fields.at(2), partitioner);
 
     auto t41 = processors::java(t4, "Bridge");
 
@@ -189,8 +187,8 @@ int main(int argc, char** argv) {
      * @brief shuffle again with another field with same partitioner
      *
      */
-    auto t5 = processors::shuffle(t4, ptr->fields.at(4), partitioner);
-    t5->verifyShuffle(ptr->fields.at(4), partitioner);
+    auto t5 = processors::shuffle(t4, schema_ptr->fields.at(4), partitioner);
+    t5->verifyShuffle(schema_ptr->fields.at(4), partitioner);
 
     /**
      * @brief read data from java

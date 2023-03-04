@@ -114,10 +114,10 @@ int main(int argc, char** argv) {
    *
    */
   RowSchema r;
-  SchemaUtils::appendElements(r, "timestamp", RowType::LONG, 1);
-  SchemaUtils::appendElements(r, "host", RowType::STRING, 1);
-  SchemaUtils::appendElements(r, "metricName", RowType::STRING, 1);
-  SchemaUtils::appendElements(r, "metricValue", RowType::DOUBLE, 1);
+  SchemaUtils::initField(r, "timestamp", RowType::LONG, sizeof(long));
+  SchemaUtils::initField(r, "host", RowType::STRING, 64);
+  SchemaUtils::initField(r, "metricName", RowType::STRING, MAX_STR_LEN);
+  SchemaUtils::initField(r, "metricValue", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
   const std::shared_ptr<mschema> schema_ptr = std::make_shared<mschema>(r);
 
   /**
