@@ -31,34 +31,34 @@ namespace table {
  * @return std::shared_ptr<mtable>  outputtable
  */
 std::shared_ptr<mtable> processors::map(std::shared_ptr<mtable> in, std::shared_ptr<mschema> out_schema_ptr, std::function<bool(mrow&, mrow&, const mschema&)> transform) {
-  auto out = std::make_shared<mtable>(in->getNodePtr(), out_schema_ptr, in->row_count * out_schema_ptr->rowSize());
+  auto out_table_ptr = std::make_shared<mtable>(in->getNodePtr(), out_schema_ptr, in->row_count * out_schema_ptr->rowSize());
   for (size_t i = 0; i < in->row_count; i++) {
     auto in_row = in->readRow(i);
     /**
      * @brief use out table memory to avoid memcpy
      */
-    mrow shaddlow_out(out->getSchema(), out->buffer->mutable_data() + out->offset);
-    bool append = transform(*in_row.get(), shaddlow_out, *out_schema_ptr.get());
-    CHECK_EQ(shaddlow_out.schema_sig(), out_schema_ptr->signature());
+    mrow shaddlow_out_row(out_table_ptr->getSchema(), out_table_ptr->buffer->mutable_data() + out_table_ptr->offset);
+    bool append = transform(*in_row.get(), shaddlow_out_row, *out_schema_ptr.get());
+    CHECK_EQ(shaddlow_out_row.schema_sig(), out_schema_ptr->signature());
 
     /**
      * @brief update offset and row_count
      *
      */
     if (append) {
-      out->row_count++;
-      out->offset += out->getSchema()->rowSize();
-      CHECK_LE(out->row_count, in->row_count);
-      CHECK_LE(out->offset, in->row_count * out_schema_ptr->rowSize());
+      out_table_ptr->row_count++;
+      out_table_ptr->offset += out_table_ptr->getSchema()->rowSize();
+      CHECK_LE(out_table_ptr->row_count, in->row_count);
+      CHECK_LE(out_table_ptr->offset, in->row_count * out_schema_ptr->rowSize());
     } else {
       /**
        * @brief reset memory
        *
        */
-      memset(shaddlow_out.payload_ptr(), 0, out->getSchema()->rowSize());
+      memset(shaddlow_out_row.payload_ptr(), 0, out_table_ptr->getSchema()->rowSize());
     }
   }
-  return out;
+  return out_table_ptr;
 }
 
 void processors::reduce(std::shared_ptr<mtable> in_ptr,

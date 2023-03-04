@@ -57,7 +57,7 @@ void linear_regression(std::shared_ptr<mtable> shuffled_training_dataset, int ra
     // Hyper parameters
     const int64_t input_size = 1;
     const int64_t output_size = 1;
-    const size_t num_epochs = 40;
+    const size_t num_epochs = 50;
     const double learning_rate = 0.001;
 
     // Sample dataset
