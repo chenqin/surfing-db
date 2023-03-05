@@ -172,7 +172,6 @@ public:
 
   /**
    * @brief convert arrow schema with unit size map as mschema
-   * //TODO: fix me
    * @param schema
    * @param units
    * @return std::shared_ptr<mschema>
@@ -245,6 +244,7 @@ public:
         if (type == arrow::Type::LIST) {
           auto bc = (arrow::ListScalar*)result.get();
           auto list = bc->value;
+          CHECK_LE(list->length(), schema->fields.at(j).max_unit_size);
           for (int k = 0; k < list->length(); k++) {
             auto item = list->GetScalar(k).ValueOrDie();
             PValue pval;
@@ -254,12 +254,12 @@ public:
         }
         if (type == arrow::Type::MAP) {
           auto bc = (arrow::MapScalar*)result.get();
-          auto counts = bc->value->length();
           /**
            * @brief insert number of items in map
            *
            */
-          for (int k = 0; k < counts; k++) {
+          CHECK_LE(bc->value->length(), schema->fields.at(j).max_unit_size);
+          for (int k = 0; k < bc->value->length(); k++) {
             auto pairval = bc->value->GetScalar(k).ValueOrDie();
             auto structval = (arrow::StructScalar*)pairval.get();
             std::shared_ptr<arrow::Scalar> keyval = structval->field("key").ValueOrDie();

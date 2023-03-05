@@ -91,7 +91,7 @@ Field SchemaUtils::initField(RowSchema& r, const std::string& name, const RowTyp
   Field field;
   field.name = name;
   field.type = type;
-  field.max_unit_size = max_size;
+  field.max_unit_size = type != RowType::STRING ? SchemaUtils::getFieldSize(field) : max_size;
   CHECK(type != RowType::LIST);
   CHECK(type != RowType::MAP);
   checkStringLength(type, max_size);
@@ -105,7 +105,10 @@ Field SchemaUtils::initListField(RowSchema& r, const std::string& name, const Ro
   field.type = RowType::LIST;
   field.list_type = list_type;
   field.max_unit_size = max_list_size;
-  field.max_list_unit_size = max_element_size;
+  Field listfield;
+  listfield.type = list_type;
+  listfield.max_unit_size = max_element_size;
+  field.max_list_unit_size = list_type != RowType::STRING ? SchemaUtils::getFieldSize(listfield) : max_element_size;
   CHECK(list_type != RowType::LIST);
   CHECK(list_type != RowType::MAP);
   checkStringLength(list_type, max_element_size);
@@ -114,14 +117,19 @@ Field SchemaUtils::initListField(RowSchema& r, const std::string& name, const Ro
 }
 
 Field SchemaUtils::initMapField(RowSchema& r, const std::string& name, const RowType::type key_type, const RowType::type value_type, const uint64_t& max_pair_count, const uint64_t& max_key_size, const uint64_t& max_value_size) {
-  Field field;
+  Field field, keyvield, valuefield;
+  keyvield.type = key_type;
+  keyvield.max_unit_size = max_key_size;
+  valuefield.type = value_type;
+  valuefield.max_unit_size = max_value_size;
+
   field.name = name;
   field.type = RowType::MAP;
   field.map_key_type = key_type;
   field.map_value_type = value_type;
   field.max_unit_size = max_pair_count;
-  field.max_map_key_unit_size = max_key_size;
-  field.max_map_value_unit_size = max_value_size;
+  field.max_map_key_unit_size = key_type != RowType::STRING ? SchemaUtils::getFieldSize(keyvield) : max_key_size;
+  field.max_map_value_unit_size = value_type != RowType::STRING ? SchemaUtils::getFieldSize(valuefield) : max_value_size;
   CHECK(key_type != RowType::LIST);
   CHECK(key_type != RowType::MAP);
   CHECK(value_type != RowType::LIST);
