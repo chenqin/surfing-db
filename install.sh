@@ -70,3 +70,6 @@ echo 'export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64' >> ~/.bashrc
 echo 'export PATH=$PATH:$CMAKE_HOME/bin:$JAVA_HOME/bin' >> ~/.bashrc 
 echo 'export CUDA_ROOT=/usr/local/cuda' >> ~/.bashrc 
 source ~/.bashrc
+
+python download_mnist.py -d build/data/mnist
+    

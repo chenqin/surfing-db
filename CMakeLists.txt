@@ -21,6 +21,17 @@ find_package(Boost REQUIRED)
 find_package(JNI REQUIRED)
 include_directories(${JNI_INCLUDE_DIRS})
 
+SET(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/libtorch")
+find_package(CUDA REQUIRED)
+#find_package(CUDAToolkit REQUIRED)
+enable_language(CUDA)
+
+find_package(Torch REQUIRED)
+find_package(ArrowCUDA REQUIRED)
+set(ARROW_CUDA_LIBRARY ArrowCUDA::arrow_cuda_shared)
+
 if(APPLE)
     set(OPENSSL_ROOT_DIR /opt/homebrew/Cellar/openssl@3/3.0.8)
     set(OPENSSL_LIBRARIES ${OPENSSL_ROOT_DIR}/lib)
@@ -59,7 +70,7 @@ set(SURFINGDB_SRC ${SURFINGDB_ROOT}/src)
 
 #SET(CMAKE_C_FLAGS ${CMAKE_C_FLAGS} -fopenmp)
 
-include_directories(include ${glog_INCLUDE_DIRS} ${SURFINGDB_SRC} ${MPI_CXX_INCLUDE_PATH} ${MPI_INCLUDE_PATH})
+include_directories(include ${glog_INCLUDE_DIRS} ${SURFINGDB_SRC} ${MPI_CXX_INCLUDE_PATH} ${MPI_INCLUDE_PATH} ${CMAKE_SOURCE_DIR}/libtorch/include())
 
 # a switch to use clang or g++
 # clang or g++
@@ -295,18 +306,13 @@ target_link_libraries(DataGenExample
         PRIVATE ${META}
         PRIVATE ${TABLE}
         PRIVATE ${CONNECTOR}
-        PRIVATE ${ARROW_LIBRARY})
+        PRIVATE ${ARROW_LIBRARY}
+        PRIVATE ${TORCH_LIBRARIES})
 
-SET(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
-list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/libtorch")
-find_package(CUDA REQUIRED)
-#find_package(CUDAToolkit REQUIRED)
-enable_language(CUDA)
-
-find_package(Torch REQUIRED)
-find_package(ArrowCUDA REQUIRED)
-set(ARROW_CUDA_LIBRARY ArrowCUDA::arrow_cuda_shared)
+set_target_properties(DataGenExample 
+    PROPERTIES COMPILE_FLAGS "${MPI_COMPILE_FLAGS}")
+set_target_properties(DataGenExample PROPERTIES
+    LINK_FLAGS "${MPI_LINK_FLAGS}")
 
 target_link_libraries(KafkaExample
     PRIVATE ${META}
