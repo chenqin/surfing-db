@@ -243,7 +243,7 @@ include(ext/FMT_Ext.cmake)
 include(ext/Gtest_Ext.cmake)
 
 # add a dependency of glog
-include(ext/Gflags_Ext.cmake)
+#include(ext/Gflags_Ext.cmake)
 
 # add a dependency of glog
 #include(ext/Glog_Ext.cmake)
