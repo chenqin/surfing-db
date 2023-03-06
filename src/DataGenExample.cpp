@@ -23,6 +23,8 @@
 #include <jni.h>
 #include <omp.h>
 #include <rapidjson/document.h>
+#include <torch/csrc/distributed/c10d/ProcessGroupMPI.hpp>
+#include <torch/csrc/distributed/c10d/Work.hpp>
 #include <torch/torch.h>
 #include "connector/datagen.h"
 #include "meta/node.h"

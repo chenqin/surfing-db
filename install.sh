@@ -1,5 +1,7 @@
 sudo apt update
 
+sudo apt install -y -V build-essential
+
 #force use jdk 8 for JNI hardcode and JAVA_HOME
 sudo apt install -y -V openjdk-8-jdk
 
@@ -24,7 +26,6 @@ wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr '
 sudo apt install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
 rm ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
 
-sudo apt install -y -V libcudnn8-dev
 sudo apt install -y -V libarrow-dev # For C++
 sudo apt install -y -V libarrow-cuda-dev #For GPU
 sudo apt install -y -V libarrow-glib-dev # For GLib (C)
@@ -41,29 +42,22 @@ pip install "pybind11[global]"
 # pin already install librdkafka
 #sudo apt install -y -V librdkafka-dev
 
-# cleanup
-sudo apt autoremove
-
-#sudo apt install libtorch-dev
-#https://linuxhint.com/install-cuda-ubuntu-2004/ follow this tutorial
-sudo apt install -y -V build-essential
+#install cuda-11-8 and depdencies, build pytorch 1.13.1
 sudo wget -O /etc/apt/preferences.d/cuda-repository-pin-600 https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-ubuntu2004.pin
 sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/3bf863cc.pub
 sudo add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/ /"
 sudo apt update
 sudo apt install -y -V cuda-11-8
+sudo apt install -y -V cuda-toolkit-11-8
 
 export CUDA_ROOT=/usr/local/cuda
 sudo ln -s /usr/bin/gcc $CUDA_ROOT/bin/gcc
 sudo ln -s /usr/bin/g++ $CUDA_ROOT/bin/g++
 
-# libtorch
-#wget https://download.pytorch.org/libtorch/cu117/libtorch-cxx11-abi-shared-with-deps-1.13.1%2Bcu117.zip
-#unzip libtorch-cxx11-abi-shared-with-deps-1.13.1+cu117.zip
-# Script for installing libtorch from scratch (without any python dependencies)
-# This clones the ``pytorch`` folder in the current directory, creates a ``pytorch-build`` directory containing all the intermediate files for building, and creates a ``pytorch-install`` folder for storing the compiled library.
-# After the build, you can use it by setting ``CMAKE_PREFIX_PATH=(path to pytorch-install folder)``.
-# Note that you need to have all the dependencies needed before running this script! (Read README.md in the main pytorch repo)
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/libcudnn8-dev_8.7.0.84-1+cuda11.8_amd64.deb
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/libcudnn8_8.7.0.84-1+cuda11.8_amd64.deb
+sudo dpkg -i libcudnn8*
+rm libcudnn8*
 
 git clone --recursive https://github.com/pytorch/pytorch -b v1.13.1 --depth 1
 
@@ -108,9 +102,11 @@ cmake -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
       -DCUDA_HOME=/usr/local/cuda \
       -DCUDNN_LIB_DIR=/usr/lib/x86_64-linux-gnu \
       -DCUDNN_INCLUDE_DIR=/usr/include \
-      -DTORCH_CUDA_ARCH_LIST="3.5 5.2 6.0 6.1 7.0+PTX 8.0" \
+      -DTORCH_CUDA_ARCH_LIST="6.0 6.1 7.0+PTX 8.0" \
       -DUSE_CUDA=ON \
       -DUSE_CUDNN=ON \
+      -DCAFFE2_STATIC_LINK_CUDA=ON \
+      -DUSE_STATIC_CUDNN=ON \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX=../../libtorch \
       -DGLIBCXX_USE_CXX11_ABI=1 \
@@ -134,4 +130,3 @@ echo 'export CUDA_ROOT=/usr/local/cuda' >> ~/.bashrc
 source ~/.bashrc
 
 python download_mnist.py -d build/data/mnist
-    
