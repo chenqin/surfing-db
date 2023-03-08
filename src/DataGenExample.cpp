@@ -95,9 +95,9 @@ struct Model : torch::nn::Module {
   torch::nn::Linear fc2;
 };
 
-void minst(int rank, int numranks) {
-  auto cuda_available = torch::cuda::is_available();
-  torch::Device device(cuda_available ? torch::kCUDA : torch::kCPU);
+void process(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numranks) {
+  // ensure data provider is not gpu rank
+  CHECK_NE(rank, 0);
   // TRAINING
   // Read train dataset
   const char* kDataRoot = "data/mnist/";
@@ -110,6 +110,54 @@ void minst(int rank, int numranks) {
     train_dataset.size().value(), numranks, rank, false);
 
   auto num_train_samples_per_proc = train_dataset.size().value() / numranks;
+
+  // Generate dataloader
+  auto total_batch_size = 64;
+  auto batch_size_per_proc = total_batch_size / numranks; // effective batch size in each processor
+  auto data_loader = torch::data::make_data_loader(
+    std::move(train_dataset), data_sampler, batch_size_per_proc);
+
+  // setting manual seed
+  torch::manual_seed(0);
+  // Number of epochs
+  size_t num_epochs = 10;
+
+  for (size_t epoch = 1; epoch <= num_epochs; ++epoch) {
+    size_t num_correct = 0;
+
+    for (auto& batch : *data_loader) {
+      std::vector<torch::Tensor> rank_batch_data = { batch.data };
+      std::vector<torch::Tensor> rank_batch_target = { batch.target };
+      auto work1 = pg->send(rank_batch_data, 0, rank);
+      auto work2 = pg->send(rank_batch_target, 0, rank);
+      work1->wait();
+      work2->wait();
+    } // end batch loader
+  }   // end epoch
+}
+
+void train(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numranks) {
+  /**
+   * @brief ensure gpu node stay in rank 0
+   *
+   */
+  CHECK_EQ(rank, 0);
+  CHECK_GT(numranks, 1);
+  auto cuda_available = torch::cuda::is_available();
+  torch::Device host(torch::kCPU);
+  torch::Device device(cuda_available ? torch::kCUDA : torch::kCPU);
+  // TRAINING
+  // Read train dataset
+  const char* kDataRoot = "data/mnist/";
+  auto train_dataset = torch::data::datasets::MNIST(kDataRoot)
+                         .map(torch::data::transforms::Normalize<>(0.1307, 0.3081))
+                         .map(torch::data::transforms::Stack<>());
+
+  // Distributed Random Sampler
+  auto data_sampler = torch::data::samplers::DistributedRandomSampler(
+    train_dataset.size().value(), numranks, rank, false);
+
+  auto num_train_samples_per_proc = train_dataset.size().value() * (numranks - 1) / numranks;
 
   // Generate dataloader
   auto total_batch_size = 64;
@@ -134,51 +182,81 @@ void minst(int rank, int numranks) {
     size_t num_correct = 0;
 
     for (auto& batch : *data_loader) {
-      auto ip = batch.data.to(device);
-      auto op = batch.target.to(device).squeeze();
+      /**
+       * @brief TODO: should either train rank 0 data or avoid split to rank 0
+       * 
+       */
+      std::vector<torch::Tensor> rank_batch_data = { batch.data };
+      std::vector<torch::Tensor> rank_batch_target = { batch.target };
+      /**
+       * @brief collect all batch data from CPU ranks and feed into
+       *
+       */
+      for (int i = 1; i < numranks; i++) {
+        auto work1 = pg->recv(rank_batch_data, i, i);
+        auto work2 = pg->recv(rank_batch_target, i, i);
+        work1->wait();
+        work2->wait();
+        auto ip = batch.data.to(device);
+        auto op = batch.target.to(device).squeeze();
 
-      // convert to required formats
-      ip = ip.to(torch::kF32);
-      op = op.to(torch::kLong);
+        // convert to required formats
+        ip = ip.to(torch::kF32);
+        op = op.to(torch::kLong);
 
-      // Reset gradients
-      model->zero_grad();
+        // Reset gradients
+        model->zero_grad();
 
-      // Execute forward pass
-      auto prediction = model->forward(ip);
+        // Execute forward pass
+        auto prediction = model->forward(ip);
 
-      auto loss = torch::nll_loss(torch::log_softmax(prediction, 1), op);
+        auto loss = torch::nll_loss(torch::log_softmax(prediction, 1), op);
 
-      // Backpropagation
-      loss.backward();
+        // Backpropagation
+        loss.backward();
 
-      // Averaging the gradients of the parameters in all the processors
-      // Note: This may lag behind DistributedDataParallel (DDP) in performance
-      // since this synchronizes parameters after backward pass while DDP
-      // overlaps synchronizing parameters and computing gradients in backward
-      // pass
-      // std::vector<std::shared_ptr<::c10d::ProcessGroup::Work>> works;
-      for (auto& param : model->named_parameters()) {
-        std::vector<torch::Tensor> tmp = { param.value().grad() };
-        // auto work = pg->allreduce(tmp);
-        // works.push_back(std::move(work));
+        // Averaging the gradients of the parameters in all the processors
+        // Note: This may lag behind DistributedDataParallel (DDP) in performance
+        // since this synchronizes parameters after backward pass while DDP
+        // overlaps synchronizing parameters and computing gradients in backward
+        // pass
+        /* TODO: we use CPU mpi to shuffle data to GPU for now
+        std::vector<c10::intrusive_ptr<c10d::Work>> works;
+        //model->to(host);
+        for (auto& param : model->named_parameters()) {
+          std::vector<torch::Tensor> tmp = { param.value().grad() };
+          auto work = pg->allreduce(tmp);
+          works.push_back(std::move(work));
+        }
+
+        for (auto& work : works) {
+          try {
+            work->wait();
+          } catch (const std::exception& ex) {
+            std::cerr << "Exception received: " << ex.what() << std::endl;
+            pg->abort();
+          }
+        }
+
+        for (auto& param : model->named_parameters()) {
+          param.value().grad().data() = param.value().grad().data() / numranks;
+        }
+        */
+        // model->to(device);
+        //  Update parameters
+        optimizer.step();
+
+        auto guess = prediction.argmax(1);
+        num_correct += torch::sum(guess.eq_(op)).item<int64_t>();
       }
-
-      // waitWork(pg, works);
-
-      for (auto& param : model->named_parameters()) {
-        param.value().grad().data() = param.value().grad().data() / numranks;
-      }
-
-      // Update parameters
-      optimizer.step();
-
-      auto guess = prediction.argmax(1);
-      num_correct += torch::sum(guess.eq_(op)).item<int64_t>();
     } // end batch loader
 
     auto accuracy = 100.0 * num_correct / num_train_samples_per_proc;
-
+    /**
+     * @brief go to next
+     *
+     */
+    if (rank != 0) continue;
     std::cout << "Accuracy in rank " << rank << " in epoch " << epoch << " - "
               << accuracy << std::endl;
 
@@ -247,6 +325,7 @@ int main(int argc, char** argv) {
    * mschema -> row based MPI friendly schema defined to encode/decode table/row in O(1) time
    * con -> data connector ingess running on a number of nodes micro batching data pullers
    */
+  auto pg = c10d::ProcessGroupMPI::createProcessGroupMPI();
   const auto node = std::make_shared<surfingdb::meta::node>(&argc, &argv);
 
   const auto schema_ptr = std::make_shared<mschema>(r);
@@ -261,25 +340,16 @@ int main(int argc, char** argv) {
    * consumer ranks can async send data to other ranks
    * jump to next iteration and get next batch ready
    */
-  bool produce = node->rank % 2 == 0;
+  bool produce = node->rank != 0;
   node->setissubscriber(&produce);
   auto partitioner = [](size_t key, int rank, int world) {
     int base = world % 2 == 0 ? world - 1 : world;
-    int dest = key % base;
+    int dest = key % world;
     /**
-     * @brief dest is subscriber to data ingestion
-     *
+     * @brief avoid use GPU rank in preprocessing
+     * 
      */
-    if (dest % 2 == 0) {
-      if (dest + 1 > world - 1) {
-        dest = dest - 1;
-      } else {
-        dest = dest + 1;
-      }
-    }
-    CHECK_GE(dest, 0);
-    CHECK_LT(dest, world);
-    return dest;
+    return dest == 0 ? dest+1 : dest;
   };
 
   while (terminal_signal == 0) {
@@ -362,7 +432,15 @@ int main(int argc, char** argv) {
      */
     auto t51 = processors::java(t5, "MyBridge");
 
-    minst(node->rank, node->world);
+    /**
+     * @brief rest of worker load data convert to tensor and send to gpu rank 0
+     * gpu rank 0 only train
+     */
+    if(node->rank != 0) {
+      process(pg, node->rank, node->world);
+    } else {
+      train(pg, node->rank, node->world);
+    }
   }
   return terminal_signal;
 }
