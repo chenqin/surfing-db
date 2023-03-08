@@ -101,6 +101,7 @@ cmake -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
       -DCUDNN_INCLUDE_DIR=/usr/include \
       -DTORCH_CUDA_ARCH_LIST="6.0 6.1 7.0+PTX 8.0" \
       -DUSE_CUDA=ON \
+      -DUSE_FAST_NVCC=ON \
       -DUSE_CUDNN=ON \
       -DCAFFE2_STATIC_LINK_CUDA=ON \
       -DUSE_STATIC_CUDNN=ON \

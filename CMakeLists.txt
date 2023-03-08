@@ -23,7 +23,7 @@ include_directories(${JNI_INCLUDE_DIRS})
 
 SET(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
-list(APPEND CMAKE_PREFIX_PATH "/home/chen/libtorch")
+list(APPEND CMAKE_PREFIX_PATH "/home/cqin/code/libtorch")
 find_package(CUDA REQUIRED 11.8)
 find_package(CUDAToolkit REQUIRED 11.8)
 enable_language(CUDA)
