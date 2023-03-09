@@ -10,7 +10,7 @@ A efficient and powerful in memory kafka messages processor using MPI and Apache
 # how to run
 - run install.sh for dependencies
 
-mpirun --hostfile hostfile KafkaExample --mca oob_tcp_port_min_v4 7337 -mca btl_tcp_if_exclude lo,docker0
+mpirun --hostfile hostfile DataGenExample --mca oob_tcp_port_min_v4 7337 -mca btl_tcp_if_exclude lo,docker0
 
 # configuration
 - src/meta/schema.h 

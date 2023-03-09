@@ -144,7 +144,6 @@ void train(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numranks)
   CHECK_EQ(rank, 0);
   CHECK_GT(numranks, 1);
   auto cuda_available = torch::cuda::is_available();
-  torch::Device host(torch::kCPU);
   torch::Device device(cuda_available ? torch::kCUDA : torch::kCPU);
   // TRAINING
   // Read train dataset
@@ -193,23 +192,26 @@ void train(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numranks)
        *
        */
       for (int i = 1; i < numranks; i++) {
+
         auto work1 = pg->recv(rank_batch_data, i, i);
         auto work2 = pg->recv(rank_batch_target, i, i);
-        work1->wait();
-        work2->wait();
-        auto ip = batch.data.to(device);
-        auto op = batch.target.to(device).squeeze();
-
-        // convert to required formats
-        ip = ip.to(torch::kF32);
-        op = op.to(torch::kLong);
-
-        // Reset gradients
+         // Reset gradients
         model->zero_grad();
-
+        /**
+         once get training batch from rank i run predication
+        */
+        work1->wait();
+        auto ip = batch.data.to(device);
+        ip = ip.to(torch::kF32);
         // Execute forward pass
         auto prediction = model->forward(ip);
 
+        /**
+           once get label dataset from rank i, ran BP
+        */
+        work2->wait();
+        auto op = batch.target.to(device).squeeze();
+        op = op.to(torch::kLong);
         auto loss = torch::nll_loss(torch::log_softmax(prediction, 1), op);
 
         // Backpropagation

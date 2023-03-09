@@ -90,7 +90,6 @@ cmake -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
       -DBUILD_PYTHON=OFF \
       -DBUILD_TEST=OFF \
       -DUSE_OPENCV=ON \
-      -DUSE_SYSTEM_NCCL=ON \
       -DBUILD_CAFFE2=ON \
       -DUSE_DISTRIBUTED=ON \
       -DUSE_MPI=ON \
