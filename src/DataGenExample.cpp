@@ -130,8 +130,12 @@ void process(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numrank
       std::vector<torch::Tensor> rank_batch_target = { batch.target };
       auto work1 = pg->send(rank_batch_data, 0, rank);
       auto work2 = pg->send(rank_batch_target, 0, rank);
+      auto work3 = pg->send(rank_batch_data, 4, rank);
+      auto work4 = pg->send(rank_batch_target, 4, rank);
       work1->wait();
       work2->wait();
+      work3->wait();
+      work4->wait();
     } // end batch loader
   }   // end epoch
 }
@@ -141,8 +145,6 @@ void train(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numranks)
    * @brief ensure gpu node stay in rank 0
    *
    */
-  CHECK_EQ(rank, 0);
-  CHECK_GT(numranks, 1);
   auto cuda_available = torch::cuda::is_available();
   torch::Device device(cuda_available ? torch::kCUDA : torch::kCPU);
   // TRAINING
@@ -156,7 +158,7 @@ void train(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numranks)
   auto data_sampler = torch::data::samplers::DistributedRandomSampler(
     train_dataset.size().value(), numranks, rank, false);
 
-  auto num_train_samples_per_proc = train_dataset.size().value() * (numranks - 1) / numranks;
+  auto num_train_samples_per_proc = train_dataset.size().value() * (numranks - 2) / numranks;
 
   // Generate dataloader
   auto total_batch_size = 64;
@@ -192,7 +194,7 @@ void train(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numranks)
        *
        */
       for (int i = 1; i < numranks; i++) {
-
+        if(i == 4) continue;
         auto work1 = pg->recv(rank_batch_data, i, i);
         auto work2 = pg->recv(rank_batch_target, i, i);
          // Reset gradients
@@ -438,7 +440,7 @@ int main(int argc, char** argv) {
      * @brief rest of worker load data convert to tensor and send to gpu rank 0
      * gpu rank 0 only train
      */
-    if(node->rank != 0) {
+    if(node->trainer == 0) {
       process(pg, node->rank, node->world);
     } else {
       train(pg, node->rank, node->world);

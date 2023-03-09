@@ -33,7 +33,6 @@ private:
    *
    */
   bool* issubscriber;
-  int trainer = 0;
 public:
   node(int* argc, char*** argv);
   node(int, int, std::string);
@@ -57,13 +56,14 @@ public:
   long forward(); // move to next stage of compute
   int world;
   int rank;
-  
+
   /**
    * @brief each node can have one role either gpu trainer or CPU processor
    *        use role_comm to reach other nodes with same role e.g 
    *        processor shuffle or trainer allreduce gridiant avg
    *
    */
+  int trainer = 0;
   MPI_Comm role_comm;
   int role_rank;
   int role_world;
