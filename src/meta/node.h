@@ -33,11 +33,12 @@ private:
    *
    */
   bool* issubscriber;
-
+  int trainer = 0;
 public:
   node(int* argc, char*** argv);
   node(int, int, std::string);
   ~node(){
+    MPI_Comm_free(&role_comm);
     MPI_Finalize();
     jvm->DestroyJavaVM();
   }
@@ -56,6 +57,16 @@ public:
   long forward(); // move to next stage of compute
   int world;
   int rank;
+  
+  /**
+   * @brief each node can have one role either gpu trainer or CPU processor
+   *        use role_comm to reach other nodes with same role e.g 
+   *        processor shuffle or trainer allreduce gridiant avg
+   *
+   */
+  MPI_Comm role_comm;
+  int role_rank;
+  int role_world;
   /**
    * @brief stage that needs golbal synchorization (e.g shuffle)
    * 

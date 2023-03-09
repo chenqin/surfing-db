@@ -51,8 +51,16 @@ node::node(int* argc, char*** argv) {
   MPI_Get_processor_name(processor_name, &name_len);
 
   processor = std::string(processor_name);
+  std::cout << processor << " on " << rank << std::endl;
   stage = 0;
   LOG(INFO) << "cluster size " << world << " node rank " << rank << " alias " << processor;
+
+  // TODO: FIXME determine role of each node
+  trainer = rank % 4 == 0 ? 1 : 0; // 
+
+  MPI_Comm_split(MPI_COMM_WORLD, trainer, rank, &role_comm);
+  MPI_Comm_rank(role_comm, &role_rank);
+  MPI_Comm_size(role_comm, &role_world);
 
   JavaVMInitArgs vm_args;
   JavaVMOption options[2];
