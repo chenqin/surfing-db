@@ -124,18 +124,21 @@ void process(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numrank
 
   for (size_t epoch = 1; epoch <= num_epochs; ++epoch) {
     size_t num_correct = 0;
-
+    int index = 0;
     for (auto& batch : *data_loader) {
-      std::vector<torch::Tensor> rank_batch_data = { batch.data };
-      std::vector<torch::Tensor> rank_batch_target = { batch.target };
-      auto work1 = pg->send(rank_batch_data, 0, rank);
-      auto work2 = pg->send(rank_batch_target, 0, rank);
-      auto work3 = pg->send(rank_batch_data, 4, rank);
-      auto work4 = pg->send(rank_batch_target, 4, rank);
-      work1->wait();
-      work2->wait();
-      work3->wait();
-      work4->wait();
+      if(index % numranks == rank) {
+        std::vector<torch::Tensor> rank_batch_data = { batch.data };
+        std::vector<torch::Tensor> rank_batch_target = { batch.target };
+        auto work1 = pg->send(rank_batch_data, 0, index);
+        auto work2 = pg->send(rank_batch_target, 0, index);
+        auto work3 = pg->send(rank_batch_data, 4, index);
+        auto work4 = pg->send(rank_batch_target, 4, index);
+        work1->wait();
+        work2->wait();
+        work3->wait();
+        work4->wait();
+      }
+      index++;
     } // end batch loader
   }   // end epoch
 }
@@ -158,7 +161,7 @@ void train(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numranks)
   auto data_sampler = torch::data::samplers::DistributedRandomSampler(
     train_dataset.size().value(), numranks, rank, false);
 
-  auto num_train_samples_per_proc = train_dataset.size().value() * (numranks - 2) / numranks;
+  auto num_train_samples_per_proc = train_dataset.size().value() / numranks;
 
   // Generate dataloader
   auto total_batch_size = 64;
@@ -177,41 +180,32 @@ void train(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numranks)
   torch::optim::SGD optimizer(model->parameters(), learning_rate);
 
   // Number of epochs
-  size_t num_epochs = 10;
+  size_t num_epochs = 20;
 
   for (size_t epoch = 1; epoch <= num_epochs; ++epoch) {
     size_t num_correct = 0;
-
+    int index = 0;
     for (auto& batch : *data_loader) {
-      /**
-       * @brief TODO: should either train rank 0 data or avoid split to rank 0
-       * 
-       */
-      std::vector<torch::Tensor> rank_batch_data = { batch.data };
-      std::vector<torch::Tensor> rank_batch_target = { batch.target };
       /**
        * @brief collect all batch data from CPU ranks and feed into
        *
        */
-      for (int i = 1; i < numranks; i++) {
-        if(i == 4) continue;
-        auto work1 = pg->recv(rank_batch_data, i, i);
-        auto work2 = pg->recv(rank_batch_target, i, i);
+        if(index != rank) {
+          std::vector<torch::Tensor> rank_batch_data = { batch.data };
+          std::vector<torch::Tensor> rank_batch_target = { batch.target };
+          auto work1 = pg->recvAnysource(rank_batch_data, index);
+          auto work2 = pg->recvAnysource(rank_batch_target, index);
+          work1->wait();
+          work2->wait();
+          index++;
+        }
          // Reset gradients
         model->zero_grad();
-        /**
-         once get training batch from rank i run predication
-        */
-        work1->wait();
         auto ip = batch.data.to(device);
         ip = ip.to(torch::kF32);
         // Execute forward pass
         auto prediction = model->forward(ip);
 
-        /**
-           once get label dataset from rank i, ran BP
-        */
-        work2->wait();
         auto op = batch.target.to(device).squeeze();
         op = op.to(torch::kLong);
         auto loss = torch::nll_loss(torch::log_softmax(prediction, 1), op);
@@ -252,7 +246,6 @@ void train(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numranks)
 
         auto guess = prediction.argmax(1);
         num_correct += torch::sum(guess.eq_(op)).item<int64_t>();
-      }
     } // end batch loader
 
     auto accuracy = 100.0 * num_correct / num_train_samples_per_proc;
