@@ -56,7 +56,7 @@ node::node(int* argc, char*** argv) {
   LOG(INFO) << "cluster size " << world << " node rank " << rank << " alias " << processor;
 
   // TODO: FIXME determine role of each node
-  trainer = rank % 4 == 0 ? 1 : 0; // 
+  trainer = rank == 0 ? 1 : 0; // 
 
   MPI_Comm_split(MPI_COMM_WORLD, trainer, rank, &role_comm);
   MPI_Comm_rank(role_comm, &role_rank);
