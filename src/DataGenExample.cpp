@@ -130,17 +130,14 @@ void process(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numrank
       std::vector<torch::Tensor> rank_batch_target = { batch.target };
       auto work1 = pg->send(rank_batch_data, 0, rank);
       auto work2 = pg->send(rank_batch_target, 0, rank);
-      auto work3 = pg->send(rank_batch_data, 4, rank);
-      auto work4 = pg->send(rank_batch_target, 4, rank);
       work1->wait();
       work2->wait();
-      work3->wait();
-      work4->wait();
     } // end batch loader
   }   // end epoch
 }
 
 void train(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numranks) {
+  CHECK_EQ(rank, 0);
   /**
    * @brief ensure gpu node stay in rank 0
    *
@@ -158,7 +155,7 @@ void train(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numranks)
   auto data_sampler = torch::data::samplers::DistributedRandomSampler(
     train_dataset.size().value(), numranks, rank, false);
 
-  auto num_train_samples_per_proc = train_dataset.size().value() * (numranks - 2) / numranks;
+  auto num_train_samples_per_proc = train_dataset.size().value();
 
   // Generate dataloader
   auto total_batch_size = 64;
@@ -185,7 +182,7 @@ void train(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numranks)
     for (auto& batch : *data_loader) {
       /**
        * @brief TODO: should either train rank 0 data or avoid split to rank 0
-       * 
+       *
        */
       std::vector<torch::Tensor> rank_batch_data = { batch.data };
       std::vector<torch::Tensor> rank_batch_target = { batch.target };
@@ -193,25 +190,26 @@ void train(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numranks)
        * @brief collect all batch data from CPU ranks and feed into
        *
        */
-      for (int i = 1; i < numranks; i++) {
-        if(i == 4) continue;
-        auto work1 = pg->recv(rank_batch_data, i, i);
-        auto work2 = pg->recv(rank_batch_target, i, i);
-         // Reset gradients
+      for (int i = 0; i < numranks; i++) {
+        if (i > 0) {
+          auto work1 = pg->recv(rank_batch_data, i, i);
+          auto work2 = pg->recv(rank_batch_target, i, i);
+          /**
+          once get training batch from rank i run predication
+         */
+          work1->wait();
+          /**
+            once get label dataset from rank i, ran BP
+         */
+          work2->wait();
+        }
+
+        // Reset gradients
         model->zero_grad();
-        /**
-         once get training batch from rank i run predication
-        */
-        work1->wait();
         auto ip = batch.data.to(device);
         ip = ip.to(torch::kF32);
         // Execute forward pass
         auto prediction = model->forward(ip);
-
-        /**
-           once get label dataset from rank i, ran BP
-        */
-        work2->wait();
         auto op = batch.target.to(device).squeeze();
         op = op.to(torch::kLong);
         auto loss = torch::nll_loss(torch::log_softmax(prediction, 1), op);
@@ -219,34 +217,6 @@ void train(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numranks)
         // Backpropagation
         loss.backward();
 
-        // Averaging the gradients of the parameters in all the processors
-        // Note: This may lag behind DistributedDataParallel (DDP) in performance
-        // since this synchronizes parameters after backward pass while DDP
-        // overlaps synchronizing parameters and computing gradients in backward
-        // pass
-        /* TODO: we use CPU mpi to shuffle data to GPU for now
-        std::vector<c10::intrusive_ptr<c10d::Work>> works;
-        //model->to(host);
-        for (auto& param : model->named_parameters()) {
-          std::vector<torch::Tensor> tmp = { param.value().grad() };
-          auto work = pg->allreduce(tmp);
-          works.push_back(std::move(work));
-        }
-
-        for (auto& work : works) {
-          try {
-            work->wait();
-          } catch (const std::exception& ex) {
-            std::cerr << "Exception received: " << ex.what() << std::endl;
-            pg->abort();
-          }
-        }
-
-        for (auto& param : model->named_parameters()) {
-          param.value().grad().data() = param.value().grad().data() / numranks;
-        }
-        */
-        // model->to(device);
         //  Update parameters
         optimizer.step();
 
@@ -256,55 +226,47 @@ void train(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numranks)
     } // end batch loader
 
     auto accuracy = 100.0 * num_correct / num_train_samples_per_proc;
-    /**
-     * @brief go to next
-     *
-     */
-    if (rank != 0) continue;
     std::cout << "Accuracy in rank " << rank << " in epoch " << epoch << " - "
               << accuracy << std::endl;
 
   } // end epoch
 
-  // TESTING ONLY IN RANK 0
-  if (rank == 0) {
-    auto test_dataset = torch::data::datasets::MNIST(
-                          kDataRoot, torch::data::datasets::MNIST::Mode::kTest)
-                          .map(torch::data::transforms::Normalize<>(0.1307, 0.3081))
-                          .map(torch::data::transforms::Stack<>());
+  auto test_dataset = torch::data::datasets::MNIST(
+                        kDataRoot, torch::data::datasets::MNIST::Mode::kTest)
+                        .map(torch::data::transforms::Normalize<>(0.1307, 0.3081))
+                        .map(torch::data::transforms::Stack<>());
 
-    auto num_test_samples = test_dataset.size().value();
-    auto test_loader = torch::data::make_data_loader(
-      std::move(test_dataset), num_test_samples);
+  auto num_test_samples = test_dataset.size().value();
+  auto test_loader = torch::data::make_data_loader(
+    std::move(test_dataset), num_test_samples);
 
-    model->eval(); // enable eval mode to prevent backprop
+  model->eval(); // enable eval mode to prevent backprop
 
-    size_t num_correct = 0;
+  size_t num_correct = 0;
 
-    for (auto& batch : *test_loader) {
-      auto ip = batch.data.to(device);
-      auto op = batch.target.to(device).squeeze();
+  for (auto& batch : *test_loader) {
+    auto ip = batch.data.to(device);
+    auto op = batch.target.to(device).squeeze();
 
-      // convert to required format
-      ip = ip.to(torch::kF32);
-      op = op.to(torch::kLong);
+    // convert to required format
+    ip = ip.to(torch::kF32);
+    op = op.to(torch::kLong);
 
-      auto prediction = model->forward(ip);
+    auto prediction = model->forward(ip);
 
-      auto loss = torch::nll_loss(torch::log_softmax(prediction, 1), op);
+    auto loss = torch::nll_loss(torch::log_softmax(prediction, 1), op);
 
-      std::cout << "Test loss - " << loss.item<float>() << std::endl;
+    std::cout << "Test loss - " << loss.item<float>() << std::endl;
 
-      auto guess = prediction.argmax(1);
+    auto guess = prediction.argmax(1);
 
-      num_correct += torch::sum(guess.eq_(op)).item<int64_t>();
+    num_correct += torch::sum(guess.eq_(op)).item<int64_t>();
 
-    } // end test loader
+  } // end test loader
 
-    std::cout << "Num correct - " << num_correct << std::endl;
-    std::cout << "Test Accuracy - " << 100.0 * num_correct / num_test_samples
-              << std::endl;
-  } // end rank 0
+  std::cout << "Num correct - " << num_correct << std::endl;
+  std::cout << "Test Accuracy - " << 100.0 * num_correct / num_test_samples
+            << std::endl;
 }
 
 /** run this program with
@@ -351,9 +313,9 @@ int main(int argc, char** argv) {
     int dest = key % world;
     /**
      * @brief avoid use GPU rank in preprocessing
-     * 
+     *
      */
-    return dest == 0 ? dest+1 : dest;
+    return dest == 0 ? dest + 1 : dest;
   };
 
   while (terminal_signal == 0) {
@@ -440,7 +402,7 @@ int main(int argc, char** argv) {
      * @brief rest of worker load data convert to tensor and send to gpu rank 0
      * gpu rank 0 only train
      */
-    if(node->trainer == 0) {
+    if (node->trainer == 0) {
       process(pg, node->rank, node->world);
     } else {
       train(pg, node->rank, node->world);
