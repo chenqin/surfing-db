@@ -181,27 +181,39 @@ void train(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numranks)
 
     for (auto& batch : *data_loader) {
       /**
-       * @brief TODO: should either train rank 0 data or avoid split to rank 0
+       * @brief collect all batch data from CPU ranks and feed into
        *
        */
-      std::vector<torch::Tensor> rank_batch_data = { batch.data };
-      std::vector<torch::Tensor> rank_batch_target = { batch.target };
+      std::vector<std::vector<torch::Tensor>> all_data, all_target;
+      std::vector<c10::intrusive_ptr<c10d::Work>> data_workers, target_workers;
+
+      for (int i = 0; i < numranks; i++) {
+        /**
+         * @brief async recv all mini batch from all workers
+         *        put rank 0 data on first index
+         */
+        all_data.push_back({ batch.data.clone() });
+        all_target.push_back({ batch.target.clone() });
+        /**
+         * @brief setup async recv data and target from rank i
+         *
+         */
+        if (i > 0) {
+          auto work1 = pg->recv(all_data.at(i), i, i);
+          auto work2 = pg->recv(all_target.at(i), i, i);
+          data_workers.push_back(work1);
+          target_workers.push_back(work2);
+        }
+      }
+
       /**
-       * @brief collect all batch data from CPU ranks and feed into
+       * @brief async feed batch and target into gpu
        *
        */
       for (int i = 0; i < numranks; i++) {
         if (i > 0) {
-          auto work1 = pg->recv(rank_batch_data, i, i);
-          auto work2 = pg->recv(rank_batch_target, i, i);
-          /**
-          once get training batch from rank i run predication
-         */
-          work1->wait();
-          /**
-            once get label dataset from rank i, ran BP
-         */
-          work2->wait();
+          data_workers.at(i - 1)->wait();
+          batch.data = all_data.at(i).at(0);
         }
 
         // Reset gradients
@@ -210,6 +222,11 @@ void train(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numranks)
         ip = ip.to(torch::kF32);
         // Execute forward pass
         auto prediction = model->forward(ip);
+
+        if (i > 0) {
+          target_workers.at(i - 1)->wait();
+          batch.target = all_target.at(i).at(0);
+        }
         auto op = batch.target.to(device).squeeze();
         op = op.to(torch::kLong);
         auto loss = torch::nll_loss(torch::log_softmax(prediction, 1), op);
