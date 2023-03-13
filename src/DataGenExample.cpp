@@ -38,7 +38,6 @@ using namespace surfingdb::table::schema;
 using namespace surfingdb::table;
 using namespace surfingdb::connector;
 using namespace std;
-using namespace arrow;
 
 /**
  * https://stackoverflow.com/questions/440133/how-do-i-create-a-random-alpha-numeric-string-in-c
@@ -98,7 +97,6 @@ struct Model : torch::nn::Module {
 void process(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numranks) {
   // ensure data provider is not gpu rank
   CHECK_NE(rank, 0);
-  // TRAINING
   // Read train dataset
   const char* kDataRoot = "data/mnist/";
   auto train_dataset = torch::data::datasets::MNIST(kDataRoot)
@@ -239,6 +237,32 @@ void train(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numranks)
 
         auto guess = prediction.argmax(1);
         num_correct += torch::sum(guess.eq_(op)).item<int64_t>();
+        /**
+         * @brief model sync, move grad from CUDA to CPU to run MPI
+         * 1) do sum of all grad values across all gpus ranks
+         * 2) avg grad and send back to all gpu ranks
+         */
+        std::vector<c10::intrusive_ptr<c10d::Work>> sync_worker;
+        for (auto& param : model->named_parameters()) {
+          std::vector<torch::Tensor> send_temp = {param.value().grad().clone().to(torch::kCPU)};
+          std::vector<torch::Tensor> recv_temp = {param.value().grad().clone().to(torch::kCPU)};
+          auto sender = pg->send(send_temp, 0, 0);
+          sync_worker.push_back(sender);
+        }
+
+        for (auto& param : model->named_parameters()) {
+          std::vector<torch::Tensor> recv_temp = {param.value().grad().clone().to(torch::kCPU)};
+          auto reciver = pg->recv(recv_temp, 0, 0);
+          sync_worker.push_back(reciver);
+        }
+        /**
+         * @brief wait till gpu grad sync complete
+         * 
+         * @param sync_worker 
+         */
+        for(auto& worker : sync_worker) {
+          worker->wait();
+        }
       }
     } // end batch loader
 
@@ -340,7 +364,7 @@ int main(int argc, char** argv) {
     /**
      * @brief import pyarrow
      */
-    // arrow::py::import_pyarrow();
+    // arrow::py::import_pyarrow();c10d::ProcessGroupMPI::createProcessGroupMPI();
 
     const size_t intial_row_count = node->rank * BATCH_SIZE;
     size_t total_row_count = intial_row_count;
