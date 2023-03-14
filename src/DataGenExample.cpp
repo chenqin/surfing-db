@@ -176,7 +176,7 @@ void train(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numranks)
 
   for (size_t epoch = 1; epoch <= num_epochs; ++epoch) {
     size_t num_correct = 0;
-
+    auto start = MPI_Wtime();
     for (auto& batch : *data_loader) {
       /**
        * @brief collect all batch data from CPU ranks and feed into
@@ -208,67 +208,98 @@ void train(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numranks)
        * @brief async feed batch and target into gpu
        *
        */
+      std::vector<at::Tensor> ips;
+      std::vector<at::Tensor> ops;
+      std::mutex g_mutex;
+      std::condition_variable cv;
+      int ready_batch = 0;
+
+      std::future<int> gpu_task = std::async(std::launch::async, [&]{ 
+        int correct = 0;
+        int j = 0;
+
+        while(j < numranks) {
+          std::unique_lock lk(g_mutex);
+          cv.wait(lk, []{return true;});
+          // Reset gradients
+          model->zero_grad();
+
+          auto ip = ips.at(j);
+          auto op = ops.at(j);
+          // Execute forward pass
+          auto prediction = model->forward(ip);
+          auto loss = torch::nll_loss(torch::log_softmax(prediction, 1), op);
+
+          // Backpropagation
+          loss.backward();
+
+          //  Update parameters
+          optimizer.step();
+
+          auto guess = prediction.argmax(1);
+          correct += torch::sum(guess.eq_(op)).item<int64_t>();
+          j++;
+          lk.unlock();
+        }
+        return correct; 
+      });
+
       for (int i = 0; i < numranks; i++) {
         if (i > 0) {
           data_workers.at(i - 1)->wait();
           batch.data = all_data.at(i).at(0);
         }
 
-        // Reset gradients
-        model->zero_grad();
         auto ip = batch.data.to(device);
         ip = ip.to(torch::kF32);
-        // Execute forward pass
-        auto prediction = model->forward(ip);
-
+        ips.push_back(ip);
         if (i > 0) {
           target_workers.at(i - 1)->wait();
           batch.target = all_target.at(i).at(0);
         }
         auto op = batch.target.to(device).squeeze();
         op = op.to(torch::kLong);
-        auto loss = torch::nll_loss(torch::log_softmax(prediction, 1), op);
-
-        // Backpropagation
-        loss.backward();
-
-        //  Update parameters
-        optimizer.step();
-
-        auto guess = prediction.argmax(1);
-        num_correct += torch::sum(guess.eq_(op)).item<int64_t>();
+        ops.push_back(op);
         /**
-         * @brief model sync, move grad from CUDA to CPU to run MPI
-         * 1) do sum of all grad values across all gpus ranks
-         * 2) avg grad and send back to all gpu ranks
-         */
-        std::vector<c10::intrusive_ptr<c10d::Work>> sync_worker;
-        for (auto& param : model->named_parameters()) {
-          std::vector<torch::Tensor> send_temp = {param.value().grad().clone().to(torch::kCPU)};
-          std::vector<torch::Tensor> recv_temp = {param.value().grad().clone().to(torch::kCPU)};
-          auto sender = pg->send(send_temp, 0, 0);
-          sync_worker.push_back(sender);
-        }
-
-        for (auto& param : model->named_parameters()) {
-          std::vector<torch::Tensor> recv_temp = {param.value().grad().clone().to(torch::kCPU)};
-          auto reciver = pg->recv(recv_temp, 0, 0);
-          sync_worker.push_back(reciver);
-        }
-        /**
-         * @brief wait till gpu grad sync complete
-         * 
-         * @param sync_worker 
-         */
-        for(auto& worker : sync_worker) {
-          worker->wait();
-        }
+        * one sample data and target ready, notify training thread
+        */
+        std::lock_guard lk(g_mutex);
+        ready_batch = i;
+        cv.notify_one();
       }
+      num_correct += gpu_task.wait();
     } // end batch loader
+
+    /**
+      * @brief model sync, move grad from CUDA to CPU to run MPI
+      * 1) do sum of all grad values across all gpus ranks
+      * 2) avg grad and send back to all gpu ranks
+      */
+    std::vector<c10::intrusive_ptr<c10d::Work>> sync_worker;
+    for (auto& param : model->named_parameters()) {
+      std::vector<torch::Tensor> send_temp = {param.value().grad().clone().to(torch::kCPU)};
+      std::vector<torch::Tensor> recv_temp = {param.value().grad().clone().to(torch::kCPU)};
+      auto sender = pg->send(send_temp, 0, 0);
+      sync_worker.push_back(sender);
+    }
+
+    for (auto& param : model->named_parameters()) {
+      std::vector<torch::Tensor> recv_temp = {param.value().grad().clone().to(torch::kCPU)};
+      auto reciver = pg->recv(recv_temp, 0, 0);
+      sync_worker.push_back(reciver);
+    }
+    /**
+      * @brief wait till gpu grad sync complete
+      * 
+      * @param sync_worker 
+      */
+    for(auto& worker : sync_worker) {
+      worker->wait();
+    }
 
     auto accuracy = 100.0 * num_correct / num_train_samples_per_proc;
     std::cout << "Accuracy in rank " << rank << " in epoch " << epoch << " - "
-              << accuracy << std::endl;
+              << accuracy << " with "<< num_train_samples_per_proc/ (MPI_Wtime() - start) << " qps" << std::endl;
 
   } // end epoch
 
@@ -437,13 +468,13 @@ int main(int argc, char** argv) {
      * @brief read data from java
      *
      */
-    auto t51 = processors::java(t5, "MyBridge");
+    //auto t51 = processors::java(t5, "MyBridge");
 
     /**
      * @brief rest of worker load data convert to tensor and send to gpu rank 0
      * gpu rank 0 only train
      */
-    if (node->trainer == 0) {
+    if (node->rank != 0 && node->world > 1) {
       process(pg, node->rank, node->world);
     } else {
       train(pg, node->rank, node->world);
