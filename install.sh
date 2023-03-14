@@ -16,8 +16,8 @@ sudo apt install -y -V libssl-dev
 sudo apt install -y -V libboost-dev
 sudo apt install  -y -V pybind11-dev
 sudo apt install  -y -V libgoogle-glog-dev
-sudp apt install  -y -V flex 
-sudp apt install  -y -V bison
+sudo apt install  -y -V flex 
+sudo apt install  -y -V bison
 sudo apt install  -y -V libunwind-dev
 
 #https://arrow.apache.org/install/
@@ -26,6 +26,7 @@ wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr '
 sudo apt install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
 rm ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
 
+sudo apt update
 sudo apt install -y -V libarrow-dev # For C++
 sudo apt install -y -V libarrow-cuda-dev #For GPU
 sudo apt install -y -V libarrow-glib-dev # For GLib (C)
@@ -116,8 +117,9 @@ ninja install
 popd
 
 # cmake 3.22 works for me
-wget https://github.com/Kitware/CMake/releases/download/v3.22.6/cmake-3.22.6-linux-x86_64.tar.gz ~
-tar vzxf ~/cmake-3.22.6-linux-x86_64.tar.gz 
+cd ~
+wget https://github.com/Kitware/CMake/releases/download/v3.22.6/cmake-3.22.6-linux-x86_64.tar.gz 
+tar vzxf cmake-3.22.6-linux-x86_64.tar.gz 
 
 #write to env
 echo 'export CMAKE_HOME=~/cmake-3.22.6-linux-x86_64' >> ~/.bashrc 
