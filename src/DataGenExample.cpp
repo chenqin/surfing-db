@@ -212,10 +212,9 @@ void train(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numranks)
       std::vector<at::Tensor> ops;
       std::mutex g_mutex;
       std::condition_variable cv;
-      int ready_batch = 0;
+      bool ready = false;
 
-      std::future<int> gpu_task = std::async(std::launch::async, [&]{ 
-        int correct = 0;
+      std::future<size_t> gpu_task = std::async(std::launch::async, [&]{ 
         int j = 0;
 
         while(j < numranks) {
@@ -237,11 +236,11 @@ void train(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numranks)
           optimizer.step();
 
           auto guess = prediction.argmax(1);
-          correct += torch::sum(guess.eq_(op)).item<int64_t>();
+          num_correct += torch::sum(guess.eq_(op)).item<int64_t>();
           j++;
           lk.unlock();
         }
-        return correct; 
+        return num_correct; 
       });
 
       for (int i = 0; i < numranks; i++) {
@@ -264,10 +263,10 @@ void train(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, int rank, int numranks)
         * one sample data and target ready, notify training thread
         */
         std::lock_guard lk(g_mutex);
-        ready_batch = i;
+        ready = true;
         cv.notify_one();
       }
-      num_correct += gpu_task.wait();
+      gpu_task.wait();
     } // end batch loader
 
     /**
