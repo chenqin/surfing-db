@@ -1,8 +1,8 @@
 sudo apt update
 
-sudo apt install python3.10 python3-testresources python3-pip libthrift-dev maven
+sudo apt install -y python3.10 python3-testresources python3-pip libthrift-dev maven
 
-sudo apt install build-essential openjdk-8-jdk gcc g++ ninja-build libomp-dev libopenmpi-dev libssl-dev libboost-dev pybind11-dev libgoogle-glog-dev flex bison libunwind-dev
+sudo apt install -y build-essential openjdk-8-jdk gcc g++ ninja-build libomp-dev libopenmpi-dev libssl-dev libboost-dev pybind11-dev libgoogle-glog-dev flex bison libunwind-dev
 
 # cmake 3.22 works for me
 pushd ~
@@ -16,7 +16,7 @@ sudo wget -O /etc/apt/preferences.d/cuda-repository-pin-600 https://developer.do
 sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/3bf863cc.pub
 sudo add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/ /"
 sudo apt update
-sudo apt install cuda-11-8 cuda-toolkit-11-8
+sudo apt install -y cuda-11-8 cuda-toolkit-11-8
 
 sudo ln -s /usr/bin/gcc $CUDA_ROOT/bin/gcc
 sudo ln -s /usr/bin/g++ $CUDA_ROOT/bin/g++
@@ -36,11 +36,11 @@ source ~/.bashrc
 #https://arrow.apache.org/install/
 sudo apt install ca-certificates lsb-release wget
 wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
-sudo apt install ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
+sudo apt install -y ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
 rm ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
 
 sudo apt update
-sudo apt install libarrow-dev libarrow-cuda-dev libarrow-glib-dev libarrow-dataset-dev libarrow-dataset-glib-dev libarrow-flight-dev libarrow-flight-glib-dev libgandiva-dev libgandiva-glib-dev libparquet-dev libparquet-glib-dev
+sudo apt install -y libarrow-dev libarrow-cuda-dev libarrow-glib-dev libarrow-dataset-dev libarrow-dataset-glib-dev libarrow-flight-dev libarrow-flight-glib-dev libgandiva-dev libgandiva-glib-dev libparquet-dev libparquet-glib-dev
 
 sudo pip install "pybind11[global]"
 
