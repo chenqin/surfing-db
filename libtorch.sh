@@ -1,3 +1,4 @@
+source ~/.bashrc
 sudo rm /usr/bin/python
 sudo ln -s /usr/bin/python3 /usr/bin/python
 pip3 install dataclasses typing_extensions
