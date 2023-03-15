@@ -43,8 +43,12 @@ sudo apt update
 sudo apt install libarrow-dev libarrow-cuda-dev libarrow-glib-dev libarrow-dataset-dev libarrow-dataset-glib-dev libarrow-flight-dev libarrow-flight-glib-dev libgandiva-dev libgandiva-glib-dev libparquet-dev libparquet-glib-dev
 
 sudo pip install "pybind11[global]"
-# pin already install librdkafka
-#sudo apt install librdkafka-dev
+
+git clone https://github.com/edenhill/librdkafka.git
+cd librdkafka
+./configure --prefix /usr
+make
+sudo make install
 
 
 #python download_mnist.py -d build/data/mnist
