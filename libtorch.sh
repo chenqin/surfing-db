@@ -1,3 +1,5 @@
+sudo ln -s /usr/bin/python3 /usr/bin/python
+pip3 install dataclasses
 git clone --recursive https://github.com/pytorch/pytorch -b v1.13.1 --depth 1
 
 mkdir -p pytorch/build
