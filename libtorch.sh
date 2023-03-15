@@ -1,3 +1,4 @@
+sudo rm /usr/bin/python
 sudo ln -s /usr/bin/python3 /usr/bin/python
 pip3 install dataclasses typing_extensions
 git clone --recursive https://github.com/pytorch/pytorch -b v1.13.1 --depth 1
