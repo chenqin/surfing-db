@@ -16,7 +16,8 @@ sudo wget -O /etc/apt/preferences.d/cuda-repository-pin-600 https://developer.do
 sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/3bf863cc.pub
 sudo add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/ /"
 sudo apt update
-sudo apt install -y cuda-11-8 cuda-toolkit-11-8
+sudo apt install -y cuda-11-8 
+sudo apt install -y cuda-toolkit-11-8
 
 sudo ln -s /usr/bin/gcc $CUDA_ROOT/bin/gcc
 sudo ln -s /usr/bin/g++ $CUDA_ROOT/bin/g++
