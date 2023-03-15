@@ -1,6 +1,6 @@
 sudo apt update
 
-sudo apt install python3.10 python3-testresources python3-pip
+sudo apt install python3.10 python3-testresources python3-pip libthrift-dev
 
 sudo apt install build-essential openjdk-8-jdk gcc g++ ninja-build libomp-dev libopenmpi-dev libssl-dev libboost-dev pybind11-dev libgoogle-glog-dev flex bison libunwind-dev
 
