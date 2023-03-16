@@ -11,6 +11,9 @@ tar vzxf cmake-3.22.6-linux-x86_64.tar.gz
 rm cmake-3.22.6-linux-x86_64.tar.gz
 popd
 
+echo 'export CMAKE_HOME=~/cmake-3.22.6-linux-x86_64' >> ~/.bashrc 
+echo 'export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64' >> ~/.bashrc 
+
 #install cuda-11-8 and depdencies, build pytorch 1.13.1
 sudo wget -O /etc/apt/preferences.d/cuda-repository-pin-600 https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-ubuntu2004.pin
 sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/3bf863cc.pub
@@ -18,20 +21,17 @@ sudo add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/
 sudo apt update
 sudo apt install -y cuda-11-8 
 sudo apt install -y cuda-toolkit-11-8
+echo 'export CUDA_ROOT=/usr/local/cuda' >> ~/.bashrc 
 
-sudo ln -s /usr/bin/gcc $CUDA_ROOT/bin/gcc
-sudo ln -s /usr/bin/g++ $CUDA_ROOT/bin/g++
+#sudo ln -s /usr/bin/gcc $CUDA_ROOT/bin/gcc
+#sudo ln -s /usr/bin/g++ $CUDA_ROOT/bin/g++
 
 wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/libcudnn8-dev_8.7.0.84-1+cuda11.8_amd64.deb
 wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/libcudnn8_8.7.0.84-1+cuda11.8_amd64.deb
 sudo dpkg -i libcudnn8*
 rm libcudnn8*
 
-#write to env
-echo 'export CMAKE_HOME=~/cmake-3.22.6-linux-x86_64' >> ~/.bashrc 
-echo 'export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64' >> ~/.bashrc 
-echo 'export PATH=$PATH:$CMAKE_HOME/bin:$JAVA_HOME/bin' >> ~/.bashrc 
-echo 'export CUDA_ROOT=/usr/local/cuda' >> ~/.bashrc 
+echo 'export PATH=$PATH:$CMAKE_HOME/bin:$JAVA_HOME/bin:$CUDA_ROOT/bin' >> ~/.bashrc
 source ~/.bashrc
 
 #https://arrow.apache.org/install/

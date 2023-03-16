@@ -70,7 +70,7 @@ set(SURFINGDB_SRC ${SURFINGDB_ROOT}/src)
 
 #SET(CMAKE_C_FLAGS ${CMAKE_C_FLAGS} -fopenmp)
 
-include_directories(include ${glog_INCLUDE_DIRS} ${SURFINGDB_SRC} ${MPI_CXX_INCLUDE_PATH} ${MPI_INCLUDE_PATH} ${CMAKE_SOURCE_DIR}/libtorch/include())
+include_directories(include ${glog_INCLUDE_DIRS} ${SURFINGDB_SRC} ${MPI_CXX_INCLUDE_PATH} ${MPI_INCLUDE_PATH} ~/libtorch/include)
 
 # a switch to use clang or g++
 # clang or g++
@@ -306,8 +306,7 @@ target_link_libraries(DataGenExample
         PRIVATE ${META}
         PRIVATE ${TABLE}
         PRIVATE ${CONNECTOR}
-        PRIVATE ${ARROW_LIBRARY}
-        PRIVATE ${TORCH_LIBRARIES})
+        PRIVATE ${ARROW_LIBRARY})
 
 set_target_properties(DataGenExample 
     PROPERTIES COMPILE_FLAGS "${MPI_COMPILE_FLAGS}")

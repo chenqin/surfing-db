@@ -25,8 +25,6 @@
 #include "meta/node.h"
 #include "table/utils.h"
 #include "table/processors.h"
-#include <torch/torch.h>
-#include <iomanip>
 
 #define FLUSH_DIR "/tmp/"
 
@@ -45,6 +43,7 @@ void signal_handler(int signal) {
 /*
 * feed user shuffled_training_dataset to linear regression model
 */
+/*
 void linear_regression(std::shared_ptr<mtable> shuffled_training_dataset, int rank) {
     if(rank != 0) return;
     //std::cout << "Linear Regression\n\n";
@@ -98,7 +97,7 @@ void linear_regression(std::shared_ptr<mtable> shuffled_training_dataset, int ra
     torch::NoGradGuard no_grad_guard;
     //std::cout << "Training finished!\n";
 }
-
+*/
 /** run this program with
  * mpirun -np 12 ./MainTest
  * @return
@@ -183,7 +182,7 @@ int main(int argc, char** argv) {
      * assign data gather from rest of workers to gpu backed worker
     */
     auto partitioner = [](size_t key, int rank, int world) {
-      return 0;
+      return key%world;
     };
 
     auto t3 = processors::shuffle(t2, schema_ptr->fields.at(2), partitioner);
@@ -200,13 +199,8 @@ int main(int argc, char** argv) {
     float throughput = global_row_count / (end - start);
 
     if (node->rank == 0) {
-      std::cout << "iteration trained " << throughput << " @ qps" << std::endl;
+      std::cout << "iteration pull " << throughput << " @ qps" << std::endl;
     }
-
-    /**
-     * only gpu worker run training, rest move to next kafka pull
-    */
-    linear_regression(t4, node->rank);
   }
   /**
    * @brief use arrow filter expressions

@@ -17,13 +17,17 @@
 #ifndef SURFINGDB_PROCESSORS_H
 #define SURFINGDB_PROCESSORS_H
 
+// define static method name in java side
 #define BRIDGE_METHOD_NAME "_internal_invoke"
+
 #include <arrow/api.h>
 #include <arrow/compute/api.h>
 #include <iostream>
 #include "mtable.h"
 #include "xgbop.h"
-
+#include <torch/csrc/distributed/c10d/ProcessGroupMPI.hpp>
+#include <torch/csrc/distributed/c10d/Work.hpp>
+#include <torch/torch.h>
 
 #pragma once
 
@@ -38,20 +42,38 @@ public:
 
   static void reduce(std::shared_ptr<mtable>, Field&, std::shared_ptr<std::unordered_map<Value, std::shared_ptr<mrow>, ValueHasher>> result_ptr, std::shared_ptr<mschema> result_schema_ptr, std::function<void(Value&, std::vector<std::unique_ptr<mrow>>&, std::shared_ptr<mrow>&)>);
 
-  static std::shared_ptr<mtable> shuffleRMA(std::shared_ptr<mtable>, Field&);
-
   /**
    * @brief shuffle data based on shuffle function provided
    *
    * @return std::shared_ptr<mtable>
    */
   static std::shared_ptr<mtable> shuffle(std::shared_ptr<mtable>, Field&, std::function<size_t(size_t, int, int)>);
-
+  /**
+   * @brief apply arrow compute to mtable
+   *
+   * @return const arrow::Datum
+   */
   const static arrow::Datum compute(std::shared_ptr<mtable>, std::function<arrow::Result<arrow::Datum>(std::shared_ptr<mtable>)>);
 
+  /**
+   * @brief call java class with static BRIDGE_METHOD_NAME function defined
+   *
+   * @param class_name
+   * @return const std::shared_ptr<mtable>
+   */
   const static std::shared_ptr<mtable> java(std::shared_ptr<mtable>, std::string class_name);
 
+  /**
+   * @brief train a xgboost model
+   * 
+   */
   static void xgb(std::shared_ptr<mtable>, std::vector<Field>, Field&, const XGBParameters&);
+
+  /**
+   * @brief train a pytorch model, sample
+   * 
+   */
+  static void mnist(c10::intrusive_ptr<c10d::ProcessGroupMPI>, std::shared_ptr<mtable>);
 };
 } // namespace table
 } // namespace surfingdb
