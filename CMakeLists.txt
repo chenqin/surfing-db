@@ -30,6 +30,8 @@ enable_language(CUDA)
 
 find_package(Torch REQUIRED)
 find_package(ArrowCUDA REQUIRED)
+find_package(ArrowDataset REQUIRED)
+set(ARROW_DATASET_LIBRARY ArrowDataset::arrow_dataset_shared)
 set(ARROW_CUDA_LIBRARY ArrowCUDA::arrow_cuda_shared)
 
 if(APPLE)
@@ -291,6 +293,7 @@ include(src/connector/connector.cmake)
 # build test binary
 add_executable(KafkaExample src/KafkaExample.cpp)
 add_executable(DataGenExample src/DataGenExample.cpp)
+add_executable(EngineExample src/engine.cpp)
 
 # workaround make issue for now
 add_custom_command(TARGET KafkaExample PRE_BUILD
@@ -302,16 +305,17 @@ add_custom_command(TARGET KafkaExample PRE_BUILD
         COMMAND cd ${CMAKE_SOURCE_DIR}/surfing-db-java && mvn clean package -Darrow.version=${ARROW_VERSION} 
         COMMAND cp ${CMAKE_SOURCE_DIR}/surfing-db-java/target/surfing-db-java-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_SOURCE_DIR}/surfing-db-java.jar)
 
+set_target_properties(DataGenExample PROPERTIES
+    LINK_FLAGS "${MPI_LINK_FLAGS}")
+
 target_link_libraries(DataGenExample
         PRIVATE ${META}
         PRIVATE ${TABLE}
         PRIVATE ${CONNECTOR}
         PRIVATE ${ARROW_LIBRARY})
 
-set_target_properties(DataGenExample 
+set_target_properties(KafkaExample 
     PROPERTIES COMPILE_FLAGS "${MPI_COMPILE_FLAGS}")
-set_target_properties(DataGenExample PROPERTIES
-    LINK_FLAGS "${MPI_LINK_FLAGS}")
 
 target_link_libraries(KafkaExample
     PRIVATE ${META}
@@ -319,3 +323,13 @@ target_link_libraries(KafkaExample
     PRIVATE ${CONNECTOR}
     PRIVATE ${ARROW_LIBRARY}
     PRIVATE ${TORCH_LIBRARIES})
+
+set_target_properties(EngineExample PROPERTIES
+    LINK_FLAGS "${MPI_LINK_FLAGS}")
+
+target_link_libraries(EngineExample
+        PRIVATE ${META}
+        PRIVATE ${TABLE}
+        PRIVATE ${CONNECTOR}
+        PRIVATE ${ARROW_DATASET_LIBRARY}
+        PRIVATE ${ARROW_LIBRARY})

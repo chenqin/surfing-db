@@ -474,11 +474,6 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> input, Field
   return table;
 }
 
-const arrow::Datum processors::compute(std::shared_ptr<mtable> m, std::function<arrow::Result<arrow::Datum>(std::shared_ptr<mtable>)> compute) {
-  arrow::Result<arrow::Datum> result = compute(m);
-  return result.ValueOrDie();
-}
-
 static void release_malloced_type(struct ArrowSchema* schema) {
   if (schema->release == NULL) return;
   int i;

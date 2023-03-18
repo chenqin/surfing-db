@@ -49,13 +49,6 @@ public:
    */
   static std::shared_ptr<mtable> shuffle(std::shared_ptr<mtable>, Field&, std::function<size_t(size_t, int, int)>);
   /**
-   * @brief apply arrow compute to mtable
-   *
-   * @return const arrow::Datum
-   */
-  const static arrow::Datum compute(std::shared_ptr<mtable>, std::function<arrow::Result<arrow::Datum>(std::shared_ptr<mtable>)>);
-
-  /**
    * @brief call java class with static BRIDGE_METHOD_NAME function defined
    *
    * @param class_name
