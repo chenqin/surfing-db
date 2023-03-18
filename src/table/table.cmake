@@ -1,6 +1,3 @@
-# define ingestion module in nebula
-# this module can be run as standalone app or runtime in nebula service
-# it is responsible for single ingest spec or task split
 set(TABLE surftable)
 
 #include_directories(${JEMALLOC_INCLUDE_DIRS})

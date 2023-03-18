@@ -26,10 +26,8 @@
 #include <mpi.h>
 #include <stdio.h>
 #include <string.h>
-
-#include "KMeanOperator.h"
+#include "meta/node.h"
 #include "mrow.h"
-#include "xgbop.h"
 
 #pragma once
 

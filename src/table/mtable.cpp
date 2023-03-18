@@ -19,6 +19,8 @@
 #include <unistd.h>
 #include "arrow/io/file.h"
 #include "parquet/stream_writer.h"
+#include "KMeanOperator.h"
+#include "xgbop.h"
 
 namespace surfingdb {
 namespace table {

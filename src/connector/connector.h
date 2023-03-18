@@ -17,13 +17,12 @@
 #ifndef SURFINGDB_CONNECTOR_H
 #define SURFINGDB_CONNECTOR_H
 
-#include <rdkafka.h>
 #include <string>
 #include <vector>
 #include "meta/node.h"
 #include "meta/schema.h"
-#include "table/mtable.h"
 #include "table/mrow.h"
+#include "table/mtable.h"
 
 namespace surfingdb {
 namespace connector {
@@ -36,6 +35,22 @@ using namespace surfingdb::table;
  */
 class Connector {
 public:
+  std::string connector_name;
+  size_t max_batch_size;
+  int timeout;
+  std::shared_ptr<mschema> schema_ptr;
+  std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser;
+  Connector(std::string connector_name,
+            size_t max_batch_size,
+            int timeout,
+            std::shared_ptr<mschema> schema_ptr,
+            std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser) {
+    this->connector_name = connector_name;
+    this->max_batch_size = max_batch_size;
+    this->timeout = timeout;
+    this->schema_ptr = schema_ptr;
+    this->deser = deser;
+  }
   Connector() {}
 
   /**
@@ -48,7 +63,7 @@ public:
    * @return std::shared_ptr<mtable> micro batch table
    */
   virtual std::shared_ptr<mtable>
-    consume_batch(size_t max_batch_size, int timeout, std::shared_ptr<mschema> schema_ptr, std::function<std::shared_ptr<mrow>(const char* payload,const mschema& schema)> deser)
+    consume_batch(size_t max_batch_size, int timeout, std::shared_ptr<mschema> schema_ptr, std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser)
     = 0;
 
   /**

@@ -290,10 +290,13 @@ include(src/table/table.cmake)
 
 # build table representation
 include(src/connector/connector.cmake)
+
+#build toplogy orchestration engine
+include(src/engine/engine.cmake)
+
 # build test binary
 add_executable(KafkaExample src/KafkaExample.cpp)
 add_executable(DataGenExample src/DataGenExample.cpp)
-add_executable(EngineExample src/engine.cpp)
 
 # workaround make issue for now
 add_custom_command(TARGET KafkaExample PRE_BUILD
@@ -323,13 +326,3 @@ target_link_libraries(KafkaExample
     PRIVATE ${CONNECTOR}
     PRIVATE ${ARROW_LIBRARY}
     PRIVATE ${TORCH_LIBRARIES})
-
-set_target_properties(EngineExample PROPERTIES
-    LINK_FLAGS "${MPI_LINK_FLAGS}")
-
-target_link_libraries(EngineExample
-        PRIVATE ${META}
-        PRIVATE ${TABLE}
-        PRIVATE ${CONNECTOR}
-        PRIVATE ${ARROW_DATASET_LIBRARY}
-        PRIVATE ${ARROW_LIBRARY})
