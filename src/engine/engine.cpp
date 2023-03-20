@@ -753,7 +753,7 @@ namespace surfingdb {
 namespace engine {
   
 const arrow::compute::Declaration& engine::getSource(Connector& con) {
-  auto batch = surfingdb::table::utils::toArrow(con.consume_batch(con.max_batch_size, con.timeout, con.schema_ptr, con.deser));
+  auto batch = surfingdb::table::utils::toArrow(con.consume_batch());
   auto table = arrow::Table::FromRecordBatches({ batch}).ValueOrDie();
   auto schema = surfingdb::table::utils::toArrow(con.schema_ptr);
   auto table_source_options = arrow::compute::TableSourceNodeOptions{ table, con.max_batch_size };

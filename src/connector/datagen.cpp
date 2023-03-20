@@ -26,12 +26,20 @@
 
 namespace surfingdb {
 namespace connector {
-
-DataGenConnector::DataGenConnector(const std::shared_ptr<node> node_ptr) {
-  this->node_ptr = node_ptr;
+DataGenConnector::DataGenConnector(const std::shared_ptr<node> node_ptr,
+                                   std::string connector_name,
+                                   size_t max_batch_size,
+                                   int timeout,
+                                   std::shared_ptr<mschema> schema_ptr,
+                                   std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser) : Connector(node_ptr,
+                                                                                                                                       connector_name,
+                                                                                                                                       max_batch_size,
+                                                                                                                                       timeout,
+                                                                                                                                       schema_ptr,
+                                                                                                                                       deser) {
 }
 
-std::shared_ptr<mtable> DataGenConnector::consume_batch(size_t max_batch_size, int timeout, std::shared_ptr<mschema> schema_ptr, std::function<std::shared_ptr<mrow>(const char*, const mschema&)> deser) {
+std::shared_ptr<mtable> DataGenConnector::consume_batch() {
   /**
    * @brief if node runs data polling set to max_batch, otherwise skip
    *

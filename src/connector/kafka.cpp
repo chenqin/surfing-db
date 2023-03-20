@@ -103,9 +103,19 @@ void rebalance_cb(rd_kafka_t* rk,
   }
 }
 
-KafkaConnector::KafkaConnector(std::shared_ptr<node> node_ptr, std::string topic, std::string brokers, std::string groupid) {
-  this->node_ptr = node_ptr;
-  if(node_ptr->rank == 0) return;
+KafkaConnector::KafkaConnector(const std::shared_ptr<node> node_ptr,
+                               std::string connector_name,
+                               size_t max_batch_size,
+                               int timeout,
+                               std::shared_ptr<mschema> schema_ptr,
+                               std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser,
+                               std::string topic, std::string brokers, std::string groupid) : Connector(node_ptr,
+                                                                                                        connector_name,
+                                                                                                        max_batch_size,
+                                                                                                        timeout,
+                                                                                                        schema_ptr,
+                                                                                                        deser) {
+  if (node_ptr->rank == 0) return;
   node_ptr->setissubscriber(&issubscriber);
   this->brokers = (char*)brokers.c_str();
   this->groupid = (char*)groupid.c_str();
@@ -238,9 +248,9 @@ KafkaConnector::~KafkaConnector() {
   rd_kafka_destroy(rk);
 }
 
-std::shared_ptr<mtable> KafkaConnector::consume_batch(size_t max_batch_size, int timeout, std::shared_ptr<mschema> schema_ptr, std::function<std::shared_ptr<mrow>(const char*, const mschema&)> convert) {
+std::shared_ptr<mtable> KafkaConnector::consume_batch() {
   auto t = std::make_shared<mtable>(node_ptr, schema_ptr, max_batch_size * schema_ptr->rowSize());
-  if(node_ptr->rank == 0) return t;
+  if (node_ptr->rank == 0) return t;
   auto start = MPI_Wtime();
   int total = 0;
   while ((MPI_Wtime() - start) * 1000 < timeout && total++ < max_batch_size) {
@@ -263,7 +273,7 @@ std::shared_ptr<mtable> KafkaConnector::consume_batch(size_t max_batch_size, int
       rd_kafka_message_destroy(rkm);
       continue;
     }
-    auto b = convert((const char*)rkm->payload, *schema_ptr.get());
+    auto b = deser((const char*)rkm->payload, *schema_ptr.get());
     if (b != nullptr) {
       t->appendRow(*b.get());
     }

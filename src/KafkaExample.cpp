@@ -23,8 +23,8 @@
 #include <rapidjson/document.h>
 #include "connector/kafka.h"
 #include "meta/node.h"
-#include "table/utils.h"
 #include "table/processors.h"
+#include "table/utils.h"
 
 #define FLUSH_DIR "/tmp/"
 
@@ -41,8 +41,8 @@ void signal_handler(int signal) {
 }
 
 /*
-* feed user shuffled_training_dataset to linear regression model
-*/
+ * feed user shuffled_training_dataset to linear regression model
+ */
 /*
 void linear_regression(std::shared_ptr<mtable> shuffled_training_dataset, int rank) {
     if(rank != 0) return;
@@ -120,8 +120,8 @@ int main(int argc, char** argv) {
   const std::shared_ptr<mschema> schema_ptr = std::make_shared<mschema>(r);
 
   /**
-   * features 
-  */
+   * features
+   */
   int batch = 200000;
   int interval = 300;
   int world = node->world;
@@ -137,14 +137,10 @@ int main(int argc, char** argv) {
   std::string brokers = "10.1.145.151:9092,10.1.145.239:9092,10.1.147.235:9092,10.1.148.60:9092";
   std::string group_id = "cqin-test";
 
-  std::signal(SIGTERM|SIGINT, signal_handler);
+  std::signal(SIGTERM | SIGINT, signal_handler);
 
-  auto consumer = KafkaConnector(node, kafka_topic, brokers, group_id);
-  while (terminal_signal == 0) {
-    // simulate a delay to decode and handle kafka batch
-    auto start = MPI_Wtime();
-    // kafka consumer
-    auto t1 = consumer.consume_batch(batch, interval, schema_ptr, [](const char* payload, const mschema& out) {
+  auto consumer = KafkaConnector(
+    node, "kafka-source", batch, interval, schema_ptr, [](const char* payload, const mschema& out) {
       auto r = std::make_shared<mrow>(std::make_shared<mschema>(out));
       rapidjson::Document document;
       bool err = document.Parse((const char*)payload).HasParseError();
@@ -163,7 +159,14 @@ int main(int argc, char** argv) {
         std::shared_ptr<mrow> p2(nullptr);
         return p2;
       }
-    });
+    },
+    kafka_topic, brokers, group_id);
+
+  while (terminal_signal == 0) {
+    // simulate a delay to decode and handle kafka batch
+    auto start = MPI_Wtime();
+    // kafka consumer
+    auto t1 = consumer.consume_batch();
 
     /**
      * pass each row in mtable, if return true, add to new table with schema ptr
@@ -180,9 +183,9 @@ int main(int argc, char** argv) {
 
     /*
      * assign data gather from rest of workers to gpu backed worker
-    */
+     */
     auto partitioner = [](size_t key, int rank, int world) {
-      return key%world;
+      return key % world;
     };
 
     auto t3 = processors::shuffle(t2, schema_ptr->fields.at(2), partitioner);
@@ -194,7 +197,7 @@ int main(int argc, char** argv) {
     size_t local_row_count = t1->row_count;
     size_t global_row_count = 0;
     MPI_Allreduce(&local_row_count, &global_row_count, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
-    
+
     // label
     float throughput = global_row_count / (end - start);
 

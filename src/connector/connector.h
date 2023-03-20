@@ -39,12 +39,14 @@ public:
   size_t max_batch_size;
   int timeout;
   std::shared_ptr<mschema> schema_ptr;
-  std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser;
-  Connector(std::string connector_name,
-            size_t max_batch_size,
-            int timeout,
-            std::shared_ptr<mschema> schema_ptr,
-            std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser) {
+  Connector(
+    const std::shared_ptr<node> node_ptr,
+    std::string connector_name,
+    size_t max_batch_size,
+    int timeout,
+    std::shared_ptr<mschema> schema_ptr,
+    std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser) {
+    this->node_ptr = node_ptr;
     this->connector_name = connector_name;
     this->max_batch_size = max_batch_size;
     this->timeout = timeout;
@@ -63,8 +65,7 @@ public:
    * @return std::shared_ptr<mtable> micro batch table
    */
   virtual std::shared_ptr<mtable>
-    consume_batch(size_t max_batch_size, int timeout, std::shared_ptr<mschema> schema_ptr, std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser)
-    = 0;
+    consume_batch() = 0;
 
   /**
    * @brief
@@ -74,12 +75,13 @@ public:
    * @param ser serialize each row in output and push out
    * @return size_t total number of rows published
    */
-  size_t produce_batch(int timeout, std::shared_ptr<mtable> output, std::function<bool(const std::shared_ptr<mrow> row)> ser) {
+  size_t produce_batch() {
     return 0;
   }
 
 protected:
   std::shared_ptr<node> node_ptr;
+  std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser;
 };
 } // namespace connector
 

@@ -85,7 +85,41 @@ int main(int argc, char** argv) {
   const auto node = std::make_shared<surfingdb::meta::node>(&argc, &argv);
 
   const auto schema_ptr = std::make_shared<mschema>(r);
-  const auto con = std::make_unique<DataGenConnector>(node);
+  /**
+   * @brief define a data gen source
+   *
+   */
+  auto deser = [](const char* payload, const mschema& out) {
+    auto row = std::make_shared<mrow>(std::make_shared<mschema>(out));
+    Value p;
+
+    p.p_val.long_val = 1;
+    row->write(out.fields.at(0), p);
+
+    p.p_val.string_val = "hello_host";
+    row->write(out.fields.at(1), p);
+
+    p.p_val.string_val = random_string(16);
+    row->write(out.fields.at(2), p);
+
+    p.p_val.double_val = 0.1;
+    std::vector<PValue> lval;
+    lval.push_back(p.p_val);
+    lval.push_back(p.p_val);
+    p.list_value = lval;
+    row->write(out.fields.at(3), p);
+    PValue key;
+    PValue value;
+    key.string_val = random_string(MAX_STR_LEN - 1);
+    value.string_val = random_string(MAX_STR_LEN - 1);
+    std::pair<PValue, PValue> pair;
+    pair.first = key;
+    pair.second = value;
+    p.map_value.insert(pair);
+    row->write(out.fields.at(4), p);
+    return row;
+  };
+  const auto con = std::make_unique<DataGenConnector>(node, "source", node->rank * BATCH_SIZE, 1000, schema_ptr, deser);
 
   std::signal(SIGTERM | SIGINT, signal_handler);
 
@@ -119,36 +153,7 @@ int main(int argc, char** argv) {
     size_t total_row_count = intial_row_count;
     double start = MPI_Wtime();
     // ingest, copy rows to local table memory with fixed offsets
-    const auto t1 = con->consume_batch(intial_row_count, 1000, schema_ptr, [](const char* payload, const mschema& out) {
-      auto row = std::make_shared<mrow>(std::make_shared<mschema>(out));
-      Value p;
-
-      p.p_val.long_val = 1;
-      row->write(out.fields.at(0), p);
-
-      p.p_val.string_val = "hello_host";
-      row->write(out.fields.at(1), p);
-
-      p.p_val.string_val = random_string(16);
-      row->write(out.fields.at(2), p);
-
-      p.p_val.double_val = 0.1;
-      std::vector<PValue> lval;
-      lval.push_back(p.p_val);
-      lval.push_back(p.p_val);
-      p.list_value = lval;
-      row->write(out.fields.at(3), p);
-      PValue key;
-      PValue value;
-      key.string_val = random_string(MAX_STR_LEN - 1);
-      value.string_val = random_string(MAX_STR_LEN - 1);
-      std::pair<PValue, PValue> pair;
-      pair.first = key;
-      pair.second = value;
-      p.map_value.insert(pair);
-      row->write(out.fields.at(4), p);
-      return row;
-    });
+    const auto t1 = con->consume_batch();
 
     /**
      * pass each row in mtable, if return true, add to new table with schema ptr

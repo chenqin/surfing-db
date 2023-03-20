@@ -23,8 +23,8 @@
 #include "connector/connector.h"
 #include "meta/node.h"
 #include "meta/schema.h"
-#include "table/mtable.h"
 #include "table/mrow.h"
+#include "table/mtable.h"
 
 namespace surfingdb {
 namespace connector {
@@ -38,10 +38,14 @@ using namespace surfingdb::table;
  */
 class DataGenConnector : public Connector {
 public:
-  DataGenConnector(const shared_ptr<node>);
+  DataGenConnector(const std::shared_ptr<node> node_ptr,
+                   std::string connector_name,
+                   size_t max_batch_size,
+                   int timeout,
+                   std::shared_ptr<mschema> schema_ptr,
+                   std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser);
 
-  shared_ptr<mtable>
-    consume_batch(size_t, int, shared_ptr<mschema>, function<shared_ptr<mrow>(const char* payload, const mschema&)>);
+  shared_ptr<mtable> consume_batch();
 };
 } // namespace connector
 
