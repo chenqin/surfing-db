@@ -64,8 +64,7 @@ public:
    * @param deser function that convert payload binary to a mrow with schema_ptr
    * @return std::shared_ptr<mtable> micro batch table
    */
-  virtual std::shared_ptr<mtable>
-    consume_batch() = 0;
+  virtual std::shared_ptr<mtable> consume_batch() = 0;
 
   /**
    * @brief

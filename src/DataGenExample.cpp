@@ -119,7 +119,7 @@ int main(int argc, char** argv) {
     row->write(out.fields.at(4), p);
     return row;
   };
-  const auto con = std::make_unique<DataGenConnector>(node, "source", node->rank * BATCH_SIZE, 1000, schema_ptr, deser);
+  auto con = DataGenConnector(node, "source", node->rank * BATCH_SIZE, 1000, schema_ptr, deser);
 
   std::signal(SIGTERM | SIGINT, signal_handler);
 
@@ -153,7 +153,7 @@ int main(int argc, char** argv) {
     size_t total_row_count = intial_row_count;
     double start = MPI_Wtime();
     // ingest, copy rows to local table memory with fixed offsets
-    const auto t1 = con->consume_batch();
+    const auto t1 = con.consume_batch();
 
     /**
      * pass each row in mtable, if return true, add to new table with schema ptr
