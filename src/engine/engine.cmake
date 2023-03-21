@@ -1,7 +1,7 @@
 # define toplogy orchestration
 set(ENGINE surfengine)
 
-add_library(${ENGINE} STATIC
+add_library(${ENGINE} 
         ${SURFINGDB_SRC}/engine/engine.cpp)
 
 target_link_libraries(${ENGINE}
@@ -20,6 +20,7 @@ add_executable(EngineTest
 target_link_libraries(EngineTest
         PRIVATE Threads::Threads
         PRIVATE MPI::MPI_CXX
+        PRIVATE ${ENGINE}
         PRIVATE ${GTEST_LIBRARY}
         PRIVATE ${GTEST_MAIN_LIBRARY}
         PRIVATE ${META}

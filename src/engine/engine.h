@@ -47,6 +47,7 @@
 #include <memory>
 #include <utility>
 #include "connector/connector.h"
+#include "table/utils.h"
 
 #ifndef SURFINGDB_ENGINE_H
 #define SURFINGDB_ENGINE_H
@@ -54,14 +55,38 @@ namespace surfingdb {
 namespace engine {
 
 using namespace surfingdb::connector;
+using namespace arrow::compute;
+
+struct BatchesWithSchema {
+  std::vector<arrow::compute::ExecBatch> batches;
+  std::shared_ptr<arrow::Schema> schema;
+  // This method uses internal arrow utilities to
+  // convert a vector of record batches to an AsyncGenerator of optional batches
+  arrow::AsyncGenerator<std::optional<arrow::compute::ExecBatch>> gen() const {
+    auto opt_batches = ::arrow::internal::MapVector(
+      [](arrow::compute::ExecBatch batch) { return std::make_optional(std::move(batch)); },
+      batches);
+    arrow::AsyncGenerator<std::optional<arrow::compute::ExecBatch>> gen;
+    gen = arrow::MakeVectorGenerator(std::move(opt_batches));
+    return gen;
+  }
+};
+
 class engine {
-  /**
-   * @brief declare a source node 
-   *
-   * @param con
-   * @return const arrow::compute::Declaration&
-   */
-  const arrow::compute::Declaration& getSource(Connector& con);
+public:
+  static Declaration getSource(Connector& con) {
+    BatchesWithSchema out;
+    auto res_batch = surfingdb::table::utils::toArrow(con.consume_batch());
+    arrow::compute::ExecBatch batch{ *res_batch };
+    out.batches = { batch };
+    out.schema = surfingdb::table::utils::toArrow(con.schema_ptr);
+
+    auto source_node_options = arrow::compute::SourceNodeOptions{ out.schema, out.gen() };
+
+    arrow::compute::Declaration source{ "source", std::move(source_node_options) };
+
+    return source;
+  }
 };
 } // namespace engine
 } // namespace surfingdb
