@@ -241,7 +241,7 @@ TEST(EngineTest, TestSourceJoin) {
 
     /*left_keys=*/{ "timestamp" },
 
-    /*right_keys=*/{ "timestamp" }, cp::literal(true), "l_", "r_"
+    /*right_keys=*/{ "timestamp" }, cp::literal(true), "_l", "_r"
   };
   auto join_plan = engine::join(source_left, source_right, join_opts, "hashjoin");
   CHECK_EQ(arrow::Status::OK(), ExecutePlanAndCollectAsTable(std::move(join_plan)));

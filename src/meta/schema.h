@@ -180,6 +180,15 @@ public:
     return _size;
   }
 
+  Field& getFieldByName(std::string name) {
+    int count = this->fields.size();
+    for(int i = 0 ; i < count ; i ++) {
+      if(this->fields.at(i).name == name) {
+        return this->fields.at(i);
+      }
+    }
+  }
+
   std::string getName() {
     CHECK(!this->name.empty());
     return this->name;
