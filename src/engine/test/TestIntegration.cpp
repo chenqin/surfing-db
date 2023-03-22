@@ -96,8 +96,60 @@ TEST(EngineTest, TestEngineSource) {
     return row;
   };
   auto con = DataGenConnector(nullptr, "source", 1, 10, schema_ptr, deser);
-  auto source = engine::getSource(con);
+  auto source = engine::source(con ,"source");
   CHECK_EQ(arrow::Status::OK(), ExecutePlanAndCollectAsTable(std::move(source)));
+}
+
+TEST(EngineTest, TestSourceFilter) {
+      // define how data will be stored, as rows in a table
+  RowSchema r;
+  SchemaUtils::initField(r, "timestamp", RowType::LONG, sizeof(long));
+  SchemaUtils::initField(r, "host", RowType::STRING, 64);
+  SchemaUtils::initField(r, "metricName", RowType::STRING, MAX_STR_LEN);
+  SchemaUtils::initListField(r, "metricValues", RowType::DOUBLE, 2, sizeof(DOUBLE_TYPE));
+  SchemaUtils::initMapField(r, "meta", RowType::STRING, RowType::STRING, 1, 32, 64);
+
+  const auto schema_ptr = std::make_shared<mschema>(r);
+  /**
+   * @brief define a data gen source
+   *
+   */
+  auto deser = [](const char* payload, const mschema& out) {
+    auto row = std::make_shared<mrow>(std::make_shared<mschema>(out));
+    Value p;
+
+    p.p_val.long_val = 1;
+    row->write(out.fields.at(0), p);
+
+    p.p_val.string_val = "hello_host";
+    row->write(out.fields.at(1), p);
+
+    p.p_val.string_val = random_string(16);
+    row->write(out.fields.at(2), p);
+
+    p.p_val.double_val = 0.1;
+    std::vector<PValue> lval;
+    lval.push_back(p.p_val);
+    lval.push_back(p.p_val);
+    row->write(out.fields.at(3), p);
+    PValue key;
+    PValue value;
+    key.string_val = random_string(MAX_STR_LEN - 1);
+    value.string_val = random_string(MAX_STR_LEN - 1);
+    std::pair<PValue, PValue> pair;
+    pair.first = key;
+    pair.second = value;
+    p.map_value.insert(pair);
+    row->write(out.fields.at(4), p);
+    return row;
+  };
+  auto con = DataGenConnector(nullptr, "source", 1, 10, schema_ptr, deser);
+  auto source = engine::source(con ,"source");
+  //Expression a_times_2 = cp::call("multiply", {cp::field_ref("timestamp"), cp::literal(2)});
+  //auto project = engine::project(source, a_times_2, "multiply");
+  Expression filter_expr = cp::less(cp::field_ref("timestamp"), cp::literal(3));
+  auto filter = engine::filter(source, filter_expr, "filter");
+  CHECK_EQ(arrow::Status::OK(), ExecutePlanAndCollectAsTable(std::move(filter)));
 }
 
 } // namespace test

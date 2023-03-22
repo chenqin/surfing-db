@@ -74,7 +74,7 @@ struct BatchesWithSchema {
 
 class engine {
 public:
-  static Declaration getSource(Connector& con) {
+  static Declaration source(Connector& con, std::string name) {
     BatchesWithSchema out;
     auto res_batch = surfingdb::table::utils::toArrow(con.consume_batch());
     arrow::compute::ExecBatch batch{ *res_batch };
@@ -83,9 +83,23 @@ public:
 
     auto source_node_options = arrow::compute::SourceNodeOptions{ out.schema, out.gen() };
 
-    arrow::compute::Declaration source{ "source", std::move(source_node_options) };
+    arrow::compute::Declaration source{ name, std::move(source_node_options) };
 
     return source;
+  }
+
+  static Declaration filter(Declaration& node_in, Expression& expression, std::string name) {
+    Declaration filter{
+      name, { std::move(node_in) }, FilterNodeOptions(std::move(expression))
+    };
+    return filter;
+  }
+
+  static Declaration project(Declaration& node_in, Expression& expression, std::string name) {
+    Declaration project{
+      name, { std::move(node_in) }, ProjectNodeOptions({ expression })
+    };
+    return project;
   }
 };
 } // namespace engine
