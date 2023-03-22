@@ -105,9 +105,16 @@ public:
     left_in.label = "lhs";
     right_in.label = "rhs";
     Declaration union_plan{
-      name, {std::move(left_in), std::move(right_in)}, ExecNodeOptions{}
+      name, { std::move(left_in), std::move(right_in) }, ExecNodeOptions{}
     };
     return union_plan;
+  }
+
+  static Declaration join(Declaration& left_in, Declaration& right_in, HashJoinNodeOptions& opts, std::string name) {
+    Declaration join_plan{
+      name, { std::move(left_in), std::move(right_in) }, std::move(opts)
+    };
+    return join_plan;
   }
 };
 } // namespace engine

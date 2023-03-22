@@ -53,7 +53,7 @@ arrow::Status ExecutePlanAndCollectAsTable(cp::Declaration plan) {
 }
 
 TEST(EngineTest, TestEngineSource) {
-     // define how data will be stored, as rows in a table
+  // define how data will be stored, as rows in a table
   RowSchema r;
   SchemaUtils::initField(r, "timestamp", RowType::LONG, sizeof(long));
   SchemaUtils::initField(r, "host", RowType::STRING, 64);
@@ -96,12 +96,12 @@ TEST(EngineTest, TestEngineSource) {
     return row;
   };
   auto con = DataGenConnector(nullptr, "source", 1, 10, schema_ptr, deser);
-  auto source = engine::source(con ,"source");
+  auto source = engine::source(con, "source");
   CHECK_EQ(arrow::Status::OK(), ExecutePlanAndCollectAsTable(std::move(source)));
 }
 
 TEST(EngineTest, TestSourceFilter) {
-      // define how data will be stored, as rows in a table
+  // define how data will be stored, as rows in a table
   RowSchema r;
   SchemaUtils::initField(r, "timestamp", RowType::LONG, sizeof(long));
   SchemaUtils::initField(r, "host", RowType::STRING, 64);
@@ -144,16 +144,16 @@ TEST(EngineTest, TestSourceFilter) {
     return row;
   };
   auto con = DataGenConnector(nullptr, "source", 1, 10, schema_ptr, deser);
-  auto source = engine::source(con ,"source");
-  //Expression a_times_2 = cp::call("multiply", {cp::field_ref("timestamp"), cp::literal(2)});
-  //auto project = engine::project(source, a_times_2, "multiply");
+  auto source = engine::source(con, "source");
+  // Expression a_times_2 = cp::call("multiply", {cp::field_ref("timestamp"), cp::literal(2)});
+  // auto project = engine::project(source, a_times_2, "multiply");
   Expression filter_expr = cp::less(cp::field_ref("timestamp"), cp::literal(3));
   auto filter = engine::filter(source, filter_expr, "filter");
   CHECK_EQ(arrow::Status::OK(), ExecutePlanAndCollectAsTable(std::move(filter)));
 }
 
 TEST(EngineTest, TestSourceUnion) {
-     // define how data will be stored, as rows in a table
+  // define how data will be stored, as rows in a table
   RowSchema r;
   SchemaUtils::initField(r, "timestamp", RowType::LONG, sizeof(long));
   SchemaUtils::initField(r, "host", RowType::STRING, 64);
@@ -196,10 +196,55 @@ TEST(EngineTest, TestSourceUnion) {
     return row;
   };
   auto con = DataGenConnector(nullptr, "source", 1, 10, schema_ptr, deser);
-  auto source_left = engine::source(con ,"source");
-  auto source_right = engine::source(con ,"source");
+  auto source_left = engine::source(con, "source");
+  auto source_right = engine::source(con, "source");
   auto union_plan = engine::union_op(source_left, source_right, "union");
   CHECK_EQ(arrow::Status::OK(), ExecutePlanAndCollectAsTable(std::move(union_plan)));
+}
+
+TEST(EngineTest, TestSourceJoin) {
+  // define how data will be stored, as rows in a table
+  RowSchema r;
+  SchemaUtils::initField(r, "timestamp", RowType::LONG, sizeof(long));
+  SchemaUtils::initField(r, "host", RowType::STRING, 64);
+  SchemaUtils::initField(r, "metricName", RowType::STRING, MAX_STR_LEN);
+  /**
+   * @brief current join doesn't support composite field
+   * 
+   */
+
+  const auto schema_ptr = std::make_shared<mschema>(r);
+  /**
+   * @brief define a data gen source
+   *
+   */
+  auto deser = [](const char* payload, const mschema& out) {
+    auto row = std::make_shared<mrow>(std::make_shared<mschema>(out));
+    Value p;
+
+    p.p_val.long_val = 1;
+    row->write(out.fields.at(0), p);
+
+    p.p_val.string_val = "hello_host";
+    row->write(out.fields.at(1), p);
+
+    p.p_val.string_val = random_string(16);
+    row->write(out.fields.at(2), p);
+    return row;
+  };
+  auto con = DataGenConnector(nullptr, "source", 1, 10, schema_ptr, deser);
+  auto source_left = engine::source(con, "source");
+  auto source_right = engine::source(con, "source");
+  cp::HashJoinNodeOptions join_opts{
+
+    cp::JoinType::INNER,
+
+    /*left_keys=*/{ "timestamp" },
+
+    /*right_keys=*/{ "timestamp" }, cp::literal(true), "l_", "r_"
+  };
+  auto join_plan = engine::join(source_left, source_right, join_opts, "hashjoin");
+  CHECK_EQ(arrow::Status::OK(), ExecutePlanAndCollectAsTable(std::move(join_plan)));
 }
 
 } // namespace test
