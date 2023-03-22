@@ -81,25 +81,33 @@ public:
     out.batches = { batch };
     out.schema = surfingdb::table::utils::toArrow(con.schema_ptr);
 
-    auto source_node_options = arrow::compute::SourceNodeOptions{ out.schema, out.gen() };
-
-    arrow::compute::Declaration source{ name, std::move(source_node_options) };
+    auto source_node_options = SourceNodeOptions{ out.schema, out.gen() };
+    Declaration source{ name, std::move(source_node_options) };
 
     return source;
   }
 
   static Declaration filter(Declaration& node_in, Expression& expression, std::string name) {
-    Declaration filter{
+    Declaration filter_plan{
       name, { std::move(node_in) }, FilterNodeOptions(std::move(expression))
     };
-    return filter;
+    return filter_plan;
   }
 
   static Declaration project(Declaration& node_in, Expression& expression, std::string name) {
-    Declaration project{
+    Declaration project_plan{
       name, { std::move(node_in) }, ProjectNodeOptions({ expression })
     };
-    return project;
+    return project_plan;
+  }
+
+  static Declaration union_op(Declaration& left_in, Declaration& right_in, std::string name) {
+    left_in.label = "lhs";
+    right_in.label = "rhs";
+    Declaration union_plan{
+      name, {std::move(left_in), std::move(right_in)}, ExecNodeOptions{}
+    };
+    return union_plan;
   }
 };
 } // namespace engine
