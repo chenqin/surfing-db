@@ -58,39 +58,22 @@ namespace engine {
 using namespace surfingdb::connector;
 using namespace arrow::compute;
 
-struct BatchesWithSchema {
-  std::vector<arrow::compute::ExecBatch> batches;
-  std::shared_ptr<arrow::Schema> schema;
-  // This method uses internal arrow utilities to
-  // convert a vector of record batches to an AsyncGenerator of optional batches
-  arrow::AsyncGenerator<std::optional<arrow::compute::ExecBatch>> gen() const {
-    auto opt_batches = ::arrow::internal::MapVector(
-      [](arrow::compute::ExecBatch batch) { return std::make_optional(std::move(batch)); },
-      batches);
-    arrow::AsyncGenerator<std::optional<arrow::compute::ExecBatch>> gen;
-    gen = arrow::MakeVectorGenerator(std::move(opt_batches));
-    return gen;
-  }
-};
-
 class engine {
 public:
-  static Declaration source(Connector& con, std::string name) {
-    BatchesWithSchema out;
-    auto res_batch = surfingdb::table::utils::toArrow(con.consume_batch());
-    arrow::compute::ExecBatch batch{ *res_batch };
-    out.batches = { batch };
-    out.schema = surfingdb::table::utils::toArrow(con.schema_ptr);
-
-    auto source_node_options = SourceNodeOptions{ out.schema, out.gen() };
-    Declaration source{ name, std::move(source_node_options) };
-
+  static Declaration source(Connector& con) {
+    const auto t1 = con.consume_batch();
+    auto arrow_t1 = utils::toArrow(t1);
+    auto table_1 = arrow::Table::FromRecordBatches({ std::move(arrow_t1) }).ValueOrDie();
+    int max_row = t1->row_count;
+    CHECK_GT(max_row, 0); //table source needs not be empty
+    auto table_source_options = TableSourceNodeOptions(table_1, max_row);
+    Declaration source("table_source", std::move(table_source_options));
     return source;
   }
 
-  static Declaration filter(Declaration& node_in, Expression& expression, std::string name) {
+  static Declaration filter(Declaration& node_in, Expression& expression) {
     Declaration filter_plan{
-      name, { std::move(node_in) }, FilterNodeOptions(std::move(expression))
+      "filter", { std::move(node_in) }, FilterNodeOptions(std::move(expression))
     };
     return filter_plan;
   }
@@ -116,31 +99,6 @@ public:
       name, { std::move(left_in), std::move(right_in) }, std::move(opts)
     };
     return join_plan;
-  }
-  /**
-   * @brief allow data shuffle by field name, this imply break operation chain and rebuild source
-   * 
-   * @param left_in 
-   * @param name 
-   * @return Declaration 
-   */
-  static Declaration partition(Declaration& left_in, std::string name) {
-    auto batch_in = DeclarationToBatches(std::move(left_in)).ValueOrDie();
-    auto batch = batch_in.at(0);
-    std::map<std::string, uint64_t> units;
-    std::shared_ptr<mtable> t = utils::fromArrow(batch, units, nullptr);
-    std::shared_ptr<mschema> s = utils::fromArrow(batch->schema(), units);
-    Field f = s->getFieldByName(name);
-    auto post_shuffle_batch = processors::shuffle(t, f, [](size_t key, int rank, int world) {
-      return key%world;
-    });
-    BatchesWithSchema out;
-    auto res_batch = surfingdb::table::utils::toArrow(post_shuffle_batch);
-    arrow::compute::ExecBatch batch_out{ *res_batch };
-    out.batches = { batch_out };
-    out.schema = batch->schema();
-    auto source_node_options = SourceNodeOptions{ out.schema, out.gen() };
-    Declaration source{ "source", std::move(source_node_options) };
   }
 };
 } // namespace engine

@@ -24,6 +24,7 @@
 #include <omp.h>
 #include <rapidjson/document.h>
 #include "connector/datagen.h"
+#include "engine/engine.h"
 #include "meta/node.h"
 #include "table/processors.h"
 
@@ -34,7 +35,10 @@ using namespace surfingdb::meta;
 using namespace surfingdb::table::schema;
 using namespace surfingdb::table;
 using namespace surfingdb::connector;
+using namespace surfingdb::engine;
 using namespace std;
+
+namespace cp = ::arrow::compute;
 
 /**
  * https://stackoverflow.com/questions/440133/how-do-i-create-a-random-alpha-numeric-string-in-c
@@ -74,7 +78,7 @@ int main(int argc, char** argv) {
   SchemaUtils::initField(r, "metricName", RowType::STRING, MAX_STR_LEN);
   SchemaUtils::initListField(r, "metricValues", RowType::DOUBLE, 2, sizeof(DOUBLE_TYPE));
   SchemaUtils::initMapField(r, "meta", RowType::STRING, RowType::STRING, 1, 32, 64);
-
+  std::map<std::string, uint64_t> units = { { "metricValues", 2 }, { "meta", 1 } };
   /**
    * @brief initial constructors
    * node -> single executor binding to MPI rank, number of node determined by mpi processes
@@ -119,7 +123,7 @@ int main(int argc, char** argv) {
     row->write(out.fields.at(4), p);
     return row;
   };
-  auto con = DataGenConnector(node, "source", node->rank * BATCH_SIZE, 1000, schema_ptr, deser);
+  auto con = DataGenConnector(node, "source", BATCH_SIZE, 1000, schema_ptr, deser);
 
   std::signal(SIGTERM | SIGINT, signal_handler);
 
@@ -149,44 +153,41 @@ int main(int argc, char** argv) {
      */
     // arrow::py::import_pyarrow();c10d::ProcessGroupMPI::createProcessGroupMPI();
 
-    const size_t intial_row_count = node->rank * BATCH_SIZE;
+    const size_t intial_row_count = BATCH_SIZE;
     size_t total_row_count = intial_row_count;
     double start = MPI_Wtime();
-    // ingest, copy rows to local table memory with fixed offsets
-    const auto t1 = con.consume_batch();
-
-    /**
-     * pass each row in mtable, if return true, add to new table with schema ptr
-     * release t1 mtable in the end
+    if (node->rank > 0) {
+      auto source = engine::source(con);
+      cp::Expression filter_expr = cp::greater(cp::field_ref("timestamp"), cp::literal(3));
+      auto filter_ = engine::filter(source, filter_expr);
+      auto batches = cp::DeclarationToBatches(std::move(filter_)).ValueOrDie();
+      CHECK_GT(batches.size(), 0);
+      auto t1 = utils::fromArrow(batches.at(0), units, node);
+      auto schema_1 = utils::fromArrow(batches.at(0)->schema(), units);
+      /**
+       * pass each row in mtable, if return true, add to new table with schema ptr
+       * release t1 mtable in the end
+       */
+      auto t2 = processors::map(t1, schema_1, [](mrow& in, mrow& out, const mschema& out_schema) {
+        for (const auto& f : out_schema.fields) {
+          Value v;
+          in.read(f, v);
+          out.write(f, v);
+        }
+        return true;
+      });
+    }
+    /*
+    auto t5 = processors::shuffle(t2, schema_1->fields.at(2), partitioner);
+    t5->verifyShuffle(schema_1->fields.at(2), partitioner);
+    auto t41 = processors::java(t5, "Bridge");
+*/
+    /*
+     auto t41 = processors::java(t4, "Bridge");
+     auto t5 = processors::shuffle(t4, schema_ptr->fields.at(4), partitioner);
+     t5->verifyShuffle(schema_ptr->fields.at(4), partitioner);
      */
-    auto t2 = processors::map(t1, schema_ptr, [](mrow& in, mrow& out, const mschema& out_schema) {
-      for (const auto& f : out_schema.fields) {
-        Value v;
-        in.read(f, v);
-        out.write(f, v);
-      }
-      return true;
-    });
-
-    start = MPI_Wtime();
-    auto t4 = processors::shuffle(t2, schema_ptr->fields.at(2), partitioner);
-    auto end = MPI_Wtime();
-    // std::cout << " shuffle time = " << (end - start) << " rank = " << node->rank << " ingestor = " << node->getissubscriber() << std::endl;
-    start = MPI_Wtime();
-    /**
-     * verify shuffle row placement to right worker (aka MPI rank)
-     */
-    t4->verifyShuffle(schema_ptr->fields.at(2), partitioner);
-
-    auto t41 = processors::java(t4, "Bridge");
-
-    /**
-     * @brief shuffle again with another field with same partitioner
-     *
-     */
-    auto t5 = processors::shuffle(t4, schema_ptr->fields.at(4), partitioner);
-    t5->verifyShuffle(schema_ptr->fields.at(4), partitioner);
-    processors::mnist(pg, t5);
+    // processors::mnist(pg, t5);
   }
   return terminal_signal;
 }

@@ -315,6 +315,7 @@ target_link_libraries(DataGenExample
         PRIVATE ${META}
         PRIVATE ${TABLE}
         PRIVATE ${CONNECTOR}
+        PRIVATE ${ENGINE}
         PRIVATE ${ARROW_LIBRARY})
 
 set_target_properties(KafkaExample 

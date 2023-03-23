@@ -96,7 +96,7 @@ TEST(EngineTest, TestEngineSource) {
     return row;
   };
   auto con = DataGenConnector(nullptr, "source", 1, 10, schema_ptr, deser);
-  auto source = engine::source(con, "source");
+  auto source = engine::source(con);
   CHECK_EQ(arrow::Status::OK(), ExecutePlanAndCollectAsTable(std::move(source)));
 }
 
@@ -144,11 +144,11 @@ TEST(EngineTest, TestSourceFilter) {
     return row;
   };
   auto con = DataGenConnector(nullptr, "source", 1, 10, schema_ptr, deser);
-  auto source = engine::source(con, "source");
+  auto source = engine::source(con);
   // Expression a_times_2 = cp::call("multiply", {cp::field_ref("timestamp"), cp::literal(2)});
   // auto project = engine::project(source, a_times_2, "multiply");
   Expression filter_expr = cp::less(cp::field_ref("timestamp"), cp::literal(3));
-  auto filter = engine::filter(source, filter_expr, "filter");
+  auto filter = engine::filter(source, filter_expr);
   CHECK_EQ(arrow::Status::OK(), ExecutePlanAndCollectAsTable(std::move(filter)));
 }
 
@@ -196,8 +196,8 @@ TEST(EngineTest, TestSourceUnion) {
     return row;
   };
   auto con = DataGenConnector(nullptr, "source", 1, 10, schema_ptr, deser);
-  auto source_left = engine::source(con, "source");
-  auto source_right = engine::source(con, "source");
+  auto source_left = engine::source(con);
+  auto source_right = engine::source(con);
   auto union_plan = engine::union_op(source_left, source_right, "union");
   CHECK_EQ(arrow::Status::OK(), ExecutePlanAndCollectAsTable(std::move(union_plan)));
 }
@@ -233,8 +233,8 @@ TEST(EngineTest, TestSourceJoin) {
     return row;
   };
   auto con = DataGenConnector(nullptr, "source", 1, 10, schema_ptr, deser);
-  auto source_left = engine::source(con, "source");
-  auto source_right = engine::source(con, "source");
+  auto source_left = engine::source(con);
+  auto source_right = engine::source(con);
   cp::HashJoinNodeOptions join_opts{
 
     cp::JoinType::INNER,

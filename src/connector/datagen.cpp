@@ -44,11 +44,10 @@ std::shared_ptr<mtable> DataGenConnector::consume_batch() {
    * @brief if node runs data polling set to max_batch, otherwise skip
    *
    */
-  auto batch_size = (node_ptr != nullptr && node_ptr->getissubscriber() != 1) ? 0 : max_batch_size;
-  auto t = std::make_shared<mtable>(node_ptr, schema_ptr, batch_size * schema_ptr->rowSize());
+  auto t = std::make_shared<mtable>(node_ptr, schema_ptr, max_batch_size * schema_ptr->rowSize());
   auto start = MPI_Wtime();
   int total = 0;
-  while ((MPI_Wtime() - start) * 1000 < timeout && total++ < batch_size) {
+  while ((MPI_Wtime() - start) * 1000 < timeout && total++ < max_batch_size) {
     auto b = deser(nullptr, *schema_ptr.get());
     if (b != nullptr) {
       t->appendRow(*b.get());
