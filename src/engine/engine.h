@@ -88,18 +88,18 @@ public:
     return filter_plan;
   }
 
-  static Declaration project(Declaration& node_in, Expression& expression, std::string name) {
+  static Declaration project(Declaration& node_in, Expression& expression) {
     Declaration project_plan{
-      name, { std::move(node_in) }, ProjectNodeOptions({ expression })
+      "project", { std::move(node_in) }, ProjectNodeOptions({ expression })
     };
     return project_plan;
   }
 
-  static Declaration union_op(Declaration& left_in, Declaration& right_in, std::string name) {
+  static Declaration union_op(Declaration& left_in, Declaration& right_in) {
     left_in.label = "lhs";
     right_in.label = "rhs";
     Declaration union_plan{
-      name, { std::move(left_in), std::move(right_in) }, ExecNodeOptions{}
+      "union", { std::move(left_in), std::move(right_in) }, ExecNodeOptions{}
     };
     return union_plan;
   }

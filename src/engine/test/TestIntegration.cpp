@@ -198,7 +198,7 @@ TEST(EngineTest, TestSourceUnion) {
   auto con = DataGenConnector(nullptr, "source", 1, 10, schema_ptr, deser);
   auto source_left = engine::source(con);
   auto source_right = engine::source(con);
-  auto union_plan = engine::union_op(source_left, source_right, "union");
+  auto union_plan = engine::union_op(source_left, source_right);
   CHECK_EQ(arrow::Status::OK(), ExecutePlanAndCollectAsTable(std::move(union_plan)));
 }
 

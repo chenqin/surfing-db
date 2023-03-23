@@ -155,28 +155,37 @@ int main(int argc, char** argv) {
     size_t total_row_count = intial_row_count;
     double start = MPI_Wtime();
     auto t1 = con.consume_batch();
+    //std::cout << node->rank << " " << t1->row_count << std::endl;
+    std::shared_ptr<mtable> shuffle_in = t1;
 
     auto source = engine::source(t1);
-    cp::Expression filter_expr = cp::greater(cp::field_ref("timestamp"), cp::literal(3));
+    cp::Expression filter_expr = cp::less(cp::field_ref("timestamp"), cp::literal(3));
     auto filter_ = engine::filter(source, filter_expr);
     auto batches = cp::DeclarationToBatches(std::move(filter_)).ValueOrDie();
-
+    CHECK_EQ(batches.size(), 0);
+    
     for (int i = 0; i < batches.size(); i++) {
-      auto t2 = utils::fromArrow(batches.at(0), units, node);
-      auto schema_1 = utils::fromArrow(batches.at(0)->schema(), units);
-
-      auto t3 = processors::map(t2, schema_1, [](mrow& in, mrow& out, const mschema& out_schema) {
+      auto t2 = utils::fromArrow(batches.at(i), units, node);
+      auto schema_1 = utils::fromArrow(batches.at(i)->schema(), units);
+      /**
+       * @brief transform data into shuffle schema
+       * 
+       */
+      shuffle_in = processors::map(t2, schema_ptr, [&](mrow& in, mrow& out, const mschema& out_schema) {
         for (const auto& f : out_schema.fields) {
           Value v;
-          in.read(f, v);
+          /**
+           * @brief read from old schema field
+           * 
+           */
+          in.read(schema_1->getFieldByName(f.name), v);
           out.write(f, v);
         }
         return true;
       });
-      //TODO: overwrite t1
     }
 
-    auto t5 = processors::shuffle(t1, schema_ptr->fields.at(2), partitioner);
+    auto t5 = processors::shuffle(shuffle_in, schema_ptr->fields.at(2), partitioner);
     t5->verifyShuffle(schema_ptr->fields.at(2), partitioner);
     auto t41 = processors::java(t5, "Bridge");
     processors::mnist(pg, t5);
