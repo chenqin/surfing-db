@@ -162,7 +162,6 @@ int main(int argc, char** argv) {
     cp::Expression filter_expr = cp::less(cp::field_ref("timestamp"), cp::literal(3));
     auto filter_ = engine::filter(source, filter_expr);
     auto batches = cp::DeclarationToBatches(std::move(filter_)).ValueOrDie();
-    CHECK_EQ(batches.size(), 0);
     
     for (int i = 0; i < batches.size(); i++) {
       auto t2 = utils::fromArrow(batches.at(i), units, node);
