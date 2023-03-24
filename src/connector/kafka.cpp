@@ -107,7 +107,7 @@ KafkaConnector::KafkaConnector(const std::shared_ptr<node> node_ptr,
                                int timeout,
                                std::shared_ptr<mschema> schema_ptr,
                                std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser,
-                               std::string topic, std::string brokers, std::string groupid, bool pii=false) : Connector(node_ptr,
+                               std::vector<std::string> topicvect, std::string brokers, std::string groupid, bool pii=false) : Connector(node_ptr,
                                                                                                         connector_name,
                                                                                                         max_batch_size,
                                                                                                         timeout,
@@ -116,9 +116,14 @@ KafkaConnector::KafkaConnector(const std::shared_ptr<node> node_ptr,
   assigned = false;
   this->brokers = (char*)brokers.c_str();
   this->groupid = (char*)groupid.c_str();
-  topics = (char*)topic.c_str();
+  std::string topic_str;
+  for(int i = 0 ; i < topicvect.size() ; i++) {
+      topic_str += topicvect.at(i) + ",";
+  }
+  std::string str = topic_str.substr(0, topic_str.length() -1);
+  topics = const_cast<char*>(str.c_str());
 
-  topic_cnt = 1;
+  topic_cnt = topicvect.size();
   conf = rd_kafka_conf_new();
   topic_conf = rd_kafka_topic_conf_new();
 
@@ -184,14 +189,21 @@ KafkaConnector::KafkaConnector(const std::shared_ptr<node> node_ptr,
       rd_kafka_conf_destroy(conf);
       return;
     }
-    if (rd_kafka_conf_set(conf, "ssl.certificate.location", "/var/lib/normandie/fuse/cert/generic",
+    if (rd_kafka_conf_set(conf, "ssl.certificate.location", "/var/lib/normandie/fuse/chain/generic",
                           errstr, sizeof(errstr))
         != RD_KAFKA_CONF_OK) {
       LOG(ERROR) << errstr;
       rd_kafka_conf_destroy(conf);
       return;
     }
-    if (rd_kafka_conf_set(conf, "ssl.ca.location", "/var/lib/normandie/fuse/ca/generic",
+    if (rd_kafka_conf_set(conf, "ssl.ca.location", "/var/lib/normandie/fuse/ca/root",
+                          errstr, sizeof(errstr))
+        != RD_KAFKA_CONF_OK) {
+      LOG(ERROR) << errstr;
+      rd_kafka_conf_destroy(conf);
+      return;
+    }
+    if (rd_kafka_conf_set(conf, "debug", "generic,broker,topic,metadata,feature,queue,msg,protocol,cgrp,security,fetch,interceptor,plugin,consumer,admin,eos,mock,all",
                           errstr, sizeof(errstr))
         != RD_KAFKA_CONF_OK) {
       LOG(ERROR) << errstr;
@@ -275,7 +287,7 @@ KafkaConnector::KafkaConnector(const std::shared_ptr<node> node_ptr,
 
 KafkaConnector::~KafkaConnector() {
   /* Close the consumer: commit final offsets and leave the group. */
-  fprintf(stderr, "%% Closing consumer\n");
+  LOG(ERROR) << "Consumer error";
   rd_kafka_consumer_close(rk);
 
   /* Destroy the consumer */
@@ -288,7 +300,7 @@ std::shared_ptr<mtable> KafkaConnector::consume_batch() {
   auto start = MPI_Wtime();
   int total = 0;
   while ((MPI_Wtime() - start) * 1000 < timeout && total++ < max_batch_size) {
-    rd_kafka_message_t* rkm = rd_kafka_consumer_poll(rk, 10);
+    rd_kafka_message_t* rkm = rd_kafka_consumer_poll(rk, 50);
     if (!rkm)
       continue; /* Timeout: no message within 100ms,
                  *  try again. This short timeout allows
@@ -301,9 +313,7 @@ std::shared_ptr<mtable> KafkaConnector::consume_batch() {
       /* Consumer errors are generally to be considered
        * informational as the consumer will automatically
        * try to recover from all types of errors. */
-      fprintf(stderr,
-              "%% Consumer error: %s\n",
-              rd_kafka_message_errstr(rkm));
+      LOG(ERROR) << "Consumer error: " << rd_kafka_message_errstr(rkm);
       rd_kafka_message_destroy(rkm);
       continue;
     }

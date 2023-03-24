@@ -43,7 +43,7 @@ public:
                  int,
                  std::shared_ptr<mschema>,
                  std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)>,
-                 std::string, std::string, std::string, bool);
+                 std::vector<std::string>, std::string, std::string, bool);
 
   std::shared_ptr<mtable> consume_batch();
 

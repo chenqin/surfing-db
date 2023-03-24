@@ -78,6 +78,7 @@ int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
 
   //  create node of cluster
+  //auto pg = c10d::ProcessGroupMPI::createProcessGroupMPI();
   const auto node = std::make_shared<surfingdb::meta::node>(&argc, &argv);
   /**
    * @brief define topic schema
@@ -106,7 +107,7 @@ int main(int argc, char** argv) {
 
   std::signal(SIGTERM | SIGINT, signal_handler);
 
-  auto deser = [](const char* payload, const mschema& out) {
+  auto metric_deser = [](const char* payload, const mschema& out) {
       auto r = std::make_shared<mrow>(std::make_shared<mschema>(out));
       rapidjson::Document document;
       bool err = document.Parse((const char*)payload).HasParseError();
@@ -128,13 +129,17 @@ int main(int argc, char** argv) {
     };
 
   auto metrics_prod = KafkaConnector(
-    node, "kafka-source", batch, interval, schema_ptr, deser,
-    "xenon_metrics_prod", serversettobrokers("/var/serverset/discovery.datakafka08.prod"), group_id, false);
+    node, "kafka-source", batch, interval, schema_ptr, metric_deser,
+    {"xenon_metrics_prod"}, serversettobrokers("/var/serverset/discovery.datakafka08.prod"), group_id, false);
 
   auto metrics_staging = KafkaConnector(
-    node, "kafka-source", batch, interval, schema_ptr, deser,
-     "xenon_metrics_staging", serversettobrokers("/var/serverset/discovery.datakafka08.prod"), group_id, false);
-
+    node, "kafka-source", batch, interval, schema_ptr, metric_deser,
+     {"xenon_metrics_staging"}, serversettobrokers("/var/serverset/discovery.datakafka08.prod"), group_id, false);
+/*
+  auto metrics_staging_pii = KafkaConnector(
+    node, "kafka-source", batch, interval, schema_ptr, metric_deser,
+     "xenon_metrics_staging_pii", serversettobrokers("/var/serverset/discovery.datakafka08_tls.prod"), group_id, true);
+*/
   while (terminal_signal == 0) {
     // simulate a delay to decode and handle kafka batch
     auto start = MPI_Wtime();
@@ -142,6 +147,7 @@ int main(int argc, char** argv) {
 
     std::future<std::shared_ptr<mtable>> fut1 = std::async(std::launch::async, [&metrics_prod] { return metrics_prod.consume_batch();});
     std::future<std::shared_ptr<mtable>> fut2 = std::async(std::launch::async, [&metrics_staging] {return metrics_staging.consume_batch();});
+
     auto t1 = fut1.get();
     auto t11 = fut2.get();
     std::shared_ptr<mtable> t_in;
@@ -176,18 +182,6 @@ int main(int argc, char** argv) {
         });
       }
     }
-    /**
-     * pass each row in mtable, if return true, add to new table with schema ptr
-     * release t1 mtable in the end
-     */
-    auto t2 = processors::map(t_in, schema_ptr, [](mrow& in, mrow& out, const mschema& out_schema) {
-      for (const auto& f : out_schema.fields) {
-        Value v;
-        in.read(f, v);
-        out.write(f, v);
-      }
-      return true;
-    });
 
     /*
      * assign data gather from rest of workers to gpu backed worker
@@ -196,8 +190,8 @@ int main(int argc, char** argv) {
       return key % world;
     };
 
-    auto t3 = processors::shuffle(t2, schema_ptr->fields.at(2), partitioner);
-    t3->verifyShuffle(schema_ptr->fields.at(2), partitioner);
+    auto t3 = processors::shuffle(t_in, schema_ptr->fields.at(2), partitioner);
+    //t3->verifyShuffle(schema_ptr->fields.at(2), partitioner);
 
     auto t4 = processors::java(t3, "Bridge");
 
@@ -208,7 +202,7 @@ int main(int argc, char** argv) {
 
     // label
     float throughput = global_row_count / (end - start);
-
+    //processors::mnist(pg, t4);
     if (node->rank == 0) {
       std::cout << "iteration pull " << throughput << " @ qps" << std::endl;
     }
