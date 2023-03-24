@@ -325,5 +325,6 @@ target_link_libraries(KafkaExample
     PRIVATE ${META}
     PRIVATE ${TABLE}
     PRIVATE ${CONNECTOR}
+    PRIVATE ${ENGINE}
     PRIVATE ${ARROW_LIBRARY}
     PRIVATE ${TORCH_LIBRARIES})

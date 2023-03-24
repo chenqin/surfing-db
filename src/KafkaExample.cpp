@@ -16,13 +16,18 @@
 
 #include <chrono>
 #include <fmt/core.h>
+#include <iostream>
+#include <fstream>
+#include <string>
 #include <future>
 #include <glog/logging.h>
 #include <iostream>
+#include <experimental/random>
 #include <omp.h>
 #include <rapidjson/document.h>
 #include "connector/kafka.h"
 #include "meta/node.h"
+#include "engine/engine.h"
 #include "table/processors.h"
 #include "table/utils.h"
 
@@ -33,71 +38,37 @@ using surfingdb::meta::node;
 using namespace surfingdb::table;
 using namespace surfingdb::connector;
 using namespace std::chrono;
+using namespace surfingdb::engine;
+namespace cp = ::arrow::compute;
+
+std::string serversettobrokers(std::string serverset) {
+  std::string line;
+  std::string brokers = "";
+  int count = 0;
+  int start = std::experimental::randint(8, 20);
+  std::ifstream myfile(serverset.c_str());
+  if (myfile.is_open())
+  {
+    while ( getline (myfile,line) && count < 4)
+    {
+      //std::cout << line << '\n';
+      if(start-- < 0){
+        brokers += line + ",";
+        count++;
+      }
+    }
+    myfile.close();
+  }
+
+  else std::cout << "Unable to open file"; 
+  return brokers.substr(0, brokers.length() - 1);
+}
 
 volatile std::sig_atomic_t terminal_signal;
 void signal_handler(int signal) {
   std::cout << "user exit program";
   terminal_signal = signal;
 }
-
-/*
- * feed user shuffled_training_dataset to linear regression model
- */
-/*
-void linear_regression(std::shared_ptr<mtable> shuffled_training_dataset, int rank) {
-    if(rank != 0) return;
-    //std::cout << "Linear Regression\n\n";
-
-    // Device
-    auto cuda_available = torch::cuda::is_available();
-    torch::Device device(cuda_available ? torch::kCUDA : torch::kCPU);
-    std::cout << (cuda_available ? "Training on GPU " : "Training on CPU ") << rank <<'\n';
-
-    // Hyper parameters
-    const int64_t input_size = 1;
-    const int64_t output_size = 1;
-    const size_t num_epochs = 50;
-    const double learning_rate = 0.001;
-
-    // Sample dataset
-    auto x_train = torch::randint(0, 10, {15, 1},
-                                  torch::TensorOptions(torch::kFloat).device(device));
-
-    auto y_train = torch::randint(0, 10, {15, 1},
-                                  torch::TensorOptions(torch::kFloat).device(device));
-
-    // Linear regression model
-    torch::nn::Linear model(input_size, output_size);
-    model->to(device);
-
-    // Optimizer
-    torch::optim::SGD optimizer(model->parameters(), torch::optim::SGDOptions(learning_rate));
-
-    // Set floating point output precision
-    std::cout << std::fixed << std::setprecision(4);
-
-    //std::cout << "Training...\n";
-
-    // Train the model
-    for (size_t epoch = 0; epoch != num_epochs; ++epoch) {
-        // Forward pass
-        auto output = model->forward(x_train);
-        auto loss = torch::nn::functional::mse_loss(output, y_train);
-
-        // Backward pass and optimize
-        optimizer.zero_grad();
-        loss.backward();
-        optimizer.step();
-
-        if ((epoch + 1) % 50 == 0) {
-            std::cout << "Epoch [" << (epoch + 1) << "/" << num_epochs <<
-                "], Loss: " << loss.item<double>() << "\n";
-        }
-    }
-    torch::NoGradGuard no_grad_guard;
-    //std::cout << "Training finished!\n";
-}
-*/
 /** run this program with
  * mpirun -np 12 ./MainTest
  * @return
@@ -118,6 +89,7 @@ int main(int argc, char** argv) {
   SchemaUtils::initField(r, "metricName", RowType::STRING, MAX_STR_LEN);
   SchemaUtils::initField(r, "metricValue", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
   const std::shared_ptr<mschema> schema_ptr = std::make_shared<mschema>(r);
+  std::map<std::string, uint64_t> units = { { "host", 64 }, { "metricName", MAX_STR_LEN }};
 
   /**
    * features
@@ -130,17 +102,18 @@ int main(int argc, char** argv) {
   srand(std::time(nullptr));
 
   auto start = MPI_Wtime();
-  std::string kafka_topic = "xenon_metrics_prod";
   /**
    * read from /var/serverset/datakafka08
    */
-  std::string brokers = "10.1.145.151:9092,10.1.145.239:9092,10.1.147.235:9092,10.1.148.60:9092";
+  std::string kafka_topic = "xenon_metrics_prod";
+  std::string brokers = serversettobrokers("/var/serverset/discovery.datakafka08.prod");
+  std::string kafka_topic_1 = "xenon_metrics_prod_pii";
+  std::string brokers_1 = serversettobrokers("/var/serverset/discovery.datakafka08_tls.prod");
   std::string group_id = "cqin-test";
 
   std::signal(SIGTERM | SIGINT, signal_handler);
 
-  auto consumer = KafkaConnector(
-    node, "kafka-source", batch, interval, schema_ptr, [](const char* payload, const mschema& out) {
+  auto deser = [](const char* payload, const mschema& out) {
       auto r = std::make_shared<mrow>(std::make_shared<mschema>(out));
       rapidjson::Document document;
       bool err = document.Parse((const char*)payload).HasParseError();
@@ -159,20 +132,59 @@ int main(int argc, char** argv) {
         std::shared_ptr<mrow> p2(nullptr);
         return p2;
       }
-    },
+    };
+
+  auto metrics_prod = KafkaConnector(
+    node, "kafka-source", batch, interval, schema_ptr, deser,
     kafka_topic, brokers, group_id);
+
+  auto metrics_prod_pii = KafkaConnector(
+    node, "kafka-source", batch, interval, schema_ptr, deser,
+    kafka_topic_1, brokers_1, group_id);
 
   while (terminal_signal == 0) {
     // simulate a delay to decode and handle kafka batch
     auto start = MPI_Wtime();
     // kafka consumer
-    auto t1 = consumer.consume_batch();
+    auto t1 = metrics_prod.consume_batch();
+    auto t11 = metrics_prod_pii.consume_batch();
+    std::shared_ptr<mtable> t_in;
+    if(t1->row_count == 0 && t11->row_count == 0) {
+      t_in = t1;
+    } else if(t1->row_count == 0) {
+      t_in = t11;
+    } else {
+      auto source = engine::source(t1);
+      auto source_1 = engine::source(t1);
+      auto uion_del = engine::union_op(source, source_1);
+      auto batches = cp::DeclarationToBatches(std::move(uion_del)).ValueOrDie();
 
+      for (int i = 0; i < batches.size(); i++) {
+        auto t_111 = utils::fromArrow(batches.at(i), units, node);
+        auto schema_1 = utils::fromArrow(batches.at(i)->schema(), units);
+        /**
+        * @brief transform data into shuffle schema
+        * 
+        */
+        t_in = processors::map(t_111, schema_ptr, [&](mrow& in, mrow& out, const mschema& out_schema) {
+          for (const auto& f : out_schema.fields) {
+            Value v;
+            /**
+            * @brief read from old schema field
+            * 
+            */
+            in.read(schema_1->getFieldByName(f.name), v);
+            out.write(f, v);
+          }
+          return true;
+        });
+      }
+    }
     /**
      * pass each row in mtable, if return true, add to new table with schema ptr
      * release t1 mtable in the end
      */
-    auto t2 = processors::map(t1, schema_ptr, [](mrow& in, mrow& out, const mschema& out_schema) {
+    auto t2 = processors::map(t_in, schema_ptr, [](mrow& in, mrow& out, const mschema& out_schema) {
       for (const auto& f : out_schema.fields) {
         Value v;
         in.read(f, v);
