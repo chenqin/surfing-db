@@ -41,14 +41,13 @@ bool issubscriber;
 int exit_eof = 0;
 int wait_eof = 0; /* number of partitions awaiting EOF */
 
-void print_partition_list(const rd_kafka_topic_partition_list_t* partitions) {
-  int i;
-  for (i = 0; i < partitions->cnt; i++) {
+void KafkaConnector::print_partition_list(const rd_kafka_topic_partition_list_t* partitions) {
+  for (int i = 0; i < partitions->cnt; i++) {
     LOG(INFO) << "topic " << partitions->elems[i].topic << " partition " << partitions->elems[i].partition << " offset " << partitions->elems[i].offset;
   }
 }
 
-void rebalance_cb(rd_kafka_t* rk,
+void KafkaConnector::rebalance_cb(rd_kafka_t* rk,
                   rd_kafka_resp_err_t err,
                   rd_kafka_topic_partition_list_t* partitions,
                   void* opaque) {
@@ -62,7 +61,7 @@ void rebalance_cb(rd_kafka_t* rk,
     fprintf(stderr, "assigned (%s):\n",
             rd_kafka_rebalance_protocol(rk));
     print_partition_list(partitions);
-    issubscriber = true;
+    
 
     if (!strcmp(rd_kafka_rebalance_protocol(rk), "COOPERATIVE"))
       error = rd_kafka_incremental_assign(rk, partitions);
@@ -74,8 +73,7 @@ void rebalance_cb(rd_kafka_t* rk,
   case RD_KAFKA_RESP_ERR__REVOKE_PARTITIONS:
     fprintf(stderr, "revoked (%s):\n",
             rd_kafka_rebalance_protocol(rk));
-    // print_partition_list(stderr, partitions);
-    issubscriber = false;
+    print_partition_list(partitions);
 
     if (!strcmp(rd_kafka_rebalance_protocol(rk), "COOPERATIVE")) {
       error = rd_kafka_incremental_unassign(rk, partitions);
@@ -109,14 +107,13 @@ KafkaConnector::KafkaConnector(const std::shared_ptr<node> node_ptr,
                                int timeout,
                                std::shared_ptr<mschema> schema_ptr,
                                std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser,
-                               std::string topic, std::string brokers, std::string groupid) : Connector(node_ptr,
+                               std::string topic, std::string brokers, std::string groupid, bool pii=false) : Connector(node_ptr,
                                                                                                         connector_name,
                                                                                                         max_batch_size,
                                                                                                         timeout,
                                                                                                         schema_ptr,
                                                                                                         deser) {
-  if (node_ptr->rank == 0) return;
-  node_ptr->setissubscriber(&issubscriber);
+  assigned = false;
   this->brokers = (char*)brokers.c_str();
   this->groupid = (char*)groupid.c_str();
   topics = (char*)topic.c_str();
@@ -161,14 +158,54 @@ KafkaConnector::KafkaConnector(const std::shared_ptr<node> node_ptr,
     rd_kafka_conf_destroy(conf);
     return;
   }
+  if(pii) {
+    /**
+    'group.id': consumer_group,
+    'auto.offset.reset': 'earliest',
+    'max.partition.fetch.bytes': 1024**2,
+    'security.protocol': 'ssl',
+    'ssl.key.location': '/var/lib/normandie/fuse/key/generic',
+    'ssl.certificate.location': '/var/lib/normandie/fuse/chain/generic',
+    'ssl.ca.location': '/var/lib/normandie/fuse/ca/root',
+    'enable.sparse.connections': False,
+    'error_cb': self.error_cb,
+    */
+    if (rd_kafka_conf_set(conf, "security.protocol", "ssl",
+                          errstr, sizeof(errstr))
+        != RD_KAFKA_CONF_OK) {
+      LOG(ERROR) << errstr;
+      rd_kafka_conf_destroy(conf);
+      return;
+    }
+    if (rd_kafka_conf_set(conf, "ssl.key.location", "/var/lib/normandie/fuse/key/generic",
+                          errstr, sizeof(errstr))
+        != RD_KAFKA_CONF_OK) {
+      LOG(ERROR) << errstr;
+      rd_kafka_conf_destroy(conf);
+      return;
+    }
+    if (rd_kafka_conf_set(conf, "ssl.certificate.location", "/var/lib/normandie/fuse/cert/generic",
+                          errstr, sizeof(errstr))
+        != RD_KAFKA_CONF_OK) {
+      LOG(ERROR) << errstr;
+      rd_kafka_conf_destroy(conf);
+      return;
+    }
+    if (rd_kafka_conf_set(conf, "ssl.ca.location", "/var/lib/normandie/fuse/ca/generic",
+                          errstr, sizeof(errstr))
+        != RD_KAFKA_CONF_OK) {
+      LOG(ERROR) << errstr;
+      rd_kafka_conf_destroy(conf);
+      return;
+    }
+  }
 
   /* Set default topic config for pattern-matched topics. */
   rd_kafka_conf_set_default_topic_conf(conf, topic_conf);
-
   /* Callback called on partition assignment changes */
   rd_kafka_conf_set_rebalance_cb(conf, rebalance_cb);
 
-  rd_kafka_conf_set(conf, "enable.partition.eof", "true",
+  rd_kafka_conf_set(conf, "enable.partition.eof", "false",
                     NULL, 0);
 
   /* If there is no previously committed offset for a partition
@@ -230,10 +267,7 @@ KafkaConnector::KafkaConnector(const std::shared_ptr<node> node_ptr,
     rd_kafka_destroy(rk);
   }
 
-  fprintf(stderr,
-          "%% Subscribed to %d topic(s), "
-          "waiting for rebalance and messages...\n",
-          subscription->cnt);
+  LOG(INFO) << "Subscribed to " << subscription->cnt << "topic(s), " << "waiting for rebalance and messages...";
 
   rd_kafka_topic_partition_list_destroy(subscription);
   signal(SIGINT, stop);

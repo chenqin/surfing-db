@@ -102,13 +102,6 @@ int main(int argc, char** argv) {
   srand(std::time(nullptr));
 
   auto start = MPI_Wtime();
-  /**
-   * read from /var/serverset/datakafka08
-   */
-  std::string kafka_topic = "xenon_metrics_prod";
-  std::string brokers = serversettobrokers("/var/serverset/discovery.datakafka08.prod");
-  std::string kafka_topic_1 = "xenon_metrics_prod_pii";
-  std::string brokers_1 = serversettobrokers("/var/serverset/discovery.datakafka08_tls.prod");
   std::string group_id = "cqin-test";
 
   std::signal(SIGTERM | SIGINT, signal_handler);
@@ -136,18 +129,18 @@ int main(int argc, char** argv) {
 
   auto metrics_prod = KafkaConnector(
     node, "kafka-source", batch, interval, schema_ptr, deser,
-    kafka_topic, brokers, group_id);
+    "xenon_metrics_prod", serversettobrokers("/var/serverset/discovery.datakafka08.prod"), group_id, false);
 
-  auto metrics_prod_pii = KafkaConnector(
+  auto metrics_staging = KafkaConnector(
     node, "kafka-source", batch, interval, schema_ptr, deser,
-    kafka_topic_1, brokers_1, group_id);
+     "xenon_metrics_staging", serversettobrokers("/var/serverset/discovery.datakafka08.prod"), group_id, false);
 
   while (terminal_signal == 0) {
     // simulate a delay to decode and handle kafka batch
     auto start = MPI_Wtime();
     // kafka consumer
     auto t1 = metrics_prod.consume_batch();
-    auto t11 = metrics_prod_pii.consume_batch();
+    auto t11 = metrics_staging.consume_batch();
     std::shared_ptr<mtable> t_in;
     if(t1->row_count == 0 && t11->row_count == 0) {
       t_in = t1;
@@ -206,7 +199,7 @@ int main(int argc, char** argv) {
     auto t4 = processors::java(t3, "Bridge");
 
     auto end = MPI_Wtime();
-    size_t local_row_count = t1->row_count;
+    size_t local_row_count = t_in->row_count;
     size_t global_row_count = 0;
     MPI_Allreduce(&local_row_count, &global_row_count, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
 

@@ -43,13 +43,14 @@ public:
                  int,
                  std::shared_ptr<mschema>,
                  std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)>,
-                 std::string, std::string, std::string);
+                 std::string, std::string, std::string, bool);
 
   std::shared_ptr<mtable> consume_batch();
 
   ~KafkaConnector();
 
 private:
+  bool assigned;
   rd_kafka_t* rk; /* Consumer instance handle */
   rd_kafka_topic_conf_t* topic_conf;
   rd_kafka_conf_t* conf;                         /* Temporary configuration object */
@@ -61,6 +62,11 @@ private:
   int topic_cnt;                                 /* Number of topics to subscribe to */
   rd_kafka_topic_partition_list_t* subscription; /* Subscribed topics */
   int i;
+  static void rebalance_cb(rd_kafka_t* rk,
+                  rd_kafka_resp_err_t err,
+                  rd_kafka_topic_partition_list_t* partitions,
+                  void* opaque);
+  static void print_partition_list(const rd_kafka_topic_partition_list_t* partitions);
 };
 } // namespace connector
 
