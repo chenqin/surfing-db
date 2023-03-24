@@ -139,8 +139,11 @@ int main(int argc, char** argv) {
     // simulate a delay to decode and handle kafka batch
     auto start = MPI_Wtime();
     // kafka consumer
-    auto t1 = metrics_prod.consume_batch();
-    auto t11 = metrics_staging.consume_batch();
+
+    std::future<std::shared_ptr<mtable>> fut1 = std::async(std::launch::async, [&metrics_prod] { return metrics_prod.consume_batch();});
+    std::future<std::shared_ptr<mtable>> fut2 = std::async(std::launch::async, [&metrics_staging] {return metrics_staging.consume_batch();});
+    auto t1 = fut1.get();
+    auto t11 = fut2.get();
     std::shared_ptr<mtable> t_in;
     if(t1->row_count == 0 && t11->row_count == 0) {
       t_in = t1;
