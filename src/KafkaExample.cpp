@@ -85,12 +85,10 @@ int main(int argc, char** argv) {
    *
    */
   RowSchema r;
-  SchemaUtils::initField(r, "timestamp", RowType::LONG, sizeof(long));
-  SchemaUtils::initField(r, "host", RowType::STRING, 64);
-  SchemaUtils::initField(r, "metricName", RowType::STRING, MAX_STR_LEN);
-  SchemaUtils::initField(r, "metricValue", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
+  SchemaUtils::initField(r, "topic", RowType::STRING, 64);
+  SchemaUtils::initField(r, "payload", RowType::STRING, MAX_STR_LEN);
   const std::shared_ptr<mschema> schema_ptr = std::make_shared<mschema>(r);
-  std::map<std::string, uint64_t> units = { { "host", 64 }, { "metricName", MAX_STR_LEN }};
+  std::map<std::string, uint64_t> units = { { "topic", 64 }, { "payload", MAX_STR_LEN }};
 
   /**
    * features
@@ -109,23 +107,13 @@ int main(int argc, char** argv) {
 
   auto metric_deser = [](const char* payload, const mschema& out) {
       auto r = std::make_shared<mrow>(std::make_shared<mschema>(out));
-      rapidjson::Document document;
-      bool err = document.Parse((const char*)payload).HasParseError();
-      if (!err && document.HasMember("timestamp")) {
-        Value v[4];
-        v[0].p_val.long_val = document["timestamp"].GetInt64();
-        v[1].p_val.string_val = document["host"].GetString();
-        v[2].p_val.string_val = document["metricName"].GetString();
-        v[3].p_val.double_val = std::atof(document["metricValue"].GetString());
-        for (int i = 0; i < 4; i++) {
-          r->write(out.fields.at(i), v[i]);
-        }
-        return r;
-      } else {
-        LOG(INFO) << "invalid data";
-        std::shared_ptr<mrow> p2(nullptr);
-        return p2;
+      Value v[2];
+      v[0].p_val.string_val = "metric";
+      v[1].p_val.string_val = std::string(payload);
+      for (int i = 0; i < 2; i++) {
+        r->write(out.fields.at(i), v[i]);
       }
+      return r;
     };
 
   auto metrics_prod = KafkaConnector(
@@ -135,73 +123,60 @@ int main(int argc, char** argv) {
   auto metrics_staging = KafkaConnector(
     node, "kafka-source", batch, interval, schema_ptr, metric_deser,
      {"xenon_metrics_staging"}, serversettobrokers("/var/serverset/discovery.datakafka08.prod"), group_id, false);
-/*
-  auto metrics_staging_pii = KafkaConnector(
-    node, "kafka-source", batch, interval, schema_ptr, metric_deser,
-     "xenon_metrics_staging_pii", serversettobrokers("/var/serverset/discovery.datakafka08_tls.prod"), group_id, true);
-*/
+
+  auto metric_log_deser = [](const char* payload, const mschema& out) {
+    auto r = std::make_shared<mrow>(std::make_shared<mschema>(out));
+    Value v[2];
+    v[0].p_val.string_val = "log";
+    v[1].p_val.string_val = std::string(payload);
+    for (int i = 0; i < 2; i++) {
+      r->write(out.fields.at(i), v[i]);
+    }
+    return r;
+  };
+  auto metrics_log_staging = KafkaConnector(
+    node, "kafka-source", batch, interval, schema_ptr, metric_log_deser,
+     {"xenon-logs-staging"}, serversettobrokers("/var/serverset/discovery.metricskafka07.prod"), group_id, false);
+
+  auto metrics_log_prod = KafkaConnector(
+    node, "kafka-source", batch, interval, schema_ptr, metric_log_deser,
+     {"xenon-logs-prod"}, serversettobrokers("/var/serverset/discovery.metricskafka07.prod"), group_id, false);
+
   while (terminal_signal == 0) {
     // simulate a delay to decode and handle kafka batch
     auto start = MPI_Wtime();
     // kafka consumer
+    
+    auto t1 = std::async(std::launch::async, [&metrics_prod] { return metrics_prod.consume_batch();});
+    auto t2 = std::async(std::launch::async, [&metrics_staging] { return metrics_staging.consume_batch();});
+    auto t3 = std::async(std::launch::async, [&metrics_log_staging] { return metrics_log_staging.consume_batch();});
+    auto t4 = std::async(std::launch::async, [&metrics_log_prod] { return metrics_log_prod.consume_batch();});
+    std::vector<std::shared_ptr<mtable>> inputs;
+    inputs.push_back(t1.get());
+    inputs.push_back(t2.get());
+    inputs.push_back(t3.get());
+    inputs.push_back(t4.get());
+    size_t local_row_count = 0;
+    for(auto& t : inputs) {
+      auto tjava = processors::java(t, "Bridge");
 
-    std::future<std::shared_ptr<mtable>> fut1 = std::async(std::launch::async, [&metrics_prod] { return metrics_prod.consume_batch();});
-    std::future<std::shared_ptr<mtable>> fut2 = std::async(std::launch::async, [&metrics_staging] {return metrics_staging.consume_batch();});
+      /*
+      * assign data gather from rest of workers to gpu backed worker
+      */
+      auto partitioner = [](size_t key, int rank, int world) {
+        return key % world;
+      };
 
-    auto t1 = fut1.get();
-    auto t11 = fut2.get();
-    std::shared_ptr<mtable> t_in;
-    if(t1->row_count == 0 && t11->row_count == 0) {
-      t_in = t1;
-    } else if(t1->row_count == 0) {
-      t_in = t11;
-    } else {
-      auto source = engine::source(t1);
-      auto source_1 = engine::source(t1);
-      auto uion_del = engine::union_op(source, source_1);
-      auto batches = cp::DeclarationToBatches(std::move(uion_del)).ValueOrDie();
+      //auto tshuffle = processors::shuffle(tjava, schema_ptr->fields.at(0), partitioner);
+      //t3->verifyShuffle(schema_ptr->fields.at(2), partitioner);
 
-      for (int i = 0; i < batches.size(); i++) {
-        auto t_111 = utils::fromArrow(batches.at(i), units, node);
-        auto schema_1 = utils::fromArrow(batches.at(i)->schema(), units);
-        /**
-        * @brief transform data into shuffle schema
-        * 
-        */
-        t_in = processors::map(t_111, schema_ptr, [&](mrow& in, mrow& out, const mschema& out_schema) {
-          for (const auto& f : out_schema.fields) {
-            Value v;
-            /**
-            * @brief read from old schema field
-            * 
-            */
-            in.read(schema_1->getFieldByName(f.name), v);
-            out.write(f, v);
-          }
-          return true;
-        });
-      }
+      local_row_count += t->row_count;
     }
-
-    /*
-     * assign data gather from rest of workers to gpu backed worker
-     */
-    auto partitioner = [](size_t key, int rank, int world) {
-      return key % world;
-    };
-
-    auto t3 = processors::shuffle(t_in, schema_ptr->fields.at(2), partitioner);
-    //t3->verifyShuffle(schema_ptr->fields.at(2), partitioner);
-
-    auto t4 = processors::java(t3, "Bridge");
-
-    auto end = MPI_Wtime();
-    size_t local_row_count = t_in->row_count;
     size_t global_row_count = 0;
     MPI_Allreduce(&local_row_count, &global_row_count, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
 
     // label
-    float throughput = global_row_count / (end - start);
+    float throughput = global_row_count / (MPI_Wtime() - start);
     //processors::mnist(pg, t4);
     if (node->rank == 0) {
       std::cout << "iteration pull " << throughput << " @ qps" << std::endl;
