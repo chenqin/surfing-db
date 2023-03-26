@@ -50,66 +50,11 @@ void KafkaConnector::print_partition_list(const rd_kafka_topic_partition_list_t*
   }
 }
 
-void KafkaConnector::rebalance_cb(rd_kafka_t* rk,
-                  rd_kafka_resp_err_t err,
-                  rd_kafka_topic_partition_list_t* partitions,
-                  void* opaque) {
-  rd_kafka_error_t* error = NULL;
-  rd_kafka_resp_err_t ret_err = RD_KAFKA_RESP_ERR_NO_ERROR;
-
-  fprintf(stderr, "%% Consumer group rebalanced: ");
-
-  switch (err) {
-  case RD_KAFKA_RESP_ERR__ASSIGN_PARTITIONS:
-    fprintf(stderr, "assigned (%s):\n",
-            rd_kafka_rebalance_protocol(rk));
-    print_partition_list(partitions);
-    
-
-    if (!strcmp(rd_kafka_rebalance_protocol(rk), "COOPERATIVE"))
-      error = rd_kafka_incremental_assign(rk, partitions);
-    else
-      ret_err = rd_kafka_assign(rk, partitions);
-    wait_eof += partitions->cnt;
-    break;
-
-  case RD_KAFKA_RESP_ERR__REVOKE_PARTITIONS:
-    fprintf(stderr, "revoked (%s):\n",
-            rd_kafka_rebalance_protocol(rk));
-    print_partition_list(partitions);
-
-    if (!strcmp(rd_kafka_rebalance_protocol(rk), "COOPERATIVE")) {
-      error = rd_kafka_incremental_unassign(rk, partitions);
-      wait_eof -= partitions->cnt;
-    } else {
-      ret_err = rd_kafka_assign(rk, NULL);
-      wait_eof = 0;
-    }
-    break;
-
-  default:
-    fprintf(stderr, "failed: %s\n",
-            rd_kafka_err2str(err));
-    rd_kafka_assign(rk, NULL);
-    break;
-  }
-
-  if (error) {
-    fprintf(stderr, "incremental assign failure: %s\n",
-            rd_kafka_error_string(error));
-    rd_kafka_error_destroy(error);
-  } else if (ret_err) {
-    fprintf(stderr, "assign failure: %s\n",
-            rd_kafka_err2str(ret_err));
-  }
-}
-
 std::string serversettobrokers(std::string serversetpath) {
   std::string line;
   std::string brokers = "";
   int count = 0;
-  int start = std::experimental::randint(8, 20);
-  //char* path = (char*) serversetpath.c_str();
+  int start = std::experimental::randint(1, 20);
   std::ifstream myfile(serversetpath.c_str());
   if (myfile.is_open())
   {
@@ -242,8 +187,58 @@ KafkaConnector::KafkaConnector(const std::shared_ptr<node> node_ptr,
 
   /* Set default topic config for pattern-matched topics. */
   rd_kafka_conf_set_default_topic_conf(conf, topic_conf);
+  auto cb = [](rd_kafka_t* rk, rd_kafka_resp_err_t err,
+    rd_kafka_topic_partition_list_t* partitions,
+    void* opaque) {
+        rd_kafka_error_t* error = NULL;
+        rd_kafka_resp_err_t ret_err = RD_KAFKA_RESP_ERR_NO_ERROR;
+
+        fprintf(stderr, "%% Consumer group rebalanced: ");
+
+        switch (err) {
+          case RD_KAFKA_RESP_ERR__ASSIGN_PARTITIONS:
+            fprintf(stderr, "assigned (%s):\n",
+                    rd_kafka_rebalance_protocol(rk));
+            KafkaConnector::print_partition_list(partitions);
+
+            if (!strcmp(rd_kafka_rebalance_protocol(rk), "COOPERATIVE"))
+              error = rd_kafka_incremental_assign(rk, partitions);
+            else
+              ret_err = rd_kafka_assign(rk, partitions);
+            wait_eof += partitions->cnt;
+            break;
+
+          case RD_KAFKA_RESP_ERR__REVOKE_PARTITIONS:
+            fprintf(stderr, "revoked (%s):\n",
+                    rd_kafka_rebalance_protocol(rk));
+            KafkaConnector::print_partition_list(partitions);
+            if (!strcmp(rd_kafka_rebalance_protocol(rk), "COOPERATIVE")) {
+              error = rd_kafka_incremental_unassign(rk, partitions);
+              wait_eof -= partitions->cnt;
+            } else {
+              ret_err = rd_kafka_assign(rk, NULL);
+              wait_eof = 0;
+            }
+            break;
+
+          default:
+            fprintf(stderr, "failed: %s\n",
+                    rd_kafka_err2str(err));
+            rd_kafka_assign(rk, NULL);
+            break;
+        }
+
+        if (error) {
+          fprintf(stderr, "incremental assign failure: %s\n",
+                  rd_kafka_error_string(error));
+          rd_kafka_error_destroy(error);
+        } else if (ret_err) {
+          fprintf(stderr, "assign failure: %s\n",
+                  rd_kafka_err2str(ret_err));
+        }
+    };
   /* Callback called on partition assignment changes */
-  rd_kafka_conf_set_rebalance_cb(conf, rebalance_cb);
+  rd_kafka_conf_set_rebalance_cb(conf, cb);
 
   rd_kafka_conf_set(conf, "enable.partition.eof", "false",
                     NULL, 0);
@@ -300,9 +295,7 @@ KafkaConnector::KafkaConnector(const std::shared_ptr<node> node_ptr,
   err = rd_kafka_subscribe(rk, subscription);
 
   if (err) {
-    fprintf(stderr,
-            "%% Failed to subscribe to %d topics: %s\n",
-            subscription->cnt, rd_kafka_err2str(err));
+    LOG(ERROR) << "Failed to subscribe to " << subscription->cnt << " topics: " << rd_kafka_err2str(err);
     rd_kafka_topic_partition_list_destroy(subscription);
     rd_kafka_destroy(rk);
   }
@@ -315,7 +308,7 @@ KafkaConnector::KafkaConnector(const std::shared_ptr<node> node_ptr,
 
 KafkaConnector::~KafkaConnector() {
   /* Close the consumer: commit final offsets and leave the group. */
-  LOG(ERROR) << "Consumer error";
+  LOG(INFO) << "Consumer close";
   rd_kafka_consumer_close(rk);
 
   /* Destroy the consumer */
@@ -324,7 +317,6 @@ KafkaConnector::~KafkaConnector() {
 
 std::shared_ptr<mtable> KafkaConnector::consume_batch() {
   auto t = std::make_shared<mtable>(node_ptr, schema_ptr, max_batch_size * schema_ptr->rowSize());
-  if (node_ptr->rank == 0) return t;
   auto start = MPI_Wtime();
   int total = 0;
   while ((MPI_Wtime() - start) * 1000 < timeout && total++ < max_batch_size) {

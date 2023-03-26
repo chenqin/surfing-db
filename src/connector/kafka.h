@@ -62,10 +62,6 @@ private:
   int topic_cnt;                                 /* Number of topics to subscribe to */
   rd_kafka_topic_partition_list_t* subscription; /* Subscribed topics */
   int i;
-  static void rebalance_cb(rd_kafka_t* rk,
-                  rd_kafka_resp_err_t err,
-                  rd_kafka_topic_partition_list_t* partitions,
-                  void* opaque);
   static void print_partition_list(const rd_kafka_topic_partition_list_t* partitions);
 };
 } // namespace connector

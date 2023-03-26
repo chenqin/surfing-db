@@ -32,8 +32,13 @@ public class Bridge {
                 ArrowArray array_out = ArrowArray.wrap(arrayOut);
                 ArrowSchema schema_out = ArrowSchema.wrap(schemaOut)) {
             VectorSchemaRoot input = Data.importVectorSchemaRoot(allocator, array_in, schema_in, null);
-            Data.exportVectorSchemaRoot(allocator, process(input), null, array_out, schema_out);
-            input.clear();
+            try {
+                Data.exportVectorSchemaRoot(allocator, process(input), null, array_out, schema_out);
+            } catch (Exception e) {
+                
+            }finally {
+                input.clear();
+            }
         }
     }
 
@@ -43,7 +48,7 @@ public class Bridge {
      * @param arrow memory pointer passing from c++
      * @return arrow memory pointer passing back to c++
      */
-    protected static VectorSchemaRoot process(VectorSchemaRoot input) {
+    protected static VectorSchemaRoot process(VectorSchemaRoot input) throws Exception {
         total += input.getRowCount();
         BitVector bitVector = new BitVector("boolean", allocator);
         VarCharVector varCharVector = new VarCharVector("varchar", allocator);

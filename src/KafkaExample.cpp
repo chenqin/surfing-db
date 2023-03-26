@@ -67,8 +67,8 @@ int main(int argc, char** argv) {
   /**
    * features
    */
-  int batch = 200000;
-  int interval = 300;
+  int batch = 20000;
+  int interval = 200;
   int world = node->world;
 
   size_t total = 0;
@@ -132,7 +132,7 @@ int main(int argc, char** argv) {
     inputs.push_back(t4.get());
     size_t local_row_count = 0;
     for(auto& t : inputs) {
-      auto tjava = processors::java(t, "Bridge");
+     auto tjava = processors::java(t, "MyBridge");
 
       /*
       * assign data gather from rest of workers to gpu backed worker

@@ -3,11 +3,16 @@ import java.util.Arrays;
 import java.util.List;
 
 
+import com.pinterest.drsquirrel.parsers.DrSquirrelUtils;
+import com.pinterest.drsquirrel.parsers.FlinkMetricParser;
 import org.apache.arrow.vector.types.pojo.Field;
+import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.arrow.vector.BitVector;
 import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.VarCharVector;
+import org.apache.arrow.vector.util.Text;
 
 /**
  * my bridge example
@@ -19,8 +24,22 @@ public class MyBridge extends Bridge {
      * @param arrow memory pointer passing from c++
      * @return arrow memory pointer passing back to c++
      */
-    protected static VectorSchemaRoot process(VectorSchemaRoot input) {
+    protected static VectorSchemaRoot process(VectorSchemaRoot input) throws Exception{
         total += input.getRowCount();
+        Schema schema = input.getSchema();
+        VarCharVector type = (VarCharVector) input.getVector("topic");
+        VarCharVector payload = (VarCharVector) input.getVector("payload");
+        for(int i = 0 ; i < input.getRowCount(); i++) {
+            String topic = Text.decode(type.get(i));
+            if(topic.equals("metric")) {
+
+            } else if (topic.equals("log")) {
+
+            }
+        }
+
+        //DrSquirrelUtils.constructFlinkMetric("");
+        //DrSquirrelUtils.constructFlinkMetric("");
 
         BitVector bitVector = new BitVector("boolean", allocator);
         VarCharVector varCharVector = new VarCharVector("varchar", allocator);
