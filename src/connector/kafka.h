@@ -56,7 +56,7 @@ private:
   rd_kafka_conf_t* conf;                         /* Temporary configuration object */
   rd_kafka_resp_err_t err;                       /* librdkafka API error code */
   char errstr[512];                              /* librdkafka API error reporting buffer */
-  const char* brokers;                           /* Argument: broker list */
+  std::string serversetpath;                     /* serverset path */
   const char* groupid;                           /* Argument: Consumer group id */
   char* topics;                                  /* Argument: list of topics to subscribe to */
   int topic_cnt;                                 /* Number of topics to subscribe to */

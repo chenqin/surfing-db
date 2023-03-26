@@ -17,12 +17,9 @@
 #include <chrono>
 #include <fmt/core.h>
 #include <iostream>
-#include <fstream>
 #include <string>
 #include <future>
 #include <glog/logging.h>
-#include <iostream>
-#include <experimental/random>
 #include <omp.h>
 #include <rapidjson/document.h>
 #include "connector/kafka.h"
@@ -40,29 +37,6 @@ using namespace surfingdb::connector;
 using namespace std::chrono;
 using namespace surfingdb::engine;
 namespace cp = ::arrow::compute;
-
-std::string serversettobrokers(std::string serverset) {
-  std::string line;
-  std::string brokers = "";
-  int count = 0;
-  int start = std::experimental::randint(8, 20);
-  std::ifstream myfile(serverset.c_str());
-  if (myfile.is_open())
-  {
-    while ( getline (myfile,line) && count < 4)
-    {
-      //std::cout << line << '\n';
-      if(start-- < 0){
-        brokers += line + ",";
-        count++;
-      }
-    }
-    myfile.close();
-  }
-
-  else std::cout << "Unable to open file"; 
-  return brokers.substr(0, brokers.length() - 1);
-}
 
 volatile std::sig_atomic_t terminal_signal;
 void signal_handler(int signal) {
@@ -118,11 +92,11 @@ int main(int argc, char** argv) {
 
   auto metrics_prod = KafkaConnector(
     node, "kafka-source", batch, interval, schema_ptr, metric_deser,
-    {"xenon_metrics_prod"}, serversettobrokers("/var/serverset/discovery.datakafka08.prod"), group_id, false);
+    {"xenon_metrics_prod"}, "/var/serverset/discovery.datakafka08.prod", group_id, false);
 
   auto metrics_staging = KafkaConnector(
     node, "kafka-source", batch, interval, schema_ptr, metric_deser,
-     {"xenon_metrics_staging"}, serversettobrokers("/var/serverset/discovery.datakafka08.prod"), group_id, false);
+     {"xenon_metrics_staging"}, "/var/serverset/discovery.datakafka08.prod", group_id, false);
 
   auto metric_log_deser = [](const char* payload, const mschema& out) {
     auto r = std::make_shared<mrow>(std::make_shared<mschema>(out));
@@ -136,11 +110,11 @@ int main(int argc, char** argv) {
   };
   auto metrics_log_staging = KafkaConnector(
     node, "kafka-source", batch, interval, schema_ptr, metric_log_deser,
-     {"xenon-logs-staging"}, serversettobrokers("/var/serverset/discovery.metricskafka07.prod"), group_id, false);
+     {"xenon-logs-staging"}, "/var/serverset/discovery.metricskafka07.prod", group_id, false);
 
   auto metrics_log_prod = KafkaConnector(
     node, "kafka-source", batch, interval, schema_ptr, metric_log_deser,
-     {"xenon-logs-prod"}, serversettobrokers("/var/serverset/discovery.metricskafka07.prod"), group_id, false);
+     {"xenon-logs-prod"}, "/var/serverset/discovery.metricskafka07.prod", group_id, false);
 
   while (terminal_signal == 0) {
     // simulate a delay to decode and handle kafka batch

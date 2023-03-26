@@ -17,6 +17,9 @@
 #include <chrono>
 #include <csignal>
 #include <ctype.h>
+#include <iostream>
+#include <fstream>
+#include <experimental/random>
 #include <glog/logging.h>
 #include <mpi.h>
 #include <stdio.h>
@@ -101,20 +104,44 @@ void KafkaConnector::rebalance_cb(rd_kafka_t* rk,
   }
 }
 
+std::string serversettobrokers(std::string serversetpath) {
+  std::string line;
+  std::string brokers = "";
+  int count = 0;
+  int start = std::experimental::randint(8, 20);
+  //char* path = (char*) serversetpath.c_str();
+  std::ifstream myfile(serversetpath.c_str());
+  if (myfile.is_open())
+  {
+    while ( getline (myfile,line) && count < 1)
+    {
+      //std::cout << line << '\n';
+      if(start-- < 0){
+        brokers += line + ",";
+        count++;
+      }
+    }
+    myfile.close();
+  }
+
+  else std::cout << "Unable to open file"; 
+  return brokers.substr(0, brokers.length() - 1);
+}
+
 KafkaConnector::KafkaConnector(const std::shared_ptr<node> node_ptr,
                                std::string connector_name,
                                size_t max_batch_size,
                                int timeout,
                                std::shared_ptr<mschema> schema_ptr,
                                std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser,
-                               std::vector<std::string> topicvect, std::string brokers, std::string groupid, bool pii=false) : Connector(node_ptr,
+                               std::vector<std::string> topicvect, std::string serversetpath, std::string groupid, bool pii=false) : Connector(node_ptr,
                                                                                                         connector_name,
                                                                                                         max_batch_size,
                                                                                                         timeout,
                                                                                                         schema_ptr,
                                                                                                         deser) {
   assigned = false;
-  this->brokers = (char*)brokers.c_str();
+  this->serversetpath = serversetpath;
   this->groupid = (char*)groupid.c_str();
   std::string topic_str;
   for(int i = 0 ; i < topicvect.size() ; i++) {
@@ -124,6 +151,7 @@ KafkaConnector::KafkaConnector(const std::shared_ptr<node> node_ptr,
   topics = const_cast<char*>(str.c_str());
 
   topic_cnt = topicvect.size();
+  
   conf = rd_kafka_conf_new();
   topic_conf = rd_kafka_topic_conf_new();
 
@@ -131,7 +159,7 @@ KafkaConnector::KafkaConnector(const std::shared_ptr<node> node_ptr,
    * host or host:port (default port 9092).
    * librdkafka will use the bootstrap brokers to acquire the full
    * set of brokers from the cluster. */
-  if (rd_kafka_conf_set(conf, "bootstrap.servers", this->brokers,
+  if (rd_kafka_conf_set(conf, "bootstrap.servers", (char*) serversettobrokers(serversetpath).c_str(),
                         errstr, sizeof(errstr))
       != RD_KAFKA_CONF_OK) {
     LOG(ERROR) << errstr;
@@ -143,7 +171,7 @@ KafkaConnector::KafkaConnector(const std::shared_ptr<node> node_ptr,
    * @brief set linger.ms
    *
    */
-  if (rd_kafka_conf_set(conf, "linger.ms", "20",
+  if (rd_kafka_conf_set(conf, "linger.ms", "120",
                         errstr, sizeof(errstr))
       != RD_KAFKA_CONF_OK) {
     LOG(ERROR) << errstr;
