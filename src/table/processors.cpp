@@ -541,11 +541,11 @@ const std::shared_ptr<mtable> processors::java(std::shared_ptr<mtable> input, st
    */
   const auto resultImportVectorSchemaRoot = arrow::ImportRecordBatch(&arrowArrayOut, &arrowSchemaOut);
   std::shared_ptr<arrow::RecordBatch> recordBatch = resultImportVectorSchemaRoot.ValueOrDie();
-  return utils::fromArrow(recordBatch, units, node);
   release_malloced_array(&arrowArrayIn);
   release_malloced_array(&arrowArrayOut);
   release_malloced_type(&arrowSchemaIn);
   release_malloced_type(&arrowSchemaOut);
+  return utils::fromArrow(recordBatch, units, node);
 }
 
 } // namespace table

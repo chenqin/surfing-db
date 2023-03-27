@@ -135,7 +135,7 @@ int main(int argc, char** argv) {
 
     for(auto& t : inputs) {
      auto tjava = processors::java(t, "MyBridge", units);
-    auto schema = tjava->getSchema();
+     auto schema = tjava->getSchema();
       /*
       * assign data gather from rest of workers to gpu backed worker
       */
