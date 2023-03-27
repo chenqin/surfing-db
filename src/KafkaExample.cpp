@@ -131,9 +131,11 @@ int main(int argc, char** argv) {
     inputs.push_back(t3.get());
     inputs.push_back(t4.get());
     size_t local_row_count = 0;
-    for(auto& t : inputs) {
-     auto tjava = processors::java(t, "MyBridge");
+    std::map<std::string, uint64_t> units = {{"jobid", 64}, {"json", 10240}};
 
+    for(auto& t : inputs) {
+     auto tjava = processors::java(t, "MyBridge", units);
+    auto schema = tjava->getSchema();
       /*
       * assign data gather from rest of workers to gpu backed worker
       */
@@ -141,8 +143,8 @@ int main(int argc, char** argv) {
         return key % world;
       };
 
-      //auto tshuffle = processors::shuffle(tjava, schema_ptr->fields.at(0), partitioner);
-      //t3->verifyShuffle(schema_ptr->fields.at(2), partitioner);
+      auto tshuffle = processors::shuffle(tjava, schema->fields.at(0), partitioner);
+      tshuffle->verifyShuffle(schema->fields.at(0), partitioner);
 
       local_row_count += t->row_count;
     }

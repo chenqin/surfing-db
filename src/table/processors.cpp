@@ -508,7 +508,7 @@ static void release_malloced_array(struct ArrowArray* array) {
   array->release = NULL;
 }
 
-const std::shared_ptr<mtable> processors::java(std::shared_ptr<mtable> input, std::string class_name) {
+const std::shared_ptr<mtable> processors::java(std::shared_ptr<mtable> input, std::string class_name, std::map<std::string, uint64_t> units) {
   auto node = input->getNodePtr();
   const jclass bridge = node->env->FindClass(class_name.c_str());
   CHECK_NOTNULL(bridge);
@@ -541,7 +541,6 @@ const std::shared_ptr<mtable> processors::java(std::shared_ptr<mtable> input, st
    */
   const auto resultImportVectorSchemaRoot = arrow::ImportRecordBatch(&arrowArrayOut, &arrowSchemaOut);
   std::shared_ptr<arrow::RecordBatch> recordBatch = resultImportVectorSchemaRoot.ValueOrDie();
-  std::map<std::string, uint64_t> units;
   return utils::fromArrow(recordBatch, units, node);
   release_malloced_array(&arrowArrayIn);
   release_malloced_array(&arrowArrayOut);

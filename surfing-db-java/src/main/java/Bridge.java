@@ -1,6 +1,8 @@
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.vector.types.pojo.Field;
@@ -19,6 +21,7 @@ import org.apache.arrow.vector.VectorSchemaRoot;
 public class Bridge {
     protected static long total = 0;
     protected final static BufferAllocator allocator = new RootAllocator();
+    protected static final Logger LOG = LoggerFactory.getLogger(Bridge.class);
 
     /**
      * Create a {@link VectorSchemaRoot} and export it via the C Data Interface

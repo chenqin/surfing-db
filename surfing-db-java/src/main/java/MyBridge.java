@@ -33,6 +33,8 @@ import org.slf4j.LoggerFactory;
  * my bridge example
  */
 public class MyBridge extends Bridge {
+
+    private static ObjectMapper mapper = new ObjectMapper();
     /**
      * user defined function entry with zero copy
      * 
@@ -43,9 +45,14 @@ public class MyBridge extends Bridge {
         total += input.getRowCount();
        
         VarCharVector jobId = new VarCharVector("jobid", allocator);
+        VarCharVector json = new VarCharVector("json", allocator);
         jobId.allocateNew();
+        json.allocateNew();
         int count = 0;
-        jobId.setSafe(count++, new Text());
+
+        jobId.setSafe(count, new Text());
+        json.setSafe(count, new Text());
+        count++;
        
         VarCharVector input_type = (VarCharVector) input.getVector("topic");
         VarCharVector input_payload = (VarCharVector) input.getVector("payload");
@@ -61,23 +68,27 @@ public class MyBridge extends Bridge {
                     || flinkMetric.getType() == FlinkMetricType.JOBMANAGER
                     || flinkMetric.getType() == FlinkMetricType.JOBMANAGER_JOB_WITH_APPID
                     || flinkMetric.getType() == FlinkMetricType.JOBMANAGER_WITH_APPID)) {
-                    
-                    //String json_str = mapper.writeValueAsString(flinkMetric);
-                    jobId.setSafe(count, flinkMetric.getJobId().getBytes(StandardCharsets.UTF_8));
-                    //json.setSafe(count, json_str.getBytes(StandardCharsets.UTF_8));
-                    count++;
+                    try{
+                        String json_str = mapper.writeValueAsString(flinkMetric);
+                        jobId.setSafe(count, flinkMetric.getJobId().getBytes(StandardCharsets.UTF_8));
+                        json.setSafe(count, json_str.getBytes(StandardCharsets.UTF_8));
+                        count++;
+                    } catch (Exception e) {
+                        LOG.warn("fail to parse", e);
+                    }
                 }
                 
             } else if (topic.equals("log")) {
                 RawLog rawLog = DrSquirrelUtils.constructRawLog(body, "log");
-                //String json_str = mapper.writeValueAsString(rawLog);
-                //System.out.println(json_str);
-                
                 if(rawLog.getFile().contains("ExecutionGraph")) {
-                    //String json_str = mapper.writeValueAsString(rawLog);
-                    jobId.setSafe(count, rawLog.getApplicationId().getBytes(StandardCharsets.UTF_8));
-                    //json.setSafe(count, json_str.getBytes(StandardCharsets.UTF_8));
-                    count++;
+                    try {
+                        String json_str = mapper.writeValueAsString(rawLog);
+                        jobId.setSafe(count, rawLog.getApplicationId().getBytes(StandardCharsets.UTF_8));
+                        json.setSafe(count, json_str.getBytes(StandardCharsets.UTF_8));
+                        count++;
+                    } catch (Exception e) {
+                        LOG.warn("fail to parse", e);
+                    }
                 }
             } else {
                 throw new RuntimeException("topic is not supported");
@@ -85,7 +96,8 @@ public class MyBridge extends Bridge {
         }
 
         jobId.setValueCount(count);
-        List<FieldVector> vectors = Arrays.asList(jobId);
+        json.setValueCount(count);
+        List<FieldVector> vectors = Arrays.asList(jobId, json);
         VectorSchemaRoot vectorSchemaRoot = new VectorSchemaRoot(vectors);
         vectorSchemaRoot.setRowCount(count);
         return vectorSchemaRoot;

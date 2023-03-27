@@ -54,7 +54,7 @@ public:
    * @param class_name
    * @return const std::shared_ptr<mtable>
    */
-  const static std::shared_ptr<mtable> java(std::shared_ptr<mtable>, std::string class_name);
+  const static std::shared_ptr<mtable> java(std::shared_ptr<mtable>, std::string class_name, std::map<std::string, uint64_t> units);
 
   /**
    * @brief train a xgboost model

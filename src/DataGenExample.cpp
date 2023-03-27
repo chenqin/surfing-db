@@ -186,7 +186,8 @@ int main(int argc, char** argv) {
 
     auto t5 = processors::shuffle(shuffle_in, schema_ptr->fields.at(2), partitioner);
     t5->verifyShuffle(schema_ptr->fields.at(2), partitioner);
-    auto t41 = processors::java(t5, "Bridge");
+    std::map<std::string, uint64_t> units;
+    auto t41 = processors::java(t5, "Bridge", units);
     processors::mnist(pg, t5);
   }
   return terminal_signal;
