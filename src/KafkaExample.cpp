@@ -153,7 +153,6 @@ int main(int argc, char** argv) {
 
     // label
     float throughput = global_row_count / (MPI_Wtime() - start);
-    //processors::mnist(pg, t4);
     if (node->rank == 0) {
       std::cout << "iteration pull " << throughput << " @ qps" << std::endl;
     }

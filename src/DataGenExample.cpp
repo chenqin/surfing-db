@@ -75,10 +75,10 @@ int main(int argc, char** argv) {
   RowSchema r;
   SchemaUtils::initField(r, "timestamp", RowType::LONG, sizeof(long));
   SchemaUtils::initField(r, "host", RowType::STRING, 64);
-  SchemaUtils::initField(r, "metricName", RowType::STRING, MAX_STR_LEN);
+  SchemaUtils::initField(r, "metricName", RowType::STRING, 1024);
   SchemaUtils::initListField(r, "metricValues", RowType::DOUBLE, 2, sizeof(DOUBLE_TYPE));
   SchemaUtils::initMapField(r, "meta", RowType::STRING, RowType::STRING, 1, 32, 64);
-  std::map<std::string, uint64_t> units = { { "metricValues", 2 }, { "meta", 1 } };
+  std::map<std::string, uint64_t> units = { {"host", 1024}, { "metricValues", 2 }, { "meta", 1 } };
   /**
    * @brief initial constructors
    * node -> single executor binding to MPI rank, number of node determined by mpi processes
@@ -114,8 +114,8 @@ int main(int argc, char** argv) {
     row->write(out.fields.at(3), p);
     PValue key;
     PValue value;
-    key.string_val = random_string(MAX_STR_LEN - 1);
-    value.string_val = random_string(MAX_STR_LEN - 1);
+    key.string_val = random_string(1024 - 1);
+    value.string_val = random_string(1024 - 1);
     std::pair<PValue, PValue> pair;
     pair.first = key;
     pair.second = value;
@@ -123,7 +123,7 @@ int main(int argc, char** argv) {
     row->write(out.fields.at(4), p);
     return row;
   };
-  auto con = DataGenConnector(node, "source", BATCH_SIZE, 1000, schema_ptr, deser);
+  auto con = DataGenConnector(node, "source", BATCH_SIZE, 10000, schema_ptr, deser);
 
   std::signal(SIGTERM | SIGINT, signal_handler);
 
@@ -188,7 +188,7 @@ int main(int argc, char** argv) {
     t5->verifyShuffle(schema_ptr->fields.at(2), partitioner);
     std::map<std::string, uint64_t> units;
     auto t41 = processors::java(t5, "Bridge", units);
-    processors::mnist(pg, t5);
+    processors::mnist(pg, t41);
   }
   return terminal_signal;
 }
