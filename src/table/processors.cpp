@@ -534,7 +534,11 @@ const std::shared_ptr<mtable> processors::java(std::shared_ptr<mtable> input, st
                                   static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArrayIn)),
                                   static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchemaOut)),
                                   static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArrayOut)));
+  node->env->DeleteLocalRef(bridge);
 
+  if (node->env->ExceptionCheck()) {
+    LOG(INFO) << << "fail to call jni";
+  }
   /**
    * @brief import schema and data from java
    *

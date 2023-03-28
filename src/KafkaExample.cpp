@@ -65,10 +65,10 @@ int main(int argc, char** argv) {
   std::map<std::string, uint64_t> units = { { "topic", 64 }, { "payload", MAX_STR_LEN }};
 
   /**
-   * features
+   * pull every 2 seconds
    */
-  int batch = 20000;
-  int interval = 200;
+  int batch = 5000;
+  int interval = 100;
   int world = node->world;
 
   size_t total = 0;
@@ -125,11 +125,8 @@ int main(int argc, char** argv) {
     auto t2 = std::async(std::launch::async, [&metrics_staging] { return metrics_staging.consume_batch();});
     auto t3 = std::async(std::launch::async, [&metrics_log_staging] { return metrics_log_staging.consume_batch();});
     auto t4 = std::async(std::launch::async, [&metrics_log_prod] { return metrics_log_prod.consume_batch();});
-    std::vector<std::shared_ptr<mtable>> inputs;
-    inputs.push_back(t1.get());
-    inputs.push_back(t2.get());
-    inputs.push_back(t3.get());
-    inputs.push_back(t4.get());
+    std::vector<std::shared_ptr<mtable>> inputs{t1.get(), t2.get(), t3.get(), t4.get()};
+    
     size_t local_row_count = 0;
     std::map<std::string, uint64_t> units = {{"jobid", 64}, {"json", 10240}};
 
