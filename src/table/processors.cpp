@@ -537,7 +537,7 @@ const std::shared_ptr<mtable> processors::java(std::shared_ptr<mtable> input, st
   node->env->DeleteLocalRef(bridge);
 
   if (node->env->ExceptionCheck()) {
-    LOG(INFO) << << "fail to call jni";
+    LOG(ERROR) << "fail to call jni";
   }
   /**
    * @brief import schema and data from java

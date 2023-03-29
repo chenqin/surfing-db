@@ -240,8 +240,9 @@ KafkaConnector::KafkaConnector(const std::shared_ptr<node> node_ptr,
   /* Callback called on partition assignment changes */
   rd_kafka_conf_set_rebalance_cb(conf, cb);
 
-  rd_kafka_conf_set(conf, "enable.partition.eof", "false",
-                    NULL, 0);
+  rd_kafka_conf_set(conf, "enable.partition.eof", "false", NULL, 0);
+
+  rd_kafka_conf_set(conf, "queued.min.messages", "100", NULL, 0);
 
   /* If there is no previously committed offset for a partition
    * the auto.offset.reset strategy will be used to decide where
