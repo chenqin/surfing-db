@@ -64,10 +64,45 @@ public:
     auto arrow_t1 = utils::toArrow(t1);
     auto table_1 = arrow::Table::FromRecordBatches({ std::move(arrow_t1) }).ValueOrDie();
     int max_row = t1->row_count;
-    CHECK_GT(max_row, 0); //table source needs not be empty
+    CHECK_GT(max_row, 0); // table source needs not be empty
     auto table_source_options = TableSourceNodeOptions(table_1, max_row);
     Declaration source("table_source", std::move(table_source_options));
     return source;
+  }
+
+  static Declaration source(std::shared_ptr<arrow::RecordBatch> arrow_t1) {
+    int max_row = arrow_t1->num_rows();
+    CHECK_GT(max_row, 0); // table source needs not be empty
+    auto table_1 = arrow::Table::FromRecordBatches({ std::move(arrow_t1) }).ValueOrDie();
+    auto table_source_options = TableSourceNodeOptions(table_1, max_row);
+    Declaration source("table_source", std::move(table_source_options));
+    return source;
+  }
+
+  static Declaration shuffle(Declaration& node_in, std::map<std::string, uint64_t> units, std::shared_ptr<node> node) {
+    auto tables = DeclarationToBatches(std::move(node_in)).ValueOrDie();
+    CHECK_LE(tables.size(), 1);
+
+    for (const auto& t : tables) {
+      auto schema = utils::fromArrow(t->schema(), units);
+      auto mtable = utils::fromArrow(t, units, node);
+      auto t5 = processors::shuffle(mtable, schema->fields.at(0), [](size_t key, int rank, int world) {
+        return key % world;
+      });
+      t5->verifyShuffle(schema->fields.at(0), [](size_t key, int rank, int world) {
+        return key % world;
+      });
+      return source(t5);
+    }
+  }
+
+  static Declaration java(Declaration& node_in, std::string classname, std::shared_ptr<node> node) {
+    auto tables = DeclarationToBatches(std::move(node_in)).ValueOrDie();
+    CHECK_LE(tables.size(), 1);
+    for (const auto& t : tables) {
+      auto t3 = processors::java(t, classname, node);
+      return source(t3);
+    }
   }
 
   static Declaration filter(Declaration& node_in, Expression& expression) {
