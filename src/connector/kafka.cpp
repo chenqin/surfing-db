@@ -55,10 +55,10 @@ std::string serversettobrokers(std::string serversetpath) {
   std::string line;
   std::string brokers = "";
   int count = 0;
-  int start = std::experimental::randint(1, 20);
+  int start = std::experimental::randint(1, 30);
   std::ifstream myfile(serversetpath.c_str());
   if (myfile.is_open()) {
-    while (getline(myfile, line) && count < 1) {
+    while (getline(myfile, line) && count < 5) {
       // std::cout << line << '\n';
       if (start-- < 0) {
         brokers += line + ",";
@@ -240,7 +240,7 @@ KafkaConnector::KafkaConnector(const std::shared_ptr<node> node_ptr,
 
   rd_kafka_conf_set(conf, "enable.partition.eof", "false", NULL, 0);
 
-  rd_kafka_conf_set(conf, "queued.min.messages", "100", NULL, 0);
+  rd_kafka_conf_set(conf, "queued.min.messages", "100000", NULL, 0);
 
   /* If there is no previously committed offset for a partition
    * the auto.offset.reset strategy will be used to decide where
@@ -377,7 +377,7 @@ std::shared_ptr<mtable> KafkaConnector::consume_batch(std::function<std::shared_
   auto t = std::make_shared<mtable>(node_ptr, schema_ptr, max_batch_size * schema_ptr->rowSize());
   auto start = MPI_Wtime();
   int total = 0;
-  while ((MPI_Wtime() - start) * 1000 < timeout && total++ < max_batch_size) {
+  while ((MPI_Wtime() - start) * 1000 < timeout && total < max_batch_size) {
     rd_kafka_message_t* rkm = rd_kafka_consumer_poll(rk, 50);
     if (!rkm)
       continue; /* Timeout: no message within 100ms,
@@ -399,6 +399,7 @@ std::shared_ptr<mtable> KafkaConnector::consume_batch(std::function<std::shared_
     if (b != nullptr) {
       t->appendRow(*b.get());
     }
+    total++;
     rd_kafka_message_destroy(rkm);
   }
   /**
