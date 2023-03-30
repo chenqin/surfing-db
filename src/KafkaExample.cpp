@@ -62,7 +62,6 @@ int main(int argc, char** argv) {
   SchemaUtils::initField(r, "topic", RowType::STRING, 64);
   SchemaUtils::initField(r, "payload", RowType::STRING, MAX_STR_LEN);
   const std::shared_ptr<mschema> schema_ptr = std::make_shared<mschema>(r);
-  std::map<std::string, uint64_t> units = { { "topic", 64 }, { "payload", MAX_STR_LEN } };
 
   /**
    * pull every 2 seconds
@@ -158,6 +157,15 @@ int main(int argc, char** argv) {
     for(const auto& t : tables){
       local_row_count += t->num_rows();
       auto t3 = processors::java(t, "MyBridge", node);
+      std::map<std::string, uint64_t> units = { { "jobid", 64 }, { "json", 2048 } };
+      auto schema = utils::fromArrow(t3->schema(), units);
+      auto mtable = utils::fromArrow(t3, units, node);
+      auto t5 = processors::shuffle(mtable, schema->fields.at(0), [](size_t key, int rank, int world) {
+        return key % world;
+      });
+      t5->verifyShuffle(schema->fields.at(0), [](size_t key, int rank, int world) {
+        return key % world;
+      });
     }
 
     size_t global_row_count = 0;
