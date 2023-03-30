@@ -89,7 +89,6 @@ int main(int argc, char** argv) {
     }
     return r;
   };
-
   auto metrics_prod = KafkaConnector(
     node, "kafka-source", batch, interval, schema_ptr,
     { "xenon_metrics_prod" }, "/var/serverset/discovery.datakafka08.prod", group_id, false);
@@ -125,30 +124,23 @@ int main(int argc, char** argv) {
     auto start = MPI_Wtime();
     // kafka consumer
 
-    auto t1 = std::async(std::launch::async, [&metrics_prod] { return metrics_prod.consume_batch(); });
-    auto t2 = std::async(std::launch::async, [&metrics_staging] { return metrics_staging.consume_batch(); });
-    auto t3 = std::async(std::launch::async, [&metrics_log_staging] { return metrics_log_staging.consume_batch(); });
-    auto t4 = std::async(std::launch::async, [&metrics_log_prod] { return metrics_log_prod.consume_batch(); });
-    std::vector<std::shared_ptr<mtable>> inputs{ t1.get(), t2.get(), t3.get(), t4.get() };
-
-    size_t local_row_count = 0;
-    std::map<std::string, uint64_t> units = { { "jobid", 64 }, { "json", 10240 } };
-
-    for (auto& t : inputs) {
-      auto tjava = processors::java(t, "MyBridge", units);
-      auto schema = tjava->getSchema();
-      /*
-       * assign data gather from rest of workers to gpu backed worker
-       */
-      auto partitioner = [](size_t key, int rank, int world) {
-        return key % world;
-      };
-
-      auto tshuffle = processors::shuffle(tjava, schema->fields.at(0), partitioner);
-      tshuffle->verifyShuffle(schema->fields.at(0), partitioner);
-
-      local_row_count += t->row_count;
-    }
+    auto t1 = std::async(std::launch::async, [&metrics_prod] {
+      RowSchema r;
+      SchemaUtils::initField(r, "topic", RowType::STRING, 64);
+      SchemaUtils::initField(r, "payload", RowType::STRING, MAX_STR_LEN);
+      const std::shared_ptr<mschema> schema_ptr = std::make_shared<mschema>(r);
+      return metrics_prod.consume_batch([&schema_ptr](const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders) {
+        PValue v1, v2;
+        Value placeholder;
+        v1.string_val = "metric";
+        v2.string_val = std::string(payload);
+        utils::append(builders.at(0).get(), schema_ptr->fields.at(0), v1, placeholder);
+        utils::append(builders.at(1).get(), schema_ptr->fields.at(1), v2, placeholder);
+      });
+    });
+    auto t = t1.get();
+    long local_row_count = t->num_rows();
+    auto t2 = processors::java(t, "MyBridge", node);
     size_t global_row_count = 0;
     MPI_Allreduce(&local_row_count, &global_row_count, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
 
@@ -158,12 +150,5 @@ int main(int argc, char** argv) {
       std::cout << "iteration pull " << throughput << " @ qps" << std::endl;
     }
   }
-  /**
-   * @brief use arrow filter expressions
-   *
-   */
-  /**
-   * shuffle if needed
-   */
   return terminal_signal;
 }

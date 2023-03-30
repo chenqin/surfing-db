@@ -188,200 +188,200 @@ void processors::mnist(c10::intrusive_ptr<c10d::ProcessGroupMPI> pg, std::shared
     }   // end epoch
   } else {
     CHECK_EQ(rank, 0);
-  /**
-   * @brief ensure gpu node stay in rank 0
-   *
-   */
-  auto cuda_available = torch::cuda::is_available();
-  torch::Device device(cuda_available ? torch::kCUDA : torch::kCPU);
-  // TRAINING
-  // Read train dataset
+    /**
+     * @brief ensure gpu node stay in rank 0
+     *
+     */
+    auto cuda_available = torch::cuda::is_available();
+    torch::Device device(cuda_available ? torch::kCUDA : torch::kCPU);
+    // TRAINING
+    // Read train dataset
 
-  auto num_train_samples_per_proc = train_dataset.size().value();
+    auto num_train_samples_per_proc = train_dataset.size().value();
 
-  // Generate dataloader
-  auto total_batch_size = 64;
-  auto batch_size_per_proc = total_batch_size / numranks; // effective batch size in each processor
-  auto data_loader = torch::data::make_data_loader(
-    std::move(train_dataset), data_sampler, batch_size_per_proc);
+    // Generate dataloader
+    auto total_batch_size = 64;
+    auto batch_size_per_proc = total_batch_size / numranks; // effective batch size in each processor
+    auto data_loader = torch::data::make_data_loader(
+      std::move(train_dataset), data_sampler, batch_size_per_proc);
 
-  // setting manual seed
-  torch::manual_seed(0);
+    // setting manual seed
+    torch::manual_seed(0);
 
-  auto model = std::make_shared<Model>();
-  model->to(device);
+    auto model = std::make_shared<Model>();
+    model->to(device);
 
-  auto learning_rate = 1e-2;
+    auto learning_rate = 1e-2;
 
-  torch::optim::SGD optimizer(model->parameters(), learning_rate);
+    torch::optim::SGD optimizer(model->parameters(), learning_rate);
 
-  // Number of epochs
-  size_t num_epochs = 10;
+    // Number of epochs
+    size_t num_epochs = 10;
 
-  for (size_t epoch = 1; epoch <= num_epochs; ++epoch) {
-    size_t num_correct = 0;
-    auto start = MPI_Wtime();
-    for (auto& batch : *data_loader) {
-      /**
-       * @brief collect all batch data from CPU ranks and feed into
-       *
-       */
-      std::vector<std::vector<torch::Tensor>> all_data, all_target;
-      std::vector<c10::intrusive_ptr<c10d::Work>> data_workers, target_workers;
-
-      for (int i = 0; i < numranks; i++) {
+    for (size_t epoch = 1; epoch <= num_epochs; ++epoch) {
+      size_t num_correct = 0;
+      auto start = MPI_Wtime();
+      for (auto& batch : *data_loader) {
         /**
-         * @brief async recv all mini batch from all workers
-         *        put rank 0 data on first index
-         */
-        all_data.push_back({ batch.data.clone() });
-        all_target.push_back({ batch.target.clone() });
-        /**
-         * @brief setup async recv data and target from rank i
+         * @brief collect all batch data from CPU ranks and feed into
          *
          */
-        if (i > 0) {
-          auto work1 = pg->recv(all_data.at(i), i, i);
-          auto work2 = pg->recv(all_target.at(i), i, i);
-          data_workers.push_back(work1);
-          target_workers.push_back(work2);
+        std::vector<std::vector<torch::Tensor>> all_data, all_target;
+        std::vector<c10::intrusive_ptr<c10d::Work>> data_workers, target_workers;
+
+        for (int i = 0; i < numranks; i++) {
+          /**
+           * @brief async recv all mini batch from all workers
+           *        put rank 0 data on first index
+           */
+          all_data.push_back({ batch.data.clone() });
+          all_target.push_back({ batch.target.clone() });
+          /**
+           * @brief setup async recv data and target from rank i
+           *
+           */
+          if (i > 0) {
+            auto work1 = pg->recv(all_data.at(i), i, i);
+            auto work2 = pg->recv(all_target.at(i), i, i);
+            data_workers.push_back(work1);
+            target_workers.push_back(work2);
+          }
         }
-      }
+
+        /**
+         * @brief async feed batch and target into gpu
+         *
+         */
+        std::vector<at::Tensor> ips;
+        std::vector<at::Tensor> ops;
+        std::mutex g_mutex;
+        std::condition_variable cv;
+        bool ready = false;
+
+        std::future<size_t> gpu_task = std::async(std::launch::async, [&] {
+          int j = 0;
+
+          while (j < numranks) {
+            std::unique_lock lk(g_mutex);
+            cv.wait(lk, [] { return true; });
+            // Reset gradients
+            model->zero_grad();
+
+            auto ip = ips.at(j);
+            auto op = ops.at(j);
+            // Execute forward pass
+            auto prediction = model->forward(ip);
+            auto loss = torch::nll_loss(torch::log_softmax(prediction, 1), op);
+
+            // Backpropagation
+            loss.backward();
+
+            //  Update parameters
+            optimizer.step();
+
+            auto guess = prediction.argmax(1);
+            num_correct += torch::sum(guess.eq_(op)).item<int64_t>();
+            j++;
+            lk.unlock();
+          }
+          return num_correct;
+        });
+
+        for (int i = 0; i < numranks; i++) {
+          if (i > 0) {
+            data_workers.at(i - 1)->wait();
+            batch.data = all_data.at(i).at(0);
+          }
+
+          auto ip = batch.data.to(device);
+          ip = ip.to(torch::kF32);
+          ips.push_back(ip);
+          if (i > 0) {
+            target_workers.at(i - 1)->wait();
+            batch.target = all_target.at(i).at(0);
+          }
+          auto op = batch.target.to(device).squeeze();
+          op = op.to(torch::kLong);
+          ops.push_back(op);
+          /**
+           * one sample data and target ready, notify training thread
+           */
+          std::lock_guard lk(g_mutex);
+          ready = true;
+          cv.notify_one();
+        }
+        gpu_task.wait();
+      } // end batch loader
 
       /**
-       * @brief async feed batch and target into gpu
-       *
+       * @brief model sync, move grad from CUDA to CPU to run MPI
+       * 1) do sum of all grad values across all gpus ranks
+       * 2) avg grad and send back to all gpu ranks
        */
-      std::vector<at::Tensor> ips;
-      std::vector<at::Tensor> ops;
-      std::mutex g_mutex;
-      std::condition_variable cv;
-      bool ready = false;
-
-      std::future<size_t> gpu_task = std::async(std::launch::async, [&]{ 
-        int j = 0;
-
-        while(j < numranks) {
-          std::unique_lock lk(g_mutex);
-          cv.wait(lk, []{return true;});
-          // Reset gradients
-          model->zero_grad();
-
-          auto ip = ips.at(j);
-          auto op = ops.at(j);
-          // Execute forward pass
-          auto prediction = model->forward(ip);
-          auto loss = torch::nll_loss(torch::log_softmax(prediction, 1), op);
-
-          // Backpropagation
-          loss.backward();
-
-          //  Update parameters
-          optimizer.step();
-
-          auto guess = prediction.argmax(1);
-          num_correct += torch::sum(guess.eq_(op)).item<int64_t>();
-          j++;
-          lk.unlock();
-        }
-        return num_correct; 
-      });
-
-      for (int i = 0; i < numranks; i++) {
-        if (i > 0) {
-          data_workers.at(i - 1)->wait();
-          batch.data = all_data.at(i).at(0);
-        }
-
-        auto ip = batch.data.to(device);
-        ip = ip.to(torch::kF32);
-        ips.push_back(ip);
-        if (i > 0) {
-          target_workers.at(i - 1)->wait();
-          batch.target = all_target.at(i).at(0);
-        }
-        auto op = batch.target.to(device).squeeze();
-        op = op.to(torch::kLong);
-        ops.push_back(op);
-        /**
-        * one sample data and target ready, notify training thread
-        */
-        std::lock_guard lk(g_mutex);
-        ready = true;
-        cv.notify_one();
+      std::vector<c10::intrusive_ptr<c10d::Work>> sync_worker;
+      for (auto& param : model->named_parameters()) {
+        std::vector<torch::Tensor> send_temp = { param.value().grad().clone().to(torch::kCPU) };
+        std::vector<torch::Tensor> recv_temp = { param.value().grad().clone().to(torch::kCPU) };
+        auto sender = pg->send(send_temp, 0, 0);
+        sync_worker.push_back(sender);
       }
-      gpu_task.wait();
-    } // end batch loader
 
-    /**
-      * @brief model sync, move grad from CUDA to CPU to run MPI
-      * 1) do sum of all grad values across all gpus ranks
-      * 2) avg grad and send back to all gpu ranks
-      */
-    std::vector<c10::intrusive_ptr<c10d::Work>> sync_worker;
-    for (auto& param : model->named_parameters()) {
-      std::vector<torch::Tensor> send_temp = {param.value().grad().clone().to(torch::kCPU)};
-      std::vector<torch::Tensor> recv_temp = {param.value().grad().clone().to(torch::kCPU)};
-      auto sender = pg->send(send_temp, 0, 0);
-      sync_worker.push_back(sender);
-    }
+      for (auto& param : model->named_parameters()) {
+        std::vector<torch::Tensor> recv_temp = { param.value().grad().clone().to(torch::kCPU) };
+        auto reciver = pg->recv(recv_temp, 0, 0);
+        sync_worker.push_back(reciver);
+      }
+      /**
+       * @brief wait till gpu grad sync complete
+       *
+       * @param sync_worker
+       */
+      for (auto& worker : sync_worker) {
+        worker->wait();
+      }
 
-    for (auto& param : model->named_parameters()) {
-      std::vector<torch::Tensor> recv_temp = {param.value().grad().clone().to(torch::kCPU)};
-      auto reciver = pg->recv(recv_temp, 0, 0);
-      sync_worker.push_back(reciver);
-    }
-    /**
-      * @brief wait till gpu grad sync complete
-      * 
-      * @param sync_worker 
-      */
-    for(auto& worker : sync_worker) {
-      worker->wait();
-    }
+      auto accuracy = 100.0 * num_correct / num_train_samples_per_proc;
+      std::cout << "Accuracy in rank " << rank << " in epoch " << epoch << " - "
+                << accuracy << " with " << num_train_samples_per_proc / (MPI_Wtime() - start) << " qps" << std::endl;
 
-    auto accuracy = 100.0 * num_correct / num_train_samples_per_proc;
-    std::cout << "Accuracy in rank " << rank << " in epoch " << epoch << " - "
-              << accuracy << " with "<< num_train_samples_per_proc/ (MPI_Wtime() - start) << " qps" << std::endl;
+    } // end epoch
 
-  } // end epoch
+    auto test_dataset = torch::data::datasets::MNIST(
+                          kDataRoot, torch::data::datasets::MNIST::Mode::kTest)
+                          .map(torch::data::transforms::Normalize<>(0.1307, 0.3081))
+                          .map(torch::data::transforms::Stack<>());
 
-  auto test_dataset = torch::data::datasets::MNIST(
-                        kDataRoot, torch::data::datasets::MNIST::Mode::kTest)
-                        .map(torch::data::transforms::Normalize<>(0.1307, 0.3081))
-                        .map(torch::data::transforms::Stack<>());
+    auto num_test_samples = test_dataset.size().value();
+    auto test_loader = torch::data::make_data_loader(
+      std::move(test_dataset), num_test_samples);
 
-  auto num_test_samples = test_dataset.size().value();
-  auto test_loader = torch::data::make_data_loader(
-    std::move(test_dataset), num_test_samples);
+    model->eval(); // enable eval mode to prevent backprop
 
-  model->eval(); // enable eval mode to prevent backprop
+    size_t num_correct = 0;
 
-  size_t num_correct = 0;
+    for (auto& batch : *test_loader) {
+      auto ip = batch.data.to(device);
+      auto op = batch.target.to(device).squeeze();
 
-  for (auto& batch : *test_loader) {
-    auto ip = batch.data.to(device);
-    auto op = batch.target.to(device).squeeze();
+      // convert to required format
+      ip = ip.to(torch::kF32);
+      op = op.to(torch::kLong);
 
-    // convert to required format
-    ip = ip.to(torch::kF32);
-    op = op.to(torch::kLong);
+      auto prediction = model->forward(ip);
 
-    auto prediction = model->forward(ip);
+      auto loss = torch::nll_loss(torch::log_softmax(prediction, 1), op);
 
-    auto loss = torch::nll_loss(torch::log_softmax(prediction, 1), op);
+      std::cout << "Test loss - " << loss.item<float>() << std::endl;
 
-    std::cout << "Test loss - " << loss.item<float>() << std::endl;
+      auto guess = prediction.argmax(1);
 
-    auto guess = prediction.argmax(1);
+      num_correct += torch::sum(guess.eq_(op)).item<int64_t>();
 
-    num_correct += torch::sum(guess.eq_(op)).item<int64_t>();
+    } // end test loader
 
-  } // end test loader
-
-  std::cout << "Num correct - " << num_correct << std::endl;
-  std::cout << "Test Accuracy - " << 100.0 * num_correct / num_test_samples
-            << std::endl;
+    std::cout << "Num correct - " << num_correct << std::endl;
+    std::cout << "Test Accuracy - " << 100.0 * num_correct / num_test_samples
+              << std::endl;
   }
 }
 
@@ -550,6 +550,48 @@ const std::shared_ptr<mtable> processors::java(std::shared_ptr<mtable> input, st
   release_malloced_type(&arrowSchemaIn);
   release_malloced_type(&arrowSchemaOut);
   return utils::fromArrow(recordBatch, units, node);
+}
+
+const std::shared_ptr<arrow::RecordBatch> processors::java(std::shared_ptr<arrow::RecordBatch> batch, std::string class_name, std::shared_ptr<node> node) {
+  const jclass bridge = node->env->FindClass(class_name.c_str());
+  CHECK_NOTNULL(bridge);
+  struct ArrowSchema arrowSchemaIn, arrowSchemaOut;
+  struct ArrowArray arrowArrayIn, arrowArrayOut;
+  const jmethodID invoke_method = node->env->GetStaticMethodID(bridge, std::string(BRIDGE_METHOD_NAME).c_str(), "(JJJJ)V");
+  CHECK_NOTNULL(invoke_method);
+
+  /**
+   * @brief export schema and data
+   *
+   */
+  auto schema_ptr = batch->schema();
+  arrow::ExportSchema(*schema_ptr.get(), &arrowSchemaIn);
+  arrow::ExportRecordBatch(*batch.get(), &arrowArrayIn, &arrowSchemaIn);
+  /**
+   * @brief invoke java method, passing pointers
+   *
+   */
+  node->env->CallStaticVoidMethod(bridge, invoke_method,
+                                  static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchemaIn)),
+                                  static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArrayIn)),
+                                  static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchemaOut)),
+                                  static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArrayOut)));
+  node->env->DeleteLocalRef(bridge);
+
+  if (node->env->ExceptionCheck()) {
+    LOG(ERROR) << "fail to call jni";
+  }
+  /**
+   * @brief import schema and data from java
+   *
+   */
+  const auto resultImportVectorSchemaRoot = arrow::ImportRecordBatch(&arrowArrayOut, &arrowSchemaOut);
+  std::shared_ptr<arrow::RecordBatch> recordBatch = resultImportVectorSchemaRoot.ValueOrDie();
+  release_malloced_array(&arrowArrayIn);
+  release_malloced_array(&arrowArrayOut);
+  release_malloced_type(&arrowSchemaIn);
+  release_malloced_type(&arrowSchemaOut);
+  return recordBatch;
 }
 
 } // namespace table
