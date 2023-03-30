@@ -42,10 +42,10 @@ public:
                    std::string connector_name,
                    size_t max_batch_size,
                    int timeout,
-                   std::shared_ptr<mschema> schema_ptr,
-                   std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser);
+                   std::shared_ptr<mschema> schema_ptr);
 
-  shared_ptr<mtable> consume_batch();
+  shared_ptr<mtable> consume_batch(std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser);
+  std::shared_ptr<arrow::RecordBatch> consume_batch(std::function<void(const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders)> deser);
 };
 } // namespace connector
 

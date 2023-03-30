@@ -72,13 +72,15 @@ int main(int argc, char** argv) {
   google::InstallFailureSignalHandler();
   google::InitGoogleLogging(argv[0]);
   // define how data will be stored, as rows in a table
-  RowSchema r;
+  RowSchema r, r1;
   SchemaUtils::initField(r, "timestamp", RowType::LONG, sizeof(long));
+  SchemaUtils::initField(r1, "timestamp", RowType::LONG, sizeof(long));
   SchemaUtils::initField(r, "host", RowType::STRING, 64);
   SchemaUtils::initField(r, "metricName", RowType::STRING, 1024);
   SchemaUtils::initListField(r, "metricValues", RowType::DOUBLE, 2, sizeof(DOUBLE_TYPE));
+  SchemaUtils::initListField(r1, "metricValues", RowType::DOUBLE, 2, sizeof(DOUBLE_TYPE));
   SchemaUtils::initMapField(r, "meta", RowType::STRING, RowType::STRING, 1, 32, 64);
-  std::map<std::string, uint64_t> units = { {"host", 1024}, { "metricValues", 2 }, { "meta", 1 } };
+  std::map<std::string, uint64_t> units = { { "host", 1024 }, { "metricValues", 2 }, { "meta", 1 } };
   /**
    * @brief initial constructors
    * node -> single executor binding to MPI rank, number of node determined by mpi processes
@@ -89,6 +91,7 @@ int main(int argc, char** argv) {
   const auto node = std::make_shared<surfingdb::meta::node>(&argc, &argv);
 
   const auto schema_ptr = std::make_shared<mschema>(r);
+  const auto schema_ptr1 = std::make_shared<mschema>(r1);
   /**
    * @brief define a data gen source
    *
@@ -123,7 +126,8 @@ int main(int argc, char** argv) {
     row->write(out.fields.at(4), p);
     return row;
   };
-  auto con = DataGenConnector(node, "source", BATCH_SIZE, 10000, schema_ptr, deser);
+  auto con = DataGenConnector(node, "source", BATCH_SIZE, 10000, schema_ptr);
+  auto con1 = DataGenConnector(node, "source", BATCH_SIZE, 10000, schema_ptr1);
 
   std::signal(SIGTERM | SIGINT, signal_handler);
 
@@ -154,28 +158,39 @@ int main(int argc, char** argv) {
     const size_t intial_row_count = BATCH_SIZE;
     size_t total_row_count = intial_row_count;
     double start = MPI_Wtime();
-    auto t1 = con.consume_batch();
-    //std::cout << node->rank << " " << t1->row_count << std::endl;
+
+    auto arrow_t2 = con1.consume_batch([&schema_ptr1](const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders) {
+      PValue p;
+      Value v;
+      p.long_val = 1;
+      p.double_val = 0.1;
+      v.list_value = { p, p };
+      utils::append(builders.at(0).get(), schema_ptr1->fields.at(0), p, v);
+      utils::append(builders.at(1).get(), schema_ptr1->fields.at(1), p, v);
+    });
+    CHECK(arrow_t2->num_rows() == BATCH_SIZE);
+    auto t1 = con.consume_batch(deser);
+    // std::cout << node->rank << " " << t1->row_count << std::endl;
     std::shared_ptr<mtable> shuffle_in = t1;
 
     auto source = engine::source(t1);
     cp::Expression filter_expr = cp::less(cp::field_ref("timestamp"), cp::literal(3));
     auto filter_ = engine::filter(source, filter_expr);
     auto batches = cp::DeclarationToBatches(std::move(filter_)).ValueOrDie();
-    
+
     for (int i = 0; i < batches.size(); i++) {
       auto t2 = utils::fromArrow(batches.at(i), units, node);
       auto schema_1 = utils::fromArrow(batches.at(i)->schema(), units);
       /**
        * @brief transform data into shuffle schema
-       * 
+       *
        */
       shuffle_in = processors::map(t2, schema_ptr, [&](mrow& in, mrow& out, const mschema& out_schema) {
         for (const auto& f : out_schema.fields) {
           Value v;
           /**
            * @brief read from old schema field
-           * 
+           *
            */
           in.read(schema_1->getFieldByName(f.name), v);
           out.write(f, v);
@@ -188,7 +203,7 @@ int main(int argc, char** argv) {
     t5->verifyShuffle(schema_ptr->fields.at(2), partitioner);
     std::map<std::string, uint64_t> units;
     auto t41 = processors::java(t5, "Bridge", units);
-    //processors::mnist(pg, t41);
+    // processors::mnist(pg, t41);
   }
   return terminal_signal;
 }

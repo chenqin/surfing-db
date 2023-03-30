@@ -16,15 +16,15 @@
 
 #include <chrono>
 #include <fmt/core.h>
-#include <iostream>
-#include <string>
 #include <future>
 #include <glog/logging.h>
+#include <iostream>
 #include <omp.h>
 #include <rapidjson/document.h>
+#include <string>
 #include "connector/kafka.h"
-#include "meta/node.h"
 #include "engine/engine.h"
+#include "meta/node.h"
 #include "table/processors.h"
 #include "table/utils.h"
 
@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
 
   //  create node of cluster
-  //auto pg = c10d::ProcessGroupMPI::createProcessGroupMPI();
+  // auto pg = c10d::ProcessGroupMPI::createProcessGroupMPI();
   const auto node = std::make_shared<surfingdb::meta::node>(&argc, &argv);
   /**
    * @brief define topic schema
@@ -62,7 +62,7 @@ int main(int argc, char** argv) {
   SchemaUtils::initField(r, "topic", RowType::STRING, 64);
   SchemaUtils::initField(r, "payload", RowType::STRING, MAX_STR_LEN);
   const std::shared_ptr<mschema> schema_ptr = std::make_shared<mschema>(r);
-  std::map<std::string, uint64_t> units = { { "topic", 64 }, { "payload", MAX_STR_LEN }};
+  std::map<std::string, uint64_t> units = { { "topic", 64 }, { "payload", MAX_STR_LEN } };
 
   /**
    * pull every 2 seconds
@@ -80,23 +80,25 @@ int main(int argc, char** argv) {
   std::signal(SIGTERM | SIGINT, signal_handler);
 
   auto metric_deser = [](const char* payload, const mschema& out) {
-      auto r = std::make_shared<mrow>(std::make_shared<mschema>(out));
-      Value v[2];
-      v[0].p_val.string_val = "metric";
-      v[1].p_val.string_val = std::string(payload);
-      for (int i = 0; i < 2; i++) {
-        r->write(out.fields.at(i), v[i]);
-      }
-      return r;
-    };
+    auto r = std::make_shared<mrow>(std::make_shared<mschema>(out));
+    Value v[2];
+    v[0].p_val.string_val = "metric";
+    v[1].p_val.string_val = std::string(payload);
+    for (int i = 0; i < 2; i++) {
+      r->write(out.fields.at(i), v[i]);
+    }
+    return r;
+  };
 
   auto metrics_prod = KafkaConnector(
-    node, "kafka-source", batch, interval, schema_ptr, metric_deser,
-    {"xenon_metrics_prod"}, "/var/serverset/discovery.datakafka08.prod", group_id, false);
+    node, "kafka-source", batch, interval, schema_ptr,
+    { "xenon_metrics_prod" }, "/var/serverset/discovery.datakafka08.prod", group_id, false);
+  metrics_prod.setDeser(metric_deser);
 
   auto metrics_staging = KafkaConnector(
-    node, "kafka-source", batch, interval, schema_ptr, metric_deser,
-     {"xenon_metrics_staging"}, "/var/serverset/discovery.datakafka08.prod", group_id, false);
+    node, "kafka-source", batch, interval, schema_ptr,
+    { "xenon_metrics_staging" }, "/var/serverset/discovery.datakafka08.prod", group_id, false);
+  metrics_staging.setDeser(metric_deser);
 
   auto metric_log_deser = [](const char* payload, const mschema& out) {
     auto r = std::make_shared<mrow>(std::make_shared<mschema>(out));
@@ -109,33 +111,35 @@ int main(int argc, char** argv) {
     return r;
   };
   auto metrics_log_staging = KafkaConnector(
-    node, "kafka-source", batch, interval, schema_ptr, metric_log_deser,
-     {"xenon-logs-staging"}, "/var/serverset/discovery.metricskafka07.prod", group_id, false);
+    node, "kafka-source", batch, interval, schema_ptr,
+    { "xenon-logs-staging" }, "/var/serverset/discovery.metricskafka07.prod", group_id, false);
+  metrics_log_staging.setDeser(metric_log_deser);
 
   auto metrics_log_prod = KafkaConnector(
-    node, "kafka-source", batch, interval, schema_ptr, metric_log_deser,
-     {"xenon-logs-prod"}, "/var/serverset/discovery.metricskafka07.prod", group_id, false);
+    node, "kafka-source", batch, interval, schema_ptr,
+    { "xenon-logs-prod" }, "/var/serverset/discovery.metricskafka07.prod", group_id, false);
+  metrics_log_prod.setDeser(metric_log_deser);
 
   while (terminal_signal == 0) {
     // simulate a delay to decode and handle kafka batch
     auto start = MPI_Wtime();
     // kafka consumer
-    
-    auto t1 = std::async(std::launch::async, [&metrics_prod] { return metrics_prod.consume_batch();});
-    auto t2 = std::async(std::launch::async, [&metrics_staging] { return metrics_staging.consume_batch();});
-    auto t3 = std::async(std::launch::async, [&metrics_log_staging] { return metrics_log_staging.consume_batch();});
-    auto t4 = std::async(std::launch::async, [&metrics_log_prod] { return metrics_log_prod.consume_batch();});
-    std::vector<std::shared_ptr<mtable>> inputs{t1.get(), t2.get(), t3.get(), t4.get()};
-    
-    size_t local_row_count = 0;
-    std::map<std::string, uint64_t> units = {{"jobid", 64}, {"json", 10240}};
 
-    for(auto& t : inputs) {
-     auto tjava = processors::java(t, "MyBridge", units);
-     auto schema = tjava->getSchema();
+    auto t1 = std::async(std::launch::async, [&metrics_prod] { return metrics_prod.consume_batch(); });
+    auto t2 = std::async(std::launch::async, [&metrics_staging] { return metrics_staging.consume_batch(); });
+    auto t3 = std::async(std::launch::async, [&metrics_log_staging] { return metrics_log_staging.consume_batch(); });
+    auto t4 = std::async(std::launch::async, [&metrics_log_prod] { return metrics_log_prod.consume_batch(); });
+    std::vector<std::shared_ptr<mtable>> inputs{ t1.get(), t2.get(), t3.get(), t4.get() };
+
+    size_t local_row_count = 0;
+    std::map<std::string, uint64_t> units = { { "jobid", 64 }, { "json", 10240 } };
+
+    for (auto& t : inputs) {
+      auto tjava = processors::java(t, "MyBridge", units);
+      auto schema = tjava->getSchema();
       /*
-      * assign data gather from rest of workers to gpu backed worker
-      */
+       * assign data gather from rest of workers to gpu backed worker
+       */
       auto partitioner = [](size_t key, int rank, int world) {
         return key % world;
       };

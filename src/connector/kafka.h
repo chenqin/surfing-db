@@ -42,10 +42,11 @@ public:
                  size_t,
                  int,
                  std::shared_ptr<mschema>,
-                 std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)>,
                  std::vector<std::string>, std::string, std::string, bool);
 
+  std::shared_ptr<mtable> consume_batch(std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser);
   std::shared_ptr<mtable> consume_batch();
+  std::shared_ptr<arrow::RecordBatch> consume_batch(std::function<void(const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders)> deser) ;
 
   ~KafkaConnector();
 

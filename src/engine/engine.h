@@ -60,17 +60,6 @@ using namespace arrow::compute;
 
 class engine {
 public:
-  static Declaration source(Connector& con) {
-    const auto t1 = con.consume_batch();
-    auto arrow_t1 = utils::toArrow(t1);
-    auto table_1 = arrow::Table::FromRecordBatches({ std::move(arrow_t1) }).ValueOrDie();
-    int max_row = t1->row_count;
-    CHECK_GT(max_row, 0); //table source needs not be empty
-    auto table_source_options = TableSourceNodeOptions(table_1, max_row);
-    Declaration source("table_source", std::move(table_source_options));
-    return source;
-  }
-
   static Declaration source(std::shared_ptr<mtable> t1) {
     auto arrow_t1 = utils::toArrow(t1);
     auto table_1 = arrow::Table::FromRecordBatches({ std::move(arrow_t1) }).ValueOrDie();

@@ -43,7 +43,7 @@ using namespace surfingdb::meta;
  *
  */
 class utils {
-private:
+public:
   static std::shared_ptr<arrow::ArrayBuilder> getBuilder(const RowType::type& type) {
     if (type == RowType::BOOL) {
       return std::make_shared<arrow::BooleanBuilder>();
@@ -148,7 +148,6 @@ private:
     }
   }
 
-public:
   static std::shared_ptr<arrow::Schema> toArrow(const std::shared_ptr<mschema> schema) {
     /**
      * arrow schema conversion

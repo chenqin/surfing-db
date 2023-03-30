@@ -23,6 +23,7 @@
 #include <string.h>
 #include <sys/time.h>
 #include <vector>
+#include "table/utils.h"
 
 namespace surfingdb {
 namespace connector {
@@ -30,16 +31,14 @@ DataGenConnector::DataGenConnector(const std::shared_ptr<node> node_ptr,
                                    std::string connector_name,
                                    size_t max_batch_size,
                                    int timeout,
-                                   std::shared_ptr<mschema> schema_ptr,
-                                   std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser) : Connector(node_ptr,
-                                                                                                                                       connector_name,
-                                                                                                                                       max_batch_size,
-                                                                                                                                       timeout,
-                                                                                                                                       schema_ptr,
-                                                                                                                                       deser) {
+                                   std::shared_ptr<mschema> schema_ptr) : Connector(node_ptr,
+                                                                                    connector_name,
+                                                                                    max_batch_size,
+                                                                                    timeout,
+                                                                                    schema_ptr) {
 }
 
-std::shared_ptr<mtable> DataGenConnector::consume_batch() {
+std::shared_ptr<mtable> DataGenConnector::consume_batch(std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser) {
   /**
    * @brief if node runs data polling set to max_batch, otherwise skip
    *
@@ -54,6 +53,41 @@ std::shared_ptr<mtable> DataGenConnector::consume_batch() {
     }
   }
   return t;
+}
+
+std::shared_ptr<arrow::RecordBatch> DataGenConnector::consume_batch(std::function<void(const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders)> deser) {
+  // auto schema = utils::toArrow(this->schema_ptr);
+  auto start = MPI_Wtime();
+  int total = 0;
+  std::vector<std::shared_ptr<arrow::ArrayBuilder>> builders;
+  std::vector<std::shared_ptr<arrow::Array>> arrays;
+  arrow::MemoryPool* pool = arrow::default_memory_pool();
+  for (auto i = 0; i < schema_ptr->fields.size(); i++) {
+    auto type = schema_ptr->fields.at(i).type;
+    if (type == RowType::LIST) {
+      auto keytype = schema_ptr->fields.at(i).list_type;
+      builders.push_back(std::make_shared<arrow::ListBuilder>(pool, utils::getBuilder(keytype)));
+      continue;
+    }
+    if (type == RowType::MAP) {
+      auto keytype = schema_ptr->fields.at(i).map_key_type;
+      auto valuetype = schema_ptr->fields.at(i).map_value_type;
+      builders.push_back(std::make_shared<arrow::MapBuilder>(pool, utils::getBuilder(keytype), utils::getBuilder(valuetype)));
+      continue;
+    }
+    builders.push_back(utils::getBuilder(type));
+  }
+
+  while ((MPI_Wtime() - start) * 1000 < timeout && total < max_batch_size) {
+    deser(nullptr, builders);
+    total++;
+  }
+  for (auto b : builders) {
+    std::shared_ptr<arrow::Array> _array;
+    b->Finish(&_array);
+    arrays.push_back(_array);
+  }
+  return arrow::RecordBatch::Make(utils::toArrow(schema_ptr), total, arrays);
 }
 } // namespace connector
 } // namespace surfingdb

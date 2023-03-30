@@ -44,14 +44,12 @@ public:
     std::string connector_name,
     size_t max_batch_size,
     int timeout,
-    std::shared_ptr<mschema> schema_ptr,
-    std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser) {
+    std::shared_ptr<mschema> schema_ptr) {
     this->node_ptr = node_ptr;
     this->connector_name = connector_name;
     this->max_batch_size = max_batch_size;
     this->timeout = timeout;
     this->schema_ptr = schema_ptr;
-    this->deser = deser;
   }
   Connector() {}
 
@@ -64,7 +62,14 @@ public:
    * @param deser function that convert payload binary to a mrow with schema_ptr
    * @return std::shared_ptr<mtable> micro batch table
    */
-  virtual std::shared_ptr<mtable> consume_batch() = 0;
+  virtual std::shared_ptr<mtable> consume_batch(std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser) = 0;
+  /**
+   * @brief pull records as arrow record batch
+   * 
+   * @param deser 
+   * @return std::shared_ptr<arrow::RecordBatch> 
+   */
+  virtual std::shared_ptr<arrow::RecordBatch> consume_batch(std::function<void(const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders)> deser) = 0;
 
   /**
    * @brief
@@ -76,6 +81,10 @@ public:
    */
   size_t produce_batch() {
     return 0;
+  }
+
+  void setDeser(std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser) {
+    this->deser = deser;
   }
 
 protected:

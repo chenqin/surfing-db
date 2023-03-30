@@ -95,8 +95,8 @@ TEST(EngineTest, TestEngineSource) {
     row->write(out.fields.at(4), p);
     return row;
   };
-  auto con = DataGenConnector(nullptr, "source", 1, 10, schema_ptr, deser);
-  auto source = engine::source(con);
+  auto con = DataGenConnector(nullptr, "source", 1, 10, schema_ptr);
+  auto source = engine::source(con.consume_batch(deser));
   CHECK_EQ(arrow::Status::OK(), ExecutePlanAndCollectAsTable(std::move(source)));
 }
 
@@ -143,8 +143,8 @@ TEST(EngineTest, TestSourceFilter) {
     row->write(out.fields.at(4), p);
     return row;
   };
-  auto con = DataGenConnector(nullptr, "source", 1, 10, schema_ptr, deser);
-  auto source = engine::source(con);
+  auto con = DataGenConnector(nullptr, "source", 1, 10, schema_ptr);
+  auto source = engine::source(con.consume_batch(deser));
   // Expression a_times_2 = cp::call("multiply", {cp::field_ref("timestamp"), cp::literal(2)});
   // auto project = engine::project(source, a_times_2, "multiply");
   Expression filter_expr = cp::less(cp::field_ref("timestamp"), cp::literal(3));
@@ -195,9 +195,9 @@ TEST(EngineTest, TestSourceUnion) {
     row->write(out.fields.at(4), p);
     return row;
   };
-  auto con = DataGenConnector(nullptr, "source", 1, 10, schema_ptr, deser);
-  auto source_left = engine::source(con);
-  auto source_right = engine::source(con);
+  auto con = DataGenConnector(nullptr, "source", 1, 10, schema_ptr);
+  auto source_left = engine::source(con.consume_batch(deser));
+  auto source_right = engine::source(con.consume_batch(deser));
   auto union_plan = engine::union_op(source_left, source_right);
   CHECK_EQ(arrow::Status::OK(), ExecutePlanAndCollectAsTable(std::move(union_plan)));
 }
@@ -232,9 +232,9 @@ TEST(EngineTest, TestSourceJoin) {
     row->write(out.fields.at(2), p);
     return row;
   };
-  auto con = DataGenConnector(nullptr, "source", 1, 10, schema_ptr, deser);
-  auto source_left = engine::source(con);
-  auto source_right = engine::source(con);
+  auto con = DataGenConnector(nullptr, "source", 1, 10, schema_ptr);
+  auto source_left = engine::source(con.consume_batch(deser));
+  auto source_right = engine::source(con.consume_batch(deser));
   cp::HashJoinNodeOptions join_opts{
 
     cp::JoinType::INNER,
