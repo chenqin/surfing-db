@@ -6,8 +6,7 @@ import java.util.Objects;
 import static java.util.Objects.requireNonNull;
 
 /**
- * TODO the exact same class is in drSquirrel server repo as well.
- * Need to keep one copy only later.
+ * TODO the exact same class is in drSquirrel server repo as well. Need to keep one copy only later.
  */
 public class FlinkJobInfo {
   private final String username;
@@ -15,36 +14,35 @@ public class FlinkJobInfo {
   private final String applicationId;
   private final String jobId;
   private final String jobName;
-  //private final Set<String> allMetricNames;
+  // private final Set<String> allMetricNames;
   private final List<JobException> exceptions;
 
   private final JobBasicStats jobBasicStats;
   private final CheckpointStats checkpointStats;
   private final long lastUpdatedTimestamp;
 
-  public FlinkJobInfo(String username,
-                      String cluster,
-                      String applicationId,
-                      String jobId,
-                      String jobName,
-                      //Set<String> allMetricNames,
-                      List<JobException> exceptions,
-                      JobBasicStats jobBasicStats,
-                      CheckpointStats checkpointStats,
-                      long lastUpdatedTimestamp
-                      ) {
+  public FlinkJobInfo(
+      String username,
+      String cluster,
+      String applicationId,
+      String jobId,
+      String jobName,
+      // Set<String> allMetricNames,
+      List<JobException> exceptions,
+      JobBasicStats jobBasicStats,
+      CheckpointStats checkpointStats,
+      long lastUpdatedTimestamp) {
     this.username = requireNonNull(username, "username is null");
     this.cluster = requireNonNull(cluster, "cluster is null");
     this.applicationId = requireNonNull(applicationId, "applicationId is null");
     this.jobId = requireNonNull(jobId, "jobId is null");
     this.jobName = requireNonNull(jobName, "jobName is null");
-    //this.allMetricNames = allMetricNames;
+    // this.allMetricNames = allMetricNames;
     this.exceptions = exceptions;
     this.jobBasicStats = jobBasicStats;
     this.checkpointStats = checkpointStats;
     this.lastUpdatedTimestamp = lastUpdatedTimestamp;
   }
-
 
   public String getUsername() {
     return username;
@@ -66,9 +64,9 @@ public class FlinkJobInfo {
     return exceptions;
   }
 
-//  public Set<String> getAllMetricNames() {
-//    return allMetricNames;
-//  }
+  //  public Set<String> getAllMetricNames() {
+  //    return allMetricNames;
+  //  }
 
   public String getJobName() {
     return jobName;

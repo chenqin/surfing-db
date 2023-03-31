@@ -10,7 +10,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.TreeMap;
 
-
 public class State {
   private static final Logger LOG = LoggerFactory.getLogger(State.class);
   private static final String UNKNOWN_USER = "unknown_user";
@@ -39,11 +38,14 @@ public class State {
     this.update(signal);
   }
 
-  public State() {
-  }
+  public State() {}
 
   public long getLastUpdatedTimestamp() {
     return lastUpdatedTimestamp;
+  }
+
+  public void setLastUpdatedTimestamp(long lastUpdatedTimestamp) {
+    this.lastUpdatedTimestamp = lastUpdatedTimestamp;
   }
 
   public String getCluster() {
@@ -58,16 +60,32 @@ public class State {
     return jobId;
   }
 
+  public void setJobId(String jobId) {
+    this.jobId = jobId;
+  }
+
   public String getApplicationId() {
     return applicationId;
+  }
+
+  public void setApplicationId(String applicationId) {
+    this.applicationId = applicationId;
   }
 
   public String getJobName() {
     return jobName;
   }
 
+  public void setJobName(String jobName) {
+    this.jobName = jobName;
+  }
+
   public String getUsername() {
     return username;
+  }
+
+  public void setUsername(String username) {
+    this.username = username;
   }
 
   public boolean readyOutput() {
@@ -75,13 +93,12 @@ public class State {
   }
 
   /**
-   * To merge a State with another State, there are two steps:
-   * 1) merge basic info such as cluster, appId, jobId to have least Null values possible
-   * 2) merge flink metrics
+   * To merge a State with another State, there are two steps: 1) merge basic info such as cluster,
+   * appId, jobId to have least Null values possible 2) merge flink metrics
    *
-   * Note that we don't merge state.exceptions because the only usecase we have is merging
-   * a state with JM/TM logs with a metric based state. Exceptions _only_ exist in the JM/TM logs,
-   * and metric based state only has FlinkMetric to merge into but carries no exceptions.
+   * <p>Note that we don't merge state.exceptions because the only usecase we have is merging a
+   * state with JM/TM logs with a metric based state. Exceptions _only_ exist in the JM/TM logs, and
+   * metric based state only has FlinkMetric to merge into but carries no exceptions.
    */
   public void merge(State state) {
     // merge basic info
@@ -100,7 +117,6 @@ public class State {
     if (lastUpdatedTimestamp < state.getLastUpdatedTimestamp()) {
       lastUpdatedTimestamp = state.getLastUpdatedTimestamp();
     }
-
   }
 
   public FlinkJobInfo toJobInfo(JobState jobState) {
@@ -113,8 +129,7 @@ public class State {
         getJobExceptionList(),
         jobState.getJobBasicStats(),
         jobState.getCheckpointStats(),
-        lastUpdatedTimestamp
-    );
+        lastUpdatedTimestamp);
   }
 
   private List<JobException> getJobExceptionList() {
@@ -129,9 +144,9 @@ public class State {
   }
 
   /**
-   * To update State with a signal, there are two steps:
-   * 1) Update the basic info of the state, such as appId, jobId and JobName
-   * 2) Update either this.exceptions or this.metrics based off of the signal type
+   * To update State with a signal, there are two steps: 1) Update the basic info of the state, such
+   * as appId, jobId and JobName 2) Update either this.exceptions or this.metrics based off of the
+   * signal type
    */
   public void update(Signal signal) {
     // TODO think of better strategy
@@ -162,13 +177,13 @@ public class State {
     Preconditions.checkState(rawLog.getUsername() != null);
     this.username = rawLog.getUsername();
 
-    JobException jobException = new JobException(
-        rawLog.getException(),
-        rawLog.getHostName(),
-        rawLog.getContainerId(),
-        rawLog.getFile(),
-        rawLog.getTimestamp()
-    );
+    JobException jobException =
+        new JobException(
+            rawLog.getException(),
+            rawLog.getHostName(),
+            rawLog.getContainerId(),
+            rawLog.getFile(),
+            rawLog.getTimestamp());
     if (rawLog.getFile().contains("ExecutionGraph")) {
       criticalExceptions.putIfAbsent(rawLog.getDate(), new LinkedList<>());
       criticalExceptions.get(rawLog.getDate()).add(jobException);
@@ -191,8 +206,7 @@ public class State {
   }
 
   // TODO aggregate Operator metrics
-  private void update(FlinkMetric metric) {
-  }
+  private void update(FlinkMetric metric) {}
 
   private void removeEarliestException(TreeMap<Date, List<JobException>> exceptionMap) {
     Date firstTimestamp = exceptionMap.firstKey();
@@ -200,18 +214,6 @@ public class State {
     if (exceptionMap.get(firstTimestamp).size() == 0) {
       exceptionMap.remove(firstTimestamp);
     }
-  }
-
-  public void setJobId(String jobId) {
-    this.jobId = jobId;
-  }
-
-  public void setJobName(String jobName) {
-    this.jobName = jobName;
-  }
-
-  public void setApplicationId(String applicationId) {
-    this.applicationId = applicationId;
   }
 
   public int getMaxNumOfLatestExceptions() {
@@ -226,41 +228,31 @@ public class State {
     return criticalExceptions;
   }
 
+  public void setCriticalExceptions(TreeMap<Date, List<JobException>> criticalExceptions) {
+    this.criticalExceptions = criticalExceptions;
+  }
+
   public TreeMap<Date, List<JobException>> getRegularExceptions() {
     return regularExceptions;
+  }
+
+  public void setRegularExceptions(TreeMap<Date, List<JobException>> regularExceptions) {
+    this.regularExceptions = regularExceptions;
   }
 
   public int getCriticalExceptionsCount() {
     return criticalExceptionsCount;
   }
 
-  public int getRegularExceptionsCount() {
-    return regularExceptionsCount;
-  }
-
-  public void setUsername(String username) {
-    this.username = username;
-  }
-
-  public void setCriticalExceptions(
-      TreeMap<Date, List<JobException>> criticalExceptions) {
-    this.criticalExceptions = criticalExceptions;
-  }
-
-  public void setRegularExceptions(
-      TreeMap<Date, List<JobException>> regularExceptions) {
-    this.regularExceptions = regularExceptions;
-  }
-
   public void setCriticalExceptionsCount(int criticalExceptionsCount) {
     this.criticalExceptionsCount = criticalExceptionsCount;
   }
 
-  public void setRegularExceptionsCount(int regularExceptionsCount) {
-    this.regularExceptionsCount = regularExceptionsCount;
+  public int getRegularExceptionsCount() {
+    return regularExceptionsCount;
   }
 
-  public void setLastUpdatedTimestamp(long lastUpdatedTimestamp) {
-    this.lastUpdatedTimestamp = lastUpdatedTimestamp;
+  public void setRegularExceptionsCount(int regularExceptionsCount) {
+    this.regularExceptionsCount = regularExceptionsCount;
   }
 }

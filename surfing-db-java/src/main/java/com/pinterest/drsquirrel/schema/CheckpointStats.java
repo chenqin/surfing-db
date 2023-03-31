@@ -11,8 +11,8 @@ public class CheckpointStats {
   private final Duration durationInMs;
   private final Map<Long, String> checkpointPaths;
 
-  public CheckpointStats(int failedCheckpoints, long size, Duration durationInMs,
-                         Map<Long, String> checkpointPaths) {
+  public CheckpointStats(
+      int failedCheckpoints, long size, Duration durationInMs, Map<Long, String> checkpointPaths) {
     this.failedCheckpoints = failedCheckpoints;
     this.size = size;
     this.durationInMs = durationInMs;
@@ -58,8 +58,12 @@ public class CheckpointStats {
   @Override
   public String toString() {
     return "CheckpointStats{"
-        + "failedCheckpoints=" + failedCheckpoints
-        + ", size=" + size
-        + ", durationInMs=" + durationInMs + '}';
+        + "failedCheckpoints="
+        + failedCheckpoints
+        + ", size="
+        + size
+        + ", durationInMs="
+        + durationInMs
+        + '}';
   }
 }

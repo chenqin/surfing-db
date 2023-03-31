@@ -11,7 +11,7 @@ public class FlinkMetric implements Signal, Cloneable, Serializable {
   public static final String BUFFER_INPOOL_USAGE = "buffers.inPoolUsage";
   public static final String BUFFER_OUTPOOL_USAGE = "buffers.outPoolUsage";
 
-  public static final String RECORDS_IN_RATE  = "numRecordsInPerSecond.rate";
+  public static final String RECORDS_IN_RATE = "numRecordsInPerSecond.rate";
   public static final String RECORDS_OUT_RATE = "numRecordsOutPerSecond.rate";
 
   private FlinkMetricType type;
@@ -33,18 +33,9 @@ public class FlinkMetric implements Signal, Cloneable, Serializable {
   private String cluster;
   private String applicationId;
 
-
   public FlinkMetric() {
     timestamp = -1L;
     host = "unknown";
-  }
-
-  public void setTimestamp(long timestamp) {
-    this.timestamp = timestamp;
-  }
-
-  public void setHost(String host) {
-    this.host = host;
   }
 
   public FlinkMetricType getType() {
@@ -61,14 +52,6 @@ public class FlinkMetric implements Signal, Cloneable, Serializable {
 
   public void setTaskManagerId(String tmId) {
     this.taskManagerId = tmId;
-  }
-
-  public void setJobId(String jobId) {
-    this.jobId = jobId;
-  }
-
-  public void setJobName(String jobName) {
-    this.jobName = jobName;
   }
 
   public String getOperatorId() {
@@ -103,28 +86,20 @@ public class FlinkMetric implements Signal, Cloneable, Serializable {
     this.name = name;
   }
 
-  public void setTaskId(String taskId) {
-    this.taskId = taskId;
-  }
-
   public String getTaskId() {
     return taskId;
   }
 
-  public void setTaskName(String taskName) {
-    this.taskName = taskName;
+  public void setTaskId(String taskId) {
+    this.taskId = taskId;
   }
 
   public String getTaskName() {
     return taskName;
   }
 
-  public void setTaskAttemptId(String attemptId) {
-    this.taskAttemptId = attemptId;
-  }
-
-  public void setTaskAttemptNum(int attemptNum) {
-    this.taskAttemptNum = attemptNum;
+  public void setTaskName(String taskName) {
+    this.taskName = taskName;
   }
 
   public int getIntValue() {
@@ -144,16 +119,24 @@ public class FlinkMetric implements Signal, Cloneable, Serializable {
     return timestamp;
   }
 
+  public void setTimestamp(long timestamp) {
+    this.timestamp = timestamp;
+  }
+
   public String getHost() {
     return host;
   }
 
-  public void setFullName(String fullName) {
-    this.fullName = fullName;
+  public void setHost(String host) {
+    this.host = host;
   }
 
   public String getFullName() {
     return fullName;
+  }
+
+  public void setFullName(String fullName) {
+    this.fullName = fullName;
   }
 
   public String getValue() {
@@ -183,9 +166,17 @@ public class FlinkMetric implements Signal, Cloneable, Serializable {
     return jobId;
   }
 
+  public void setJobId(String jobId) {
+    this.jobId = jobId;
+  }
+
   @Override
   public String getJobName() {
     return jobName;
+  }
+
+  public void setJobName(String jobName) {
+    this.jobName = jobName;
   }
 
   @Override
@@ -199,15 +190,23 @@ public class FlinkMetric implements Signal, Cloneable, Serializable {
 
   @Override
   public String toString() {
-    return String.format("timestamp: %s, host: %s, metric: %s, value: %s",
-        timestamp, host, fullName, value);
+    return String.format(
+        "timestamp: %s, host: %s, metric: %s, value: %s", timestamp, host, fullName, value);
   }
 
   public String getTaskAttemptId() {
     return taskAttemptId;
   }
 
+  public void setTaskAttemptId(String attemptId) {
+    this.taskAttemptId = attemptId;
+  }
+
   public int getTaskAttemptNum() {
     return taskAttemptNum;
+  }
+
+  public void setTaskAttemptNum(int attemptNum) {
+    this.taskAttemptNum = attemptNum;
   }
 }

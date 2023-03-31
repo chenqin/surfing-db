@@ -1,6 +1,5 @@
 package com.pinterest.drsquirrel.parsers;
 
-
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableList;
@@ -66,9 +65,11 @@ public class FlinkMetricParser {
   public FlinkMetricParser() {
     metricScopeParsers = new HashMap<>();
 
-    metricScopeParsers.put(FlinkMetricType.JOBMANAGER_JOB,
+    metricScopeParsers.put(
+        FlinkMetricType.JOBMANAGER_JOB,
         new FlinkMetricScopeParser(FlinkMetricType.JOBMANAGER_JOB, scopeConfiguration.getJmJob()));
-    metricScopeParsers.put(FlinkMetricType.JOBMANAGER,
+    metricScopeParsers.put(
+        FlinkMetricType.JOBMANAGER,
         new FlinkMetricScopeParser(FlinkMetricType.JOBMANAGER, scopeConfiguration.getJm()));
     metricScopeParsers.put(
         FlinkMetricType.JOBMANAGER_JOB_WITH_APPID,
@@ -79,15 +80,20 @@ public class FlinkMetricParser {
         new FlinkMetricScopeParser(
             FlinkMetricType.JOBMANAGER_WITH_APPID, scopeConfiguration.getJmWithAppId()));
     String scopeTmJobLatency = getTmJobLatencyPattern(scopeConfiguration.getTmJob());
-    metricScopeParsers.put(FlinkMetricType.TASKMANAGER_JOB_LATENCY,
+    metricScopeParsers.put(
+        FlinkMetricType.TASKMANAGER_JOB_LATENCY,
         new FlinkMetricScopeParser(FlinkMetricType.TASKMANAGER_JOB_LATENCY, scopeTmJobLatency));
-    metricScopeParsers.put(FlinkMetricType.TASKMANAGER_JOB,
+    metricScopeParsers.put(
+        FlinkMetricType.TASKMANAGER_JOB,
         new FlinkMetricScopeParser(FlinkMetricType.TASKMANAGER_JOB, scopeConfiguration.getTmJob()));
-    metricScopeParsers.put(FlinkMetricType.TASKMANAGER,
+    metricScopeParsers.put(
+        FlinkMetricType.TASKMANAGER,
         new FlinkMetricScopeParser(FlinkMetricType.TASKMANAGER, scopeConfiguration.getTm()));
-    metricScopeParsers.put(FlinkMetricType.OPERATOR,
+    metricScopeParsers.put(
+        FlinkMetricType.OPERATOR,
         new FlinkMetricScopeParser(FlinkMetricType.OPERATOR, scopeConfiguration.getOperator()));
-    metricScopeParsers.put(FlinkMetricType.TASK,
+    metricScopeParsers.put(
+        FlinkMetricType.TASK,
         new FlinkMetricScopeParser(FlinkMetricType.TASK, scopeConfiguration.getTask()));
   }
 
@@ -143,7 +149,7 @@ public class FlinkMetricParser {
   }
 
   public FlinkMetricType getMetricType(String metricStr) {
-    for (FlinkMetricType metricType: METRIC_TYPE_EXAM_SEQUENCE) {
+    for (FlinkMetricType metricType : METRIC_TYPE_EXAM_SEQUENCE) {
       if (metricScopeParsers.get(metricType).isMetricType(metricStr)) {
         return metricScopeParsers.get(metricType).getMetricType();
       }

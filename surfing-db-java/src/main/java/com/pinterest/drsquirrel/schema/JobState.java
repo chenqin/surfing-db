@@ -6,9 +6,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 
-/**
- * JobState aggregates all metrics from JM
- */
+/** JobState aggregates all metrics from JM */
 public class JobState {
   private static final int MAX_CHECKPOINT_PATHS_COUNT = 3;
   // basic job stats
@@ -21,8 +19,7 @@ public class JobState {
   private Duration checkpointDurationInMs;
   private Map<Long, String> checkpointPaths = new TreeMap<>();
 
-  public JobState() {
-  }
+  public JobState() {}
 
   public JobBasicStats getJobBasicStats() {
     return new JobBasicStats(jobUptime, jobFullRestarts);
@@ -30,8 +27,7 @@ public class JobState {
 
   public CheckpointStats getCheckpointStats() {
     return new CheckpointStats(
-        failedCheckpoints, checkpointSize, checkpointDurationInMs, checkpointPaths
-    );
+        failedCheckpoints, checkpointSize, checkpointDurationInMs, checkpointPaths);
   }
 
   public void update(FlinkMetric metric) {
@@ -61,36 +57,36 @@ public class JobState {
     return jobUptime;
   }
 
-  public int getJobFullRestarts() {
-    return jobFullRestarts;
-  }
-
-  public int getFailedCheckpoints() {
-    return failedCheckpoints;
-  }
-
-  public long getCheckpointSize() {
-    return checkpointSize;
-  }
-
-  public Duration getCheckpointDurationInMs() {
-    return checkpointDurationInMs;
-  }
-
   public void setJobUptime(Duration jobUptime) {
     this.jobUptime = jobUptime;
+  }
+
+  public int getJobFullRestarts() {
+    return jobFullRestarts;
   }
 
   public void setJobFullRestarts(int jobFullRestarts) {
     this.jobFullRestarts = jobFullRestarts;
   }
 
+  public int getFailedCheckpoints() {
+    return failedCheckpoints;
+  }
+
   public void setFailedCheckpoints(int failedCheckpoints) {
     this.failedCheckpoints = failedCheckpoints;
   }
 
+  public long getCheckpointSize() {
+    return checkpointSize;
+  }
+
   public void setCheckpointSize(long checkpointSize) {
     this.checkpointSize = checkpointSize;
+  }
+
+  public Duration getCheckpointDurationInMs() {
+    return checkpointDurationInMs;
   }
 
   public void setCheckpointDurationInMs(Duration checkpointDurationInMs) {

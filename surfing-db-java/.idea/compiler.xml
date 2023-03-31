@@ -11,6 +11,7 @@
     </annotationProcessing>
     <bytecodeTargetLevel>
       <module name="java-cdata-example" target="1.8" />
+      <module name="surfing-db-java" target="1.8" />
       <module name="surfing-deb-java" target="1.8" />
     </bytecodeTargetLevel>
   </component>

@@ -9,8 +9,8 @@ public class JobException {
   private final String file;
   private final long timestamp;
 
-  public JobException(String message, String hostName, String containerId, String file,
-                      long timestamp) {
+  public JobException(
+      String message, String hostName, String containerId, String file, long timestamp) {
     this.message = requireNonNull(message.trim(), "message is null");
     this.hostName = requireNonNull(hostName, "hostName is null");
     this.containerId = requireNonNull(containerId, "containerId is null");

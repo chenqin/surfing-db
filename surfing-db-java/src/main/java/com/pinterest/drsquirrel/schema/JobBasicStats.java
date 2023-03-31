@@ -30,8 +30,7 @@ public class JobBasicStats {
       return false;
     }
     JobBasicStats that = (JobBasicStats) o;
-    return jobFullRestarts == that.jobFullRestarts
-        && jobUptime.equals(that.jobUptime);
+    return jobFullRestarts == that.jobFullRestarts && jobUptime.equals(that.jobUptime);
   }
 
   @Override
@@ -42,7 +41,10 @@ public class JobBasicStats {
   @Override
   public String toString() {
     return "JobBasicStats{"
-        + "jobUptime=" + jobUptime
-        + ", jobFullRestarts=" + jobFullRestarts + '}';
+        + "jobUptime="
+        + jobUptime
+        + ", jobFullRestarts="
+        + jobFullRestarts
+        + '}';
   }
 }

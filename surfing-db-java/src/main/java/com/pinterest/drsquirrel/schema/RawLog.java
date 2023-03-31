@@ -24,8 +24,16 @@ public class RawLog implements Signal, Cloneable, Serializable {
 
   public RawLog() {}
 
-  public RawLog(String username, String cluster, String hostName, String applicationId,
-                String containerId, Date date, String level, String file, String exception) {
+  public RawLog(
+      String username,
+      String cluster,
+      String hostName,
+      String applicationId,
+      String containerId,
+      Date date,
+      String level,
+      String file,
+      String exception) {
     this.username = requireNonNull(username, "username is null");
     this.cluster = requireNonNull(cluster, "cluster is null");
     this.hostName = requireNonNull(hostName, "hostName is null");
@@ -41,12 +49,24 @@ public class RawLog implements Signal, Cloneable, Serializable {
     return cluster;
   }
 
+  public void setCluster(String cluster) {
+    this.cluster = cluster;
+  }
+
   public String getHostName() {
     return hostName;
   }
 
+  public void setHostName(String hostName) {
+    this.hostName = hostName;
+  }
+
   public String getContainerId() {
     return containerId;
+  }
+
+  public void setContainerId(String containerId) {
+    this.containerId = containerId;
   }
 
   @Override
@@ -63,16 +83,32 @@ public class RawLog implements Signal, Cloneable, Serializable {
     return date;
   }
 
+  public void setDate(Date date) {
+    this.date = date;
+  }
+
   public String getLevel() {
     return level;
+  }
+
+  public void setLevel(String level) {
+    this.level = level;
   }
 
   public String getFile() {
     return file;
   }
 
+  public void setFile(String file) {
+    this.file = file;
+  }
+
   public String getException() {
     return exception;
+  }
+
+  public void setException(String exception) {
+    this.exception = exception;
   }
 
   @Override
@@ -83,6 +119,10 @@ public class RawLog implements Signal, Cloneable, Serializable {
   @Override
   public String getApplicationId() {
     return applicationId;
+  }
+
+  public void setApplicationId(String applicationId) {
+    this.applicationId = applicationId;
   }
 
   @Override
@@ -99,39 +139,7 @@ public class RawLog implements Signal, Cloneable, Serializable {
     return username;
   }
 
-  public void setCluster(String cluster) {
-    this.cluster = cluster;
-  }
-
-  public void setHostName(String hostName) {
-    this.hostName = hostName;
-  }
-
-  public void setApplicationId(String applicationId) {
-    this.applicationId = applicationId;
-  }
-
-  public void setContainerId(String containerId) {
-    this.containerId = containerId;
-  }
-
   public void setUsername(String username) {
     this.username = username;
-  }
-
-  public void setDate(Date date) {
-    this.date = date;
-  }
-
-  public void setLevel(String level) {
-    this.level = level;
-  }
-
-  public void setFile(String file) {
-    this.file = file;
-  }
-
-  public void setException(String exception) {
-    this.exception = exception;
   }
 }

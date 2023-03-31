@@ -5,7 +5,28 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="cff93363-7cc5-4190-b268-ef54158a3b28" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/compiler.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/Bridge.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/functions/Bridge.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/MyBridge.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/functions/Cleanup.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/parsers/DrSquirrelUtils.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/parsers/DrSquirrelUtils.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/parsers/FlinkMetricParser.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/parsers/FlinkMetricParser.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/parsers/FlinkMetricScopeParser.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/parsers/FlinkMetricScopeParser.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/parsers/MetricScopeConfiguration.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/parsers/MetricScopeConfiguration.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/CheckpointStats.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/CheckpointStats.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/FlinkJobInfo.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/FlinkJobInfo.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/FlinkMetric.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/FlinkMetric.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/FlinkMetricType.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/FlinkMetricType.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/JobBasicStats.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/JobBasicStats.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/JobException.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/JobException.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/JobState.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/JobState.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/MetaData.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/MetaData.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/RawLog.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/RawLog.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/Signal.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/Signal.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/State.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/State.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/surfing-db-java.iml" beforeDir="false" afterPath="$PROJECT_DIR$/surfing-db-java.iml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -21,6 +42,13 @@
   <component name="MarkdownSettingsMigration">
     <option name="stateVersion" value="1" />
   </component>
+  <component name="MavenImportPreferences">
+    <option name="generalSettings">
+      <MavenGeneralSettings>
+        <option name="useMavenConfig" value="true" />
+      </MavenGeneralSettings>
+    </option>
+  </component>
   <component name="ProjectCodeStyleSettingsMigration">
     <option name="version" value="2" />
   </component>
@@ -29,18 +57,31 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "RunOnceActivity.OpenProjectViewOnStart": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "last_opened_file_path": "/Users/cqin/surfing-db/surfing-db-java/src/main/java"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/cqin/surfing-db/surfing-db-java/src/main/java&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/src/main/java" />
     </key>
+  </component>
+  <component name="RunManager">
+    <configuration default="true" type="JetRunConfigurationType">
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration default="true" type="KotlinStandaloneScriptRunConfigurationType">
+      <option name="filePath" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
   </component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
   <component name="TaskManager">

@@ -1,8 +1,6 @@
 package com.pinterest.drsquirrel.schema;
 
-/**
- *  These metrics types are defined based on metrics.scope declaration in flink configuraiton.
- */
+/** These metrics types are defined based on metrics.scope declaration in flink configuraiton. */
 public enum FlinkMetricType {
   JOBMANAGER,
   JOBMANAGER_JOB,

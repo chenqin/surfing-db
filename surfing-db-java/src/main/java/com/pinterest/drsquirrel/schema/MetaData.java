@@ -41,5 +41,4 @@ public class MetaData {
     String formattedTimestamp = dateFormat.format(timestamp);
     return String.format("%s %s %s %s", hostName, containerId, formattedTimestamp, file);
   }
-
 }

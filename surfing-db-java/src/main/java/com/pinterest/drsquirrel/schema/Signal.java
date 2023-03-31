@@ -2,11 +2,6 @@ package com.pinterest.drsquirrel.schema;
 
 public interface Signal {
 
-  enum SignalType {
-    JOB_LOG,
-    FLINK_METRIC
-  }
-
   SignalType getSignalType();
 
   // Signal must at least only one of both.
@@ -22,5 +17,10 @@ public interface Signal {
 
   default String getSaltKey() {
     throw new UnsupportedOperationException("not supported");
+  }
+
+  enum SignalType {
+    JOB_LOG,
+    FLINK_METRIC
   }
 }

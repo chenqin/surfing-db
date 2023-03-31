@@ -56,6 +56,52 @@ public class FlinkMetricScopeParser {
     this.pattern = Pattern.compile(regexStr);
   }
 
+  /**
+   * applicationId is part of taskManagerId, this functions is used to derive applicationID from
+   * taskManagerId.
+   *
+   * <p>taskManagerId has a format of "container_epoch_appId_attemptId_containerId" with epoch being
+   * optional Example: - container_e02_1599158147594_70875_01_000031 (has epoch) -
+   * container_1598646788314_76489_01_000008 (without epoch)
+   */
+  public static String deriveAppIdFromTaskManagerId(String taskManagerId) {
+    String[] strs = taskManagerId.split("_");
+    if (strs.length < 4) {
+      return null;
+    }
+    return String.format("application_%s_%s", strs[strs.length - 4], strs[strs.length - 3]);
+  }
+
+  public static String getMetricScopeRegexString(String scopeStr) {
+    String result = scopeStr.replace(".", "\\.");
+    for (String scopeVar : METRIC_SCOPE_VARS) {
+      String regex;
+      if (scopeVar.equals(SUBTASK_INDEX_VAR)) {
+        regex = "(\\d+)?";
+      } else if (scopeVar.equals(TM_ID_VAR) || scopeVar.equals(JOB_ID_VAR)) {
+        regex = "([a-zA-Z0-9\\_]+)?";
+      } else {
+        regex = "(.*?)";
+      }
+      result = result.replace(scopeVar, regex);
+    }
+    result += "\\.(.*)";
+    return result;
+  }
+
+  public static List<String> getScopeVars(String scopeStr) {
+    List<String> varsSequence = new ArrayList<>();
+    Pattern pattern = Pattern.compile("<[a-zA-Z_]*?>");
+    Matcher matcher = pattern.matcher(scopeStr);
+    while (matcher.find()) {
+      String group = matcher.group();
+      if (METRIC_SCOPE_VARS.contains(group)) {
+        varsSequence.add(group);
+      }
+    }
+    return varsSequence;
+  }
+
   public boolean isMetricType(String metricStr) {
     Matcher matcher = pattern.matcher(metricStr);
     return matcher.matches();
@@ -134,55 +180,5 @@ public class FlinkMetricScopeParser {
       }
     }
     return metric;
-  }
-
-  /**
-   * applicationId is part of taskManagerId, this functions is used to
-   * derive applicationID from taskManagerId.
-   *
-   * taskManagerId has a format of
-   * "container_epoch_appId_attemptId_containerId" with epoch being optional
-   * Example:
-   * - container_e02_1599158147594_70875_01_000031  (has epoch)
-   * - container_1598646788314_76489_01_000008      (without epoch)
-   */
-  public static String deriveAppIdFromTaskManagerId(String taskManagerId) {
-    String[] strs = taskManagerId.split("_");
-    if (strs.length < 4) {
-      return null;
-    }
-    return String.format(
-        "application_%s_%s", strs[strs.length - 4], strs[strs.length - 3]);
-  }
-
-  public static String getMetricScopeRegexString(String scopeStr) {
-    String result = scopeStr.replace(".", "\\.");
-    for (String scopeVar : METRIC_SCOPE_VARS) {
-      String regex;
-      if (scopeVar.equals(SUBTASK_INDEX_VAR)) {
-        regex = "(\\d+)?";
-      } else if (scopeVar.equals(TM_ID_VAR) || scopeVar.equals(JOB_ID_VAR)) {
-        regex = "([a-zA-Z0-9\\_]+)?";
-      } else {
-        regex = "(.*?)";
-      }
-      result = result.replace(scopeVar, regex);
-    }
-    result += "\\.(.*)";
-    return result;
-  }
-
-
-  public static List<String> getScopeVars(String scopeStr) {
-    List<String> varsSequence = new ArrayList<>();
-    Pattern pattern = Pattern.compile("<[a-zA-Z_]*?>");
-    Matcher matcher = pattern.matcher(scopeStr);
-    while (matcher.find()) {
-      String group = matcher.group();
-      if (METRIC_SCOPE_VARS.contains(group)) {
-        varsSequence.add(group);
-      }
-    }
-    return varsSequence;
   }
 }
