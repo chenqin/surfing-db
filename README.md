@@ -1,6 +1,6 @@
-# surfing-db
+# HPCArrow
 
-A efficient and powerful in memory kafka messages processor using MPI and Apache Arrow.
+A efficient and powerful HPC workload engine with MPI and Apache Arrow.
 
 # features
 
@@ -10,14 +10,13 @@ A efficient and powerful in memory kafka messages processor using MPI and Apache
 # how to run
 - run install.sh for dependencies
 
-mpirun --hostfile hostfile DataGenExample --mca oob_tcp_port_min_v4 7337 -mca btl_tcp_if_exclude lo,docker0
+cd build
+mpirun --hostfile hostfile KafkaExample --mca oob_tcp_port_min_v4 7337 -mca btl_tcp_if_exclude lo,docker0
 
 # configuration
 - src/meta/schema.h 
 -- MAX_STR_LEN defines max size of string before truncate (lower is better for perf)
 -- MEM_PAGE_SIZE defines mtable pre allocated memory
 
-# schema definition
-- row size can be optimized by giving conservation max_unit_size of string fields
 
 created @Maui, Hawaii, U.S.A since 2021
