@@ -4,9 +4,9 @@ A efficient and powerful HPC workload engine with MPI and Apache Arrow.
 
 # features
 
-- in-memory data processor, O(1) access low level memory layout optimization. row oriented maper and shuffe, columnar oriented slice and dice
-- kafka consumer sharding with MPI based distributed programming and zero copy arrow rpce
-- user defined partioner decouple ingest workers from rest of workloads (aka map reduce, slice/dice rpc stages)
+- Unified data communication (ML / Data) under MPI protocol
+- Efficient languages support with Apache Arrow 
+- XGBoost Pytorch GPU support
 # how to run
 - run install.sh for dependencies
 
