@@ -5,9 +5,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="cff93363-7cc5-4190-b268-ef54158a3b28" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/src/main/java/Aggregate.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/functions/Bridge.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/Bridge.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/functions/Cleanup.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/Cleanup.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/Bridge.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/Bridge.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/Cleanup.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/Cleanup.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/State.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/State.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -16,6 +18,13 @@
   </component>
   <component name="CodeStyleSettingsInfer">
     <option name="done" value="true" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Class" />
+      </list>
+    </option>
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/.." />

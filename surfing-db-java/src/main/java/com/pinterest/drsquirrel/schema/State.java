@@ -13,7 +13,7 @@ import java.util.TreeMap;
 public class State {
   private static final Logger LOG = LoggerFactory.getLogger(State.class);
   private static final String UNKNOWN_USER = "unknown_user";
-  private int maxNumOfLatestExceptions;
+  public int maxNumOfLatestExceptions;
 
   private String cluster;
   private String jobId;
