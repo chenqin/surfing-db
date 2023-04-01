@@ -62,8 +62,8 @@ public class Cleanup extends Bridge {
             LOG.warn("fail to parse", e);
           }
         }
-
-      } else if (topic.equals("log")) {
+      }
+      if (topic.equals("log")) {
         RawLog rawLog = DrSquirrelUtils.constructRawLog(body, "log");
         if (rawLog.getFile().contains("ExecutionGraph")) {
           try {
