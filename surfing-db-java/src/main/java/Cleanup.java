@@ -1,5 +1,3 @@
-package com.pinterest.drsquirrel.functions;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pinterest.drsquirrel.parsers.DrSquirrelUtils;
 import com.pinterest.drsquirrel.schema.FlinkMetric;

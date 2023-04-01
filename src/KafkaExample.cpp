@@ -155,7 +155,7 @@ int main(int argc, char** argv) {
     auto source1 = engine::source(t1.get());
     auto source2 = engine::source(t2.get());
     auto union_sources = engine::union_op(source1, source2);
-    auto tjava = engine::java(union_sources, "MyBridge", node);
+    auto tjava = engine::java(union_sources, "Cleanup", node);
     std::map<std::string, uint64_t> units = { { "jobid", 64 }, { "json", 2048 } };
     auto tshuffle = engine::shuffle(tjava, units, node);
     auto tables = cp::DeclarationToBatches(std::move(tshuffle)).ValueOrDie();

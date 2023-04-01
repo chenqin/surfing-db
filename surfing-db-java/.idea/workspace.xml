@@ -5,28 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="cff93363-7cc5-4190-b268-ef54158a3b28" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/compiler.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/Bridge.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/functions/Bridge.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/MyBridge.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/functions/Cleanup.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/parsers/DrSquirrelUtils.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/parsers/DrSquirrelUtils.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/parsers/FlinkMetricParser.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/parsers/FlinkMetricParser.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/parsers/FlinkMetricScopeParser.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/parsers/FlinkMetricScopeParser.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/parsers/MetricScopeConfiguration.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/parsers/MetricScopeConfiguration.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/CheckpointStats.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/CheckpointStats.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/FlinkJobInfo.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/FlinkJobInfo.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/FlinkMetric.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/FlinkMetric.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/FlinkMetricType.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/FlinkMetricType.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/JobBasicStats.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/JobBasicStats.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/JobException.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/JobException.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/JobState.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/JobState.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/MetaData.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/MetaData.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/RawLog.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/RawLog.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/Signal.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/Signal.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/State.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/schema/State.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/surfing-db-java.iml" beforeDir="false" afterPath="$PROJECT_DIR$/surfing-db-java.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/functions/Bridge.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/Bridge.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/pinterest/drsquirrel/functions/Cleanup.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/Cleanup.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

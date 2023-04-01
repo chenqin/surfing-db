@@ -1,5 +1,3 @@
-package com.pinterest.drsquirrel.functions;
-
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
@@ -18,7 +16,7 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * user expect to override com.pinterest.drsquirrel.functions.Bridge and implement thier own process
+ * user expect to override Bridge and implement thier own process
  * function
  */
 public class Bridge {
