@@ -155,7 +155,7 @@ int main(int argc, char** argv) {
     std::vector<std::shared_ptr<arrow::RecordBatch>> tables = {t1.get(), t2.get()};
     for(const auto& t : tables){
       local_row_count += t->num_rows();
-      auto t3 = processors::java(t, "com.pinterest.drsquirrel.functions.Cleanup", node);
+      auto t3 = processors::java(t, "Cleanup", node);
       std::map<std::string, uint64_t> units = { { "jobid", 64 }, { "json", 2048 } };
       auto schema = utils::fromArrow(t3->schema(), units);
       auto mtable = utils::fromArrow(t3, units, node);
@@ -166,7 +166,6 @@ int main(int argc, char** argv) {
         return key % world;
       });
     }
-
     size_t global_row_count = 0;
     MPI_Allreduce(&local_row_count, &global_row_count, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
 
