@@ -152,13 +152,20 @@ int main(int argc, char** argv) {
         utils::append(builders.at(1).get(), schema_ptr->fields.at(1), v2, placeholder);
       });
     });
-    auto source1 = engine::source(t1.get());
-    auto source2 = engine::source(t2.get());
-    auto union_sources = engine::union_op(source1, source2);
-    auto tjava = engine::java(union_sources, "MyBridge", node);
-    std::map<std::string, uint64_t> units = { { "jobid", 64 }, { "json", 2048 } };
-    auto tshuffle = engine::shuffle(tjava, units, node);
-    auto tables = cp::DeclarationToBatches(std::move(tshuffle)).ValueOrDie();
+    std::vector<std::shared_ptr<arrow::RecordBatch>> tables = {t1.get(), t2.get()};
+    for(const auto& t : tables){
+      local_row_count += t->num_rows();
+      auto t3 = processors::java(t, "com.pinterest.drsquirrel.functions.Cleanup", node);
+      std::map<std::string, uint64_t> units = { { "jobid", 64 }, { "json", 2048 } };
+      auto schema = utils::fromArrow(t3->schema(), units);
+      auto mtable = utils::fromArrow(t3, units, node);
+      auto t5 = processors::shuffle(mtable, schema->fields.at(0), [](size_t key, int rank, int world) {
+        return key % world;
+      });
+      t5->verifyShuffle(schema->fields.at(0), [](size_t key, int rank, int world) {
+        return key % world;
+      });
+    }
 
     size_t global_row_count = 0;
     MPI_Allreduce(&local_row_count, &global_row_count, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
