@@ -46,14 +46,21 @@ public class Bridge {
     }
   }
 
-  /**
-   * user defined function entry with zero copy
-   *
-   * @param arrow memory pointer passing from c++
-   * @return arrow memory pointer passing back to c++
-   */
   protected static VectorSchemaRoot process(VectorSchemaRoot input) throws Exception {
-    total += input.getRowCount();
-    return input;
-  }
+        total += input.getRowCount();
+        BitVector bitVector = new BitVector("boolean", allocator);
+        VarCharVector varCharVector = new VarCharVector("varchar", allocator);
+        bitVector.allocateNew();
+        varCharVector.allocateNew();
+        for (int i = 0; i < 10; i++) {
+            bitVector.setSafe(i, i % 2 == 0 ? 0 : 1);
+            varCharVector.setSafe(i, ("test" + i).getBytes(StandardCharsets.UTF_8));
+        }
+        bitVector.setValueCount(10);
+        varCharVector.setValueCount(10);
+        List<Field> fields = Arrays.asList(bitVector.getField(), varCharVector.getField());
+        List<FieldVector> vectors = Arrays.asList(bitVector, varCharVector);
+        VectorSchemaRoot vectorSchemaRoot = new VectorSchemaRoot(fields, vectors);
+        return vectorSchemaRoot;
+    }
 }

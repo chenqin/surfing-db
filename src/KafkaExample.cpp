@@ -165,8 +165,8 @@ int main(int argc, char** argv) {
       t5->verifyShuffle(schema->fields.at(0), [](size_t key, int rank, int world) {
         return key % world;
       });
-      auto at5 = utils::toArrow(t5);
-      auto t6 = processors::java(at5, "Aggregate", node);
+      //auto at5 = utils::toArrow(t5);
+      //auto t6 = processors::java(at5, "Aggregate", node);
     }
     size_t global_row_count = 0;
     MPI_Allreduce(&local_row_count, &global_row_count, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);

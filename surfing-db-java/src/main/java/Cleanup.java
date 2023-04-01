@@ -7,30 +7,59 @@ import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.util.Text;
+import org.apache.arrow.c.ArrowArray;
+import org.apache.arrow.c.ArrowSchema;
+import org.apache.arrow.c.Data;
+import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.memory.RootAllocator;
+import org.apache.arrow.vector.BitVector;
+import org.apache.arrow.vector.FieldVector;
+import org.apache.arrow.vector.VarCharVector;
+import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.types.pojo.Field;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 
 /** my bridge example */
-public class Cleanup extends Bridge {
-
-  private static ObjectMapper mapper = new ObjectMapper();
-  /**
-   * user defined function entry with zero copy
+public class Cleanup {
+  protected static final BufferAllocator allocator = new RootAllocator();
+  protected static final Logger LOG = LoggerFactory.getLogger(Cleanup.class);
+  protected static long total = 0;
+/**
+   * Create a {@link VectorSchemaRoot} and export it via the C Data Interface
    *
-   * @param arrow memory pointer passing from c++
-   * @return arrow memory pointer passing back to c++
+   * @param schemaAddress Schema memory address to wrap
+   * @param arrayAddress Array memory address to wrap
    */
+  public static void _internal_invoke(long schemaIn, long arrayIn, long schemaOut, long arrayOut) {
+    try (ArrowArray array_in = ArrowArray.wrap(arrayIn);
+        ArrowSchema schema_in = ArrowSchema.wrap(schemaIn);
+        ArrowArray array_out = ArrowArray.wrap(arrayOut);
+        ArrowSchema schema_out = ArrowSchema.wrap(schemaOut)) {
+      VectorSchemaRoot input = Data.importVectorSchemaRoot(allocator, array_in, schema_in, null);
+      try {
+        Data.exportVectorSchemaRoot(allocator, process(input), null, array_out, schema_out);
+      } catch (Exception e) {
+      } finally {
+        input.clear();
+      }
+    }
+  }
+  private static ObjectMapper mapper = new ObjectMapper();
+  
   protected static VectorSchemaRoot process(VectorSchemaRoot input) throws Exception {
     total += input.getRowCount();
 
     VarCharVector jobId = new VarCharVector("jobid", allocator);
     VarCharVector type = new VarCharVector("type", allocator);
     VarCharVector json = new VarCharVector("json", allocator);
-    jobId.allocateNew(input.getRowCount());
-    type.allocateNew(input.getRowCount());
-    json.allocateNew(input.getRowCount());
+    jobId.allocateNew();
+    type.allocateNew();
+    json.allocateNew();
     int count = 0;
 
     jobId.setSafe(count, new Text());
@@ -76,8 +105,6 @@ public class Cleanup extends Bridge {
             LOG.warn("fail to parse", e);
           }
         }
-      } else {
-        throw new RuntimeException("topic is not supported");
       }
     }
 
