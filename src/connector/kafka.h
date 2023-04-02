@@ -64,6 +64,7 @@ private:
   rd_kafka_topic_partition_list_t* subscription; /* Subscribed topics */
   int i;
   static void print_partition_list(const rd_kafka_topic_partition_list_t* partitions);
+  void generate(bool pii);
 };
 } // namespace connector
 

@@ -47,14 +47,28 @@ public class Aggregate {
       try {
         Data.exportVectorSchemaRoot(allocator, process(input), null, array_out, schema_out);
       } catch (Exception e) {
+        VarCharVector app = new VarCharVector("jobid", allocator);
+        VarCharVector snapshot = new VarCharVector("json", allocator);
+        app.allocateNew();
+        snapshot.allocateNew();
+        int count = 0;
 
+        app.setSafe(count, new Text());
+        snapshot.setSafe(count, new Text());
+        count++;
+        app.setValueCount(count);
+        snapshot.setValueCount(count);
+        List<FieldVector> vectors = Arrays.asList(app, snapshot);
+        VectorSchemaRoot vectorSchemaRoot = new VectorSchemaRoot(vectors);
+        vectorSchemaRoot.setRowCount(count);
+        Data.exportVectorSchemaRoot(allocator, vectorSchemaRoot, null, array_out, schema_out);
       } finally {
         input.clear();
       }
     }
   }
     
-    protected static VectorSchemaRoot process(VectorSchemaRoot input) throws Exception{
+    protected static VectorSchemaRoot process(VectorSchemaRoot input) throws Exception {
         VarCharVector jobid = (VarCharVector) input.getVector("jobid");
         VarCharVector type = (VarCharVector) input.getVector("type");
         VarCharVector json = (VarCharVector) input.getVector("json");

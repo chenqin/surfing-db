@@ -156,7 +156,7 @@ int main(int argc, char** argv) {
     for(const auto& t : tables){
       local_row_count += t->num_rows();
       auto t3 = processors::java(t, "Cleanup", node);
-      std::map<std::string, uint64_t> units = { { "jobid", 64 }, { "json", 2048 } };
+      std::map<std::string, uint64_t> units = utils::toUnits(t3);
       auto schema = utils::fromArrow(t3->schema(), units);
       auto mtable = utils::fromArrow(t3, units, node);
       auto t5 = processors::shuffle(mtable, schema->fields.at(0), [](size_t key, int rank, int world) {
@@ -165,8 +165,8 @@ int main(int argc, char** argv) {
       t5->verifyShuffle(schema->fields.at(0), [](size_t key, int rank, int world) {
         return key % world;
       });
-      //auto at5 = utils::toArrow(t5);
-      //auto t6 = processors::java(at5, "Aggregate", node);
+      auto at5 = utils::toArrow(t5);
+      auto t6 = processors::java(at5, "Aggregate", node);
     }
     size_t global_row_count = 0;
     MPI_Allreduce(&local_row_count, &global_row_count, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
