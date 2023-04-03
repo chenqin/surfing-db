@@ -22,17 +22,17 @@ find_package(JNI REQUIRED)
 include_directories(${JNI_INCLUDE_DIRS})
 
 SET(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
-list(APPEND CMAKE_PREFIX_PATH "~/libtorch")
-find_package(CUDA REQUIRED 11.8)
-find_package(CUDAToolkit REQUIRED 11.8)
-enable_language(CUDA)
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
+#list(APPEND CMAKE_PREFIX_PATH "~/libtorch")
+#find_package(CUDA REQUIRED 11.8)
+#find_package(CUDAToolkit REQUIRED 11.8)
+#enable_language(CUDA)
 
-find_package(Torch REQUIRED)
-find_package(ArrowCUDA REQUIRED)
+#find_package(Torch REQUIRED)
+#find_package(ArrowCUDA REQUIRED)
 find_package(ArrowDataset REQUIRED)
 set(ARROW_DATASET_LIBRARY ArrowDataset::arrow_dataset_shared)
-set(ARROW_CUDA_LIBRARY ArrowCUDA::arrow_cuda_shared)
+#set(ARROW_CUDA_LIBRARY ArrowCUDA::arrow_cuda_shared)
 
 if(APPLE)
     set(OPENSSL_ROOT_DIR /opt/homebrew/Cellar/openssl@3/3.0.8)
@@ -305,8 +305,8 @@ add_custom_command(TARGET KafkaExample PRE_BUILD
         COMMAND make thrift)
 
 add_custom_command(TARGET KafkaExample PRE_BUILD
-        COMMAND cd ${CMAKE_SOURCE_DIR}/surfing-db-java && mvn clean package -Darrow.version=${ARROW_VERSION} 
-        COMMAND cp ${CMAKE_SOURCE_DIR}/surfing-db-java/target/surfing-db-java-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_SOURCE_DIR}/surfing-db-java.jar)
+        COMMAND cd ${CMAKE_SOURCE_DIR}/drsquirrel-java && mvn clean package -Darrow.version=${ARROW_VERSION} 
+        COMMAND cp ${CMAKE_SOURCE_DIR}/drsquirrel-java/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_SOURCE_DIR}/surfing-db-java.jar)
 
 set_target_properties(DataGenExample PROPERTIES
     LINK_FLAGS "${MPI_LINK_FLAGS}")
@@ -326,5 +326,4 @@ target_link_libraries(KafkaExample
     PRIVATE ${TABLE}
     PRIVATE ${CONNECTOR}
     PRIVATE ${ENGINE}
-    PRIVATE ${ARROW_LIBRARY}
-    PRIVATE ${TORCH_LIBRARIES})
+    PRIVATE ${ARROW_LIBRARY})

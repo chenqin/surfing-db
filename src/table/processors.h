@@ -25,9 +25,9 @@
 #include <iostream>
 #include "mtable.h"
 #include "xgbop.h"
-#include <torch/csrc/distributed/c10d/ProcessGroupMPI.hpp>
-#include <torch/csrc/distributed/c10d/Work.hpp>
-#include <torch/torch.h>
+//#include <torch/csrc/distributed/c10d/ProcessGroupMPI.hpp>
+//#include <torch/csrc/distributed/c10d/Work.hpp>
+//#include <torch/torch.h>
 
 #pragma once
 
@@ -63,12 +63,6 @@ public:
    * 
    */
   static void xgb(std::shared_ptr<mtable>, std::vector<Field>, Field&, const XGBParameters&);
-
-  /**
-   * @brief train a pytorch model, sample
-   * 
-   */
-  static void mnist(c10::intrusive_ptr<c10d::ProcessGroupMPI>, std::shared_ptr<mtable>);
 };
 } // namespace table
 } // namespace surfingdb

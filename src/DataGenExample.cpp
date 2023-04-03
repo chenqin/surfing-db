@@ -87,7 +87,7 @@ int main(int argc, char** argv) {
    * mschema -> row based MPI friendly schema defined to encode/decode table/row in O(1) time
    * con -> data connector ingess running on a number of nodes micro batching data pullers
    */
-  auto pg = c10d::ProcessGroupMPI::createProcessGroupMPI();
+  //auto pg = c10d::ProcessGroupMPI::createProcessGroupMPI();
   const auto node = std::make_shared<surfingdb::meta::node>(&argc, &argv);
 
   const auto schema_ptr = std::make_shared<mschema>(r);

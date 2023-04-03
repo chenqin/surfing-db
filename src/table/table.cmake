@@ -10,8 +10,8 @@ if(APPLE)
     include_directories(/usr/local/include)
 endif()
 
-find_package(Torch REQUIRED)
-include_directories(include  ~/libtorch/include)
+#find_package(Torch REQUIRED)
+#include_directories(include  ~/libtorch/include)
 
 add_library(${TABLE} STATIC
         ${SURFINGDB_SRC}/table/mrow.cpp
@@ -29,7 +29,6 @@ target_link_libraries(${TABLE}
         PUBLIC ${JSON_LIBRARY}
         PUBLIC ${ARROW_LIBRARY}
         PUBLIC ${PARQUET_LIBRARY}
-        PUBLIC ${TORCH_LIBRARIES}
         PUBLIC ${XGBOOST_LIBRARY})
 
 # build test binary
@@ -44,7 +43,6 @@ target_link_libraries(TableTest
         PRIVATE ${GTEST_MAIN_LIBRARY}
         PRIVATE ${ARROW_LIBRARY}
         PRIVATE ${PARQUET_LIBRARY}
-        PRIVATE ${TORCH_LIBRARIES}
         PRIVATE ${XGBOOST_LIBRARY})
 
 # discover all gtests in this module
