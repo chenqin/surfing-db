@@ -53,10 +53,10 @@ public class Cleanup {
 
     VarCharVector jobId = new VarCharVector("jobid", allocator);
     VarCharVector type = new VarCharVector("type", allocator);
-    VarCharVector binary = new VarCharVector("binary", allocator);
+    VarCharVector json = new VarCharVector("json", allocator);
     jobId.allocateNew();
     type.allocateNew();
-    binary.allocateNew();
+    json.allocateNew();
     int count = 0;
 
     VarCharVector input_type = (VarCharVector) input.getVector("topic");
@@ -73,7 +73,7 @@ public class Cleanup {
             jobId.setSafe(count, flinkMetric.getJobId().getBytes(StandardCharsets.UTF_8));
             type.setSafe(count, "metric".getBytes(StandardCharsets.UTF_8));
             // keep payload size small
-            binary.setSafe(count, SerializationUtils.serialize(flinkMetric));
+            json.setSafe(count, mapper.writeValueAsString(flinkMetric).getBytes(StandardCharsets.UTF_8));
             count++;
           } catch (Exception e) {
             LOG.warn("fail to parse", e);
@@ -85,18 +85,25 @@ public class Cleanup {
         try {
           jobId.setSafe(count, rawLog.getApplicationId().getBytes(StandardCharsets.UTF_8));
           type.setSafe(count, "log".getBytes(StandardCharsets.UTF_8));
-          binary.setSafe(count, SerializationUtils.serialize(rawLog));
+          json.setSafe(count, mapper.writeValueAsString(rawLog).getBytes(StandardCharsets.UTF_8));
           count++;
         } catch (Exception e) {
           LOG.warn("fail to parse", e);
         }
       }
     }
+    /**
+     * insert a placeholder for now
+     */
+    jobId.setSafe(count, new Text(""));
+    type.setSafe(count, new Text());
+    json.setSafe(count, new Text());
+    count++;
 
     jobId.setValueCount(count);
     type.setValueCount(count);
-    binary.setValueCount(count);
-    List<FieldVector> vectors = Arrays.asList(jobId, type, binary);
+    json.setValueCount(count);
+    List<FieldVector> vectors = Arrays.asList(jobId, type, json);
     VectorSchemaRoot vectorSchemaRoot = new VectorSchemaRoot(vectors);
     vectorSchemaRoot.setRowCount(count);
     return vectorSchemaRoot;

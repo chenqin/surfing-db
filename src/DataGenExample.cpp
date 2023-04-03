@@ -72,62 +72,19 @@ int main(int argc, char** argv) {
   google::InstallFailureSignalHandler();
   google::InitGoogleLogging(argv[0]);
   // define how data will be stored, as rows in a table
-  RowSchema r, r1;
-  SchemaUtils::initField(r, "timestamp", RowType::LONG, sizeof(long));
-  SchemaUtils::initField(r1, "timestamp", RowType::LONG, sizeof(long));
-  SchemaUtils::initField(r, "host", RowType::STRING, 64);
-  SchemaUtils::initField(r, "metricName", RowType::STRING, 1024);
-  SchemaUtils::initListField(r, "metricValues", RowType::DOUBLE, 2, sizeof(DOUBLE_TYPE));
-  SchemaUtils::initListField(r1, "metricValues", RowType::DOUBLE, 2, sizeof(DOUBLE_TYPE));
-  SchemaUtils::initMapField(r, "meta", RowType::STRING, RowType::STRING, 1, 32, 64);
-  std::map<std::string, uint64_t> units = { { "host", 1024 }, { "metricValues", 2 }, { "meta", 1 } };
+  RowSchema r;
+  SchemaUtils::initField(r, "topic", RowType::STRING, 64);
+  SchemaUtils::initField(r, "payload", RowType::STRING, MAX_STR_LEN);
+  const std::shared_ptr<mschema> schema_ptr = std::make_shared<mschema>(r);
   /**
    * @brief initial constructors
    * node -> single executor binding to MPI rank, number of node determined by mpi processes
    * mschema -> row based MPI friendly schema defined to encode/decode table/row in O(1) time
    * con -> data connector ingess running on a number of nodes micro batching data pullers
    */
-  //auto pg = c10d::ProcessGroupMPI::createProcessGroupMPI();
+  // auto pg = c10d::ProcessGroupMPI::createProcessGroupMPI();
   const auto node = std::make_shared<surfingdb::meta::node>(&argc, &argv);
-
-  const auto schema_ptr = std::make_shared<mschema>(r);
-  const auto schema_ptr1 = std::make_shared<mschema>(r1);
-  /**
-   * @brief define a data gen source
-   *
-   */
-  auto deser = [](const char* payload, const mschema& out) {
-    auto row = std::make_shared<mrow>(std::make_shared<mschema>(out));
-    Value p;
-
-    p.p_val.long_val = 1;
-    row->write(out.fields.at(0), p);
-
-    p.p_val.string_val = "hello_host";
-    row->write(out.fields.at(1), p);
-
-    p.p_val.string_val = random_string(16);
-    row->write(out.fields.at(2), p);
-
-    p.p_val.double_val = 0.1;
-    std::vector<PValue> lval;
-    lval.push_back(p.p_val);
-    lval.push_back(p.p_val);
-    p.list_value = lval;
-    row->write(out.fields.at(3), p);
-    PValue key;
-    PValue value;
-    key.string_val = random_string(1024 - 1);
-    value.string_val = random_string(1024 - 1);
-    std::pair<PValue, PValue> pair;
-    pair.first = key;
-    pair.second = value;
-    p.map_value.insert(pair);
-    row->write(out.fields.at(4), p);
-    return row;
-  };
   auto con = DataGenConnector(node, "source", BATCH_SIZE, 10000, schema_ptr);
-  auto con1 = DataGenConnector(node, "source", BATCH_SIZE, 10000, schema_ptr1);
 
   std::signal(SIGTERM | SIGINT, signal_handler);
 
@@ -149,7 +106,6 @@ int main(int argc, char** argv) {
   };
 
   while (terminal_signal == 0) {
-    if (node->rank == 0) std::cout << "iteration" << std::endl;
     /**
      * @brief import pyarrow
      */
@@ -159,21 +115,40 @@ int main(int argc, char** argv) {
     size_t total_row_count = intial_row_count;
     double start = MPI_Wtime();
 
-    auto arrow_t2 = con1.consume_batch([&schema_ptr1](const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders) {
-      PValue p;
-      Value v;
-      p.long_val = 1;
-      p.double_val = 0.1;
-      v.list_value = { p, p };
-      utils::append(builders.at(0).get(), schema_ptr1->fields.at(0), p, v);
-      utils::append(builders.at(1).get(), schema_ptr1->fields.at(1), p, v);
+    auto arrow_t2 = con.consume_batch([&schema_ptr](const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders) {
+      PValue v1, v2;
+      Value placeholder;
+      v1.string_val = "metric";
+      v2.string_val = "{\"timestamp\": 1680480831430, \"host\": \"xenon-prod-001-20220810-dpp-worker-prod-0a02070a\", \"metricName\": \"flink.operator._t_host.xenon-prod-001-20220810-dpp-worker-prod-0a02070a_ec2_pin220_com._t_tm_id.container_1661534748548_105064_01_000025._t_job_id.ebcdb5d6a8e6a51abc2e9c4d34f9508b._t_job_name.K8sAuditStreamExample-prod._t_operator_id.7df19f87deec5680128845fd9a6ca18d._t_operator_name.Flat Map._t_subtask_index.10._t_objectName.tcp--evaluationjob--yzjze390-master-0.k8s_event_object\", \"metricValue\": \"1\" }";
+      utils::append(builders.at(0).get(), schema_ptr->fields.at(0), v1, placeholder);
+      utils::append(builders.at(1).get(), schema_ptr->fields.at(1), v2, placeholder);
     });
     CHECK(arrow_t2->num_rows() == BATCH_SIZE);
 
+    auto t3 = processors::java(arrow_t2, "CleanupWrapper", node);
+    std::map<std::string, uint64_t> units = utils::toUnits(t3);
+    auto schema = utils::fromArrow(t3->schema(), units);
+    auto mtable = utils::fromArrow(t3, units, node);
+    auto t5 = processors::shuffle(mtable, schema->fields.at(0), [](size_t key, int rank, int world) {
+      return key % world;
+    });
+    t5->verifyShuffle(schema->fields.at(0), [](size_t key, int rank, int world) {
+      return key % world;
+    });
+    auto at5 = utils::toArrow(t5);
+    auto t6 = processors::java(at5, "AggregateWrapper", node);
+    units = utils::toUnits(t6);
+    auto t7 = utils::fromArrow(t6, units, node);
+    if(t7->row_count > 0) {
+      std::cout << t7->row_count;
+    }
+    if (node->rank == 0) std::cout << "iteration" << BATCH_SIZE * node->world << std::endl;
+    /*
     auto source = engine::source(arrow_t2);
     cp::Expression filter_expr = cp::less(cp::field_ref("timestamp"), cp::literal(3));
     auto filter_ = engine::filter(source, filter_expr);
     auto batches = cp::DeclarationToBatches(std::move(filter_)).ValueOrDie();
+    */
   }
   return terminal_signal;
 }

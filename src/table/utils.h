@@ -204,6 +204,7 @@ public:
       *
       * @param i
       */
+     CHECK(record_ptr->num_rows() > 0);
      int i;
      for (i = 0; i < record_ptr->num_rows(); i++) {
        for (auto j = 0; j < vc.size(); j++) {
@@ -276,7 +277,7 @@ public:
      MPI_Allreduce(&unit_max, &global_unit_max, units.size(), MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
      i = 0;
      for(auto u : units) {
-        u.second = global_unit_max[i++];
+        u.second = global_unit_max[i++] + 1;
      }
      return units;
    }

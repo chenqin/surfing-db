@@ -69,21 +69,22 @@ public class Aggregate {
     protected static VectorSchemaRoot process(VectorSchemaRoot input) throws Exception {
         VarCharVector jobid = (VarCharVector) input.getVector("jobid");
         VarCharVector type = (VarCharVector) input.getVector("type");
-        VarCharVector binary = (VarCharVector) input.getVector("binary");
+        VarCharVector binary = (VarCharVector) input.getVector("json");
         for (int i = 0; i < input.getRowCount(); i++) {
           String JobID = Text.decode(jobid.get(i));
           String JobType = Text.decode(type.get(i));
+          String jsonstr = Text.decode(binary.get(i));
           if(states.get(JobID.toLowerCase()) == null) {
               State s = new State();
               s.maxNumOfLatestExceptions = 20;
               states.put(JobID.toLowerCase(), s);
           }
           if(JobType.equalsIgnoreCase("metric")) {
-              FlinkMetric flinkMetric = SerializationUtils.deserialize(binary.get(i));
+              FlinkMetric flinkMetric = mapper.readValue(jsonstr, FlinkMetric.class);
               states.get(JobID.toLowerCase()).update(flinkMetric);
           }
           if(JobType.equalsIgnoreCase("log")) {
-              RawLog rawLog = SerializationUtils.deserialize(binary.get(i));
+              RawLog rawLog = mapper.readValue(jsonstr, RawLog.class);
               states.get(JobID.toLowerCase()).update(rawLog);
           }
         }
@@ -100,6 +101,12 @@ public class Aggregate {
             snapshot.setSafe(count, json_str.getBytes(StandardCharsets.UTF_8));
             count++;
         }
+        /**
+         * insert a placeholder for now
+         */
+        app.setSafe(count, new Text(""));
+        snapshot.setSafe(count, new Text());
+        count++;
 
         app.setValueCount(count);
         snapshot.setValueCount(count);

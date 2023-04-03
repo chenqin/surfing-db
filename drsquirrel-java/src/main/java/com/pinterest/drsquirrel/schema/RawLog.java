@@ -15,6 +15,14 @@ public class RawLog implements Signal, Cloneable, Serializable {
   private String containerId;
   private String username;
 
+  private String jobId;
+  private String jobName;
+  private long timestamp;
+
+  private String saltKey;
+
+  private SignalType signalType;
+
   @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
   private Date date;
 
