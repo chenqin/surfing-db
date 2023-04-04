@@ -66,8 +66,8 @@ int main(int argc, char** argv) {
   /**
    * pull every 2 seconds
    */
-  int batch = 15000;
-  int interval = 200;
+  int batch = 50000;
+  int interval = 2000;
   int world = node->world;
 
   size_t total = 0;
@@ -109,12 +109,12 @@ int main(int argc, char** argv) {
     return r;
   };
   auto metrics_log_staging = KafkaConnector(
-    node, "kafka-source", batch, interval, schema_ptr,
+    node, "kafka-source", 500, 1000, schema_ptr,
     { "xenon-logs-staging" }, "/var/serverset/discovery.metricskafka07.prod", group_id, false);
   metrics_log_staging.setDeser(metric_log_deser);
 
   auto metrics_log_prod = KafkaConnector(
-    node, "kafka-source", batch, interval, schema_ptr,
+    node, "kafka-source", 500, 1000, schema_ptr,
     { "xenon-logs-prod" }, "/var/serverset/discovery.metricskafka07.prod", group_id, false);
   metrics_log_prod.setDeser(metric_log_deser);
 
@@ -138,6 +138,7 @@ int main(int argc, char** argv) {
         utils::append(builders.at(1).get(), schema_ptr->fields.at(1), v2, placeholder);
       });
     });
+    
     auto t2 = std::async(std::launch::async, [&metrics_log_prod] {
       RowSchema r;
       SchemaUtils::initField(r, "topic", RowType::STRING, 64);

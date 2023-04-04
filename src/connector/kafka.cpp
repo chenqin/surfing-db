@@ -209,8 +209,8 @@ void KafkaConnector::generate(bool pii) {
   rd_kafka_conf_set_rebalance_cb(conf, cb);
 
   rd_kafka_conf_set(conf, "enable.partition.eof", "false", NULL, 0);
-
-  rd_kafka_conf_set(conf, "queued.min.messages", "1000", NULL, 0);
+  rd_kafka_conf_set(conf, "fetch.max.bytes", "524288000", NULL, 0);
+  rd_kafka_conf_set(conf, "queued.min.messages", "10000", NULL, 0);
 
   /* If there is no previously committed offset for a partition
    * the auto.offset.reset strategy will be used to decide where
