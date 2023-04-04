@@ -3,6 +3,7 @@ package com.pinterest.drsquirrel;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pinterest.drsquirrel.parsers.DrSquirrelUtils;
 import com.pinterest.drsquirrel.schema.FlinkMetric;
+import com.pinterest.drsquirrel.schema.FlinkMetricType;
 import com.pinterest.drsquirrel.schema.RawLog;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
@@ -13,7 +14,6 @@ import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.util.Text;
-import org.apache.commons.lang3.SerializationUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,7 +68,11 @@ public class Cleanup {
       if (topic.equals("metric")) {
         FlinkMetric flinkMetric = DrSquirrelUtils.constructFlinkMetric(body);
 
-        if (flinkMetric.getJobId() != null) {
+        if (flinkMetric.getJobId() != null && 
+          ( flinkMetric.getType() == FlinkMetricType.JOBMANAGER_JOB
+          || flinkMetric.getType() == FlinkMetricType.JOBMANAGER
+          || flinkMetric.getType() == FlinkMetricType.JOBMANAGER_JOB_WITH_APPID
+          || flinkMetric.getType() == FlinkMetricType.JOBMANAGER_WITH_APPID)) {
           try {
             jobId.setSafe(count, flinkMetric.getJobId().getBytes(StandardCharsets.UTF_8));
             type.setSafe(count, "metric".getBytes(StandardCharsets.UTF_8));
