@@ -42,6 +42,10 @@ public class Cleanup {
         Data.exportVectorSchemaRoot(allocator, process(input), null, array_out, schema_out);
       } catch (Exception e) {
       } finally {
+        array_in.close();
+        schema_in.close();
+        array_out.close();
+        schema_out.close();
         input.clear();
       }
     }

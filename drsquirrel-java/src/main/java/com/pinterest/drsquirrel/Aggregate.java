@@ -61,6 +61,10 @@ public class Aggregate {
         vectorSchemaRoot.setRowCount(count);
         Data.exportVectorSchemaRoot(allocator, vectorSchemaRoot, null, array_out, schema_out);
       } finally {
+        array_in.close();
+        schema_in.close();
+        array_out.close();
+        schema_out.close();
         input.clear();
       }
     }

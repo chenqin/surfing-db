@@ -256,11 +256,17 @@ const std::shared_ptr<mtable> processors::java(std::shared_ptr<mtable> input, st
                                   static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArrayIn)),
                                   static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchemaOut)),
                                   static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArrayOut)));
-  node->env->DeleteLocalRef(bridge);
 
   if (node->env->ExceptionCheck()) {
     LOG(ERROR) << "fail to call jni";
+    node->env->DeleteLocalRef(bridge);
+    release_malloced_array(&arrowArrayIn);
+    release_malloced_array(&arrowArrayOut);
+    release_malloced_type(&arrowSchemaIn);
+    release_malloced_type(&arrowSchemaOut);
+    return java(input, class_name, units);
   }
+  node->env->DeleteLocalRef(bridge);
   /**
    * @brief import schema and data from java
    *
@@ -298,11 +304,17 @@ const std::shared_ptr<arrow::RecordBatch> processors::java(std::shared_ptr<arrow
                                   static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArrayIn)),
                                   static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchemaOut)),
                                   static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArrayOut)));
-  node->env->DeleteLocalRef(bridge);
 
   if (node->env->ExceptionCheck()) {
     LOG(ERROR) << "fail to call jni";
+    node->env->DeleteLocalRef(bridge);
+    release_malloced_array(&arrowArrayIn);
+    release_malloced_array(&arrowArrayOut);
+    release_malloced_type(&arrowSchemaIn);
+    release_malloced_type(&arrowSchemaOut);
+    return java(batch, class_name, node);
   }
+  node->env->DeleteLocalRef(bridge);
   /**
    * @brief import schema and data from java
    *
