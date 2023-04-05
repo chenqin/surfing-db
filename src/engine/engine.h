@@ -62,15 +62,28 @@ class engine {
 public:
   static Declaration source(std::shared_ptr<mtable> t1) {
     auto arrow_t1 = utils::toArrow(t1);
-    auto table_1 = arrow::Table::FromRecordBatches({ std::move(arrow_t1) }).ValueOrDie();
-    int max_row = t1->row_count;
+    auto units = utils::toUnits(arrow_t1);
+    return source(arrow_t1, units);
+  }
+
+  static Declaration source(std::shared_ptr<arrow::RecordBatch> arrow_t1) {
+    
+    if(arrow_t1->num_rows() == 0) {
+      std::map<std::string, uint64_t> units;
+      arrow_t1 = utils::placeholder(arrow_t1->schema(), units);
+    }
+    int max_row = arrow_t1->num_rows();
     CHECK_GT(max_row, 0); // table source needs not be empty
+    auto table_1 = arrow::Table::FromRecordBatches({ std::move(arrow_t1) }).ValueOrDie();
     auto table_source_options = TableSourceNodeOptions(table_1, max_row);
     Declaration source("table_source", std::move(table_source_options));
     return source;
   }
 
-  static Declaration source(std::shared_ptr<arrow::RecordBatch> arrow_t1) {
+  static Declaration source(std::shared_ptr<arrow::RecordBatch> arrow_t1, std::map<std::string, uint64_t> units) {
+    if(arrow_t1->num_rows() == 0) {
+      arrow_t1 = utils::placeholder(arrow_t1->schema(), units);
+    }
     int max_row = arrow_t1->num_rows();
     CHECK_GT(max_row, 0); // table source needs not be empty
     auto table_1 = arrow::Table::FromRecordBatches({ std::move(arrow_t1) }).ValueOrDie();

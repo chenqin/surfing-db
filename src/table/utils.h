@@ -390,6 +390,45 @@ public:
     }
   }
 
+  static std::shared_ptr<arrow::RecordBatch> placeholder(std::shared_ptr<arrow::Schema> schema, std::map<std::string, uint64_t>& units) {
+    auto schema_ptr = fromArrow(schema, units);
+    std::vector<std::shared_ptr<arrow::ArrayBuilder>> builders;
+    std::vector<std::shared_ptr<arrow::Array>> arrays;
+    arrow::MemoryPool* pool = arrow::default_memory_pool();
+    for (auto i = 0; i < schema_ptr->fields.size(); i++) {
+      auto type = schema_ptr->fields.at(i).type;
+      if (type == RowType::LIST) {
+        auto keytype = schema_ptr->fields.at(i).list_type;
+        builders.push_back(std::make_shared<arrow::ListBuilder>(pool, getBuilder(keytype)));
+        continue;
+      }
+      if (type == RowType::MAP) {
+        auto keytype = schema_ptr->fields.at(i).map_key_type;
+        auto valuetype = schema_ptr->fields.at(i).map_value_type;
+        builders.push_back(std::make_shared<arrow::MapBuilder>(pool, getBuilder(keytype), getBuilder(valuetype)));
+        continue;
+      }
+      builders.push_back(getBuilder(type));
+    }
+
+ 
+    CHECK(schema_ptr->fields.size() == builders.size());
+    for (auto k = 0; k < schema_ptr->fields.size(); k++) {
+      auto field = schema_ptr->fields.at(k);
+      auto builder_ptr = builders.at(k);
+      Value v;
+      append(builder_ptr.get(), field, v.p_val, v);
+    }
+    
+
+    for (auto b : builders) {
+      std::shared_ptr<arrow::Array> _array;
+      b->Finish(&_array);
+      arrays.push_back(_array);
+    }
+    return arrow::RecordBatch::Make(schema, 1, arrays);
+  }
+
   static std::shared_ptr<arrow::RecordBatch> toArrow(const std::shared_ptr<surfingdb::table::mtable> table) {
     /**
      * Build list of builders to append

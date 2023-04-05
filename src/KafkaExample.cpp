@@ -153,7 +153,11 @@ int main(int argc, char** argv) {
         utils::append(builders.at(1).get(), schema_ptr->fields.at(1), v2, placeholder);
       });
     });
-    std::vector<std::shared_ptr<arrow::RecordBatch>> tables = {t1.get(), t2.get()};
+    auto metric = engine::source(t1.get());
+    auto log = engine::source(t2.get());
+    auto metric_log = engine::union_op(metric, log);
+
+    std::vector<std::shared_ptr<arrow::RecordBatch>> tables = cp::DeclarationToBatches(std::move(metric_log)).ValueOrDie();
     for(const auto& t : tables){
       local_row_count += t->num_rows();
       auto t3 = processors::java(t, "CleanupWrapper", node);
