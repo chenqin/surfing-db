@@ -29,7 +29,7 @@
 #include "table/processors.h"
 
 #define FLUSH_DIR "/tmp/"
-#define BATCH_SIZE 2250
+#define BATCH_SIZE 225000
 
 using namespace surfingdb::meta;
 using namespace surfingdb::table::schema;
@@ -39,23 +39,6 @@ using namespace surfingdb::engine;
 using namespace std;
 
 namespace cp = ::arrow::compute;
-
-/**
- * https://stackoverflow.com/questions/440133/how-do-i-create-a-random-alpha-numeric-string-in-c
- */
-std::string random_string(size_t length) {
-  auto randchar = []() -> char {
-    const char charset[] =
-      "0123456789"
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-      "abcdefghijklmnopqrstuvwxyz";
-    const size_t max_index = (sizeof(charset) - 1);
-    return charset[rand() % max_index];
-  };
-  std::string str(length, 0);
-  std::generate_n(str.begin(), length, randchar);
-  return str;
-}
 
 volatile std::sig_atomic_t terminal_signal;
 void signal_handler(int signal) {
@@ -88,29 +71,7 @@ int main(int argc, char** argv) {
 
   std::signal(SIGTERM | SIGINT, signal_handler);
 
-  /**
-   * @brief
-   * show case consumer send data async to ranks not pulling data
-   * so that while other workers working on shuffle or post shuffle stages
-   * consumer ranks can async send data to other ranks
-   * jump to next iteration and get next batch ready
-   */
-  auto partitioner = [](size_t key, int rank, int world) {
-    int base = world % 2 == 0 ? world - 1 : world;
-    int dest = key % world;
-    /**
-     * @brief avoid use GPU rank in preprocessing
-     *
-     */
-    return dest == 0 ? dest + 1 : dest;
-  };
-
   while (terminal_signal == 0) {
-    /**
-     * @brief import pyarrow
-     */
-    // arrow::py::import_pyarrow();c10d::ProcessGroupMPI::createProcessGroupMPI();
-
     const size_t intial_row_count = BATCH_SIZE;
     size_t total_row_count = intial_row_count;
     double start = MPI_Wtime();
@@ -124,31 +85,12 @@ int main(int argc, char** argv) {
       utils::append(builders.at(1).get(), schema_ptr->fields.at(1), v2, placeholder);
     });
     CHECK(arrow_t2->num_rows() == BATCH_SIZE);
-
-    auto t3 = processors::java(arrow_t2, "CleanupWrapper", node);
-    std::map<std::string, uint64_t> units = utils::toUnits(t3);
-    auto schema = utils::fromArrow(t3->schema(), units);
-    auto mtable = utils::fromArrow(t3, units, node);
-    auto t5 = processors::shuffle(mtable, schema->fields.at(0), [](size_t key, int rank, int world) {
-      return key % world;
-    });
-    t5->verifyShuffle(schema->fields.at(0), [](size_t key, int rank, int world) {
-      return key % world;
-    });
-    auto at5 = utils::toArrow(t5);
-    auto t6 = processors::java(at5, "AggregateWrapper", node);
-    units = utils::toUnits(t6);
-    auto t7 = utils::fromArrow(t6, units, node);
-    if(t7->row_count > 0) {
-      std::cout << t7->row_count;
-    }
+    auto metric = engine::source(arrow_t2);
+    auto signal = engine::java(metric, "CleanupWrapper", node);
+    auto parition = engine::shuffle(signal, node);
+    auto snapshot = engine::java(parition, "AggregateWrapper", node);
+    auto outputs = cp::DeclarationToBatches(std::move(snapshot)).ValueOrDie();
     if (node->rank == 0) std::cout << "iteration" << BATCH_SIZE * node->world << std::endl;
-    /*
-    auto source = engine::source(arrow_t2);
-    cp::Expression filter_expr = cp::less(cp::field_ref("timestamp"), cp::literal(3));
-    auto filter_ = engine::filter(source, filter_expr);
-    auto batches = cp::DeclarationToBatches(std::move(filter_)).ValueOrDie();
-    */
   }
   return terminal_signal;
 }

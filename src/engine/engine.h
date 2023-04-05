@@ -92,11 +92,12 @@ public:
     return source;
   }
 
-  static Declaration shuffle(Declaration& node_in, std::map<std::string, uint64_t> units, std::shared_ptr<node> node) {
+  static Declaration shuffle(Declaration& node_in, std::shared_ptr<node> node) {
     auto tables = DeclarationToBatches(std::move(node_in)).ValueOrDie();
-    CHECK_LE(tables.size(), 1);
-
+    
+    std::vector<std::shared_ptr<arrow::RecordBatch>> atables;
     for (const auto& t : tables) {
+      auto units = utils::toUnits(t);
       auto schema = utils::fromArrow(t->schema(), units);
       auto mtable = utils::fromArrow(t, units, node);
       auto t5 = processors::shuffle(mtable, schema->fields.at(0), [](size_t key, int rank, int world) {
@@ -105,17 +106,43 @@ public:
       t5->verifyShuffle(schema->fields.at(0), [](size_t key, int rank, int world) {
         return key % world;
       });
-      return source(t5);
+      atables.push_back(utils::toArrow(t5));
     }
+    long max_row = 0;
+    for(auto& t : atables) {
+      if(t->num_rows() == 0) {
+        std::map<std::string, uint64_t> units;
+        t = utils::placeholder(t->schema(), units);
+      }
+      max_row += t->num_rows();
+    }
+    auto table_1 = arrow::Table::FromRecordBatches(atables).ValueOrDie();
+    auto table_source_options = TableSourceNodeOptions(table_1, max_row);
+    Declaration source("table_source", std::move(table_source_options));
+    return source;
   }
 
   static Declaration java(Declaration& node_in, std::string classname, std::shared_ptr<node> node) {
     auto tables = DeclarationToBatches(std::move(node_in)).ValueOrDie();
-    CHECK_LE(tables.size(), 1);
+    std::vector<std::shared_ptr<arrow::RecordBatch>> atables;
+
     for (const auto& t : tables) {
       auto t3 = processors::java(t, classname, node);
-      return source(t3);
+      atables.push_back(t3);
     }
+
+    long max_row = 0;
+    for(auto& t : atables) {
+      if(t->num_rows() == 0) {
+        std::map<std::string, uint64_t> units;
+        t = utils::placeholder(t->schema(), units);
+      }
+      max_row += t->num_rows();
+    }
+    auto table_1 = arrow::Table::FromRecordBatches(atables).ValueOrDie();
+    auto table_source_options = TableSourceNodeOptions(table_1, max_row);
+    Declaration source("table_source", std::move(table_source_options));
+    return source;
   }
 
   static Declaration filter(Declaration& node_in, Expression& expression) {
