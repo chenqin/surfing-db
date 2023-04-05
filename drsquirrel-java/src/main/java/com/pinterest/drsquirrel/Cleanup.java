@@ -37,16 +37,16 @@ public class Cleanup {
         ArrowSchema schema_in = ArrowSchema.wrap(schemaIn);
         ArrowArray array_out = ArrowArray.wrap(arrayOut);
         ArrowSchema schema_out = ArrowSchema.wrap(schemaOut)) {
-      VectorSchemaRoot input = Data.importVectorSchemaRoot(allocator, array_in, schema_in, null);
+      VectorSchemaRoot input = null;
+      VectorSchemaRoot output = null;
       try {
-        Data.exportVectorSchemaRoot(allocator, process(input), null, array_out, schema_out);
+        input = Data.importVectorSchemaRoot(allocator, array_in, schema_in, null);
+        output = process(input);
+        Data.exportVectorSchemaRoot(allocator, output, null, array_out, schema_out);
       } catch (Exception e) {
       } finally {
-        array_in.close();
-        schema_in.close();
-        array_out.close();
-        schema_out.close();
-        input.clear();
+        if(input != null) input.close();
+        if(output != null) output.close();
       }
     }
   }
