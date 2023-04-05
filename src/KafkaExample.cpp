@@ -153,26 +153,18 @@ int main(int argc, char** argv) {
         utils::append(builders.at(1).get(), schema_ptr->fields.at(1), v2, placeholder);
       });
     });
-    auto metric = engine::source(t1.get());
-    auto log = engine::source(t2.get());
+    auto metric_table = t1.get();
+    local_row_count += metric_table->num_rows();
+    auto metric = engine::source(metric_table);
+    auto log_table = t2.get();
+    local_row_count += log_table->num_rows();
+    auto log = engine::source(log_table);
     auto metric_log = engine::union_op(metric, log);
-
-    std::vector<std::shared_ptr<arrow::RecordBatch>> tables = cp::DeclarationToBatches(std::move(metric_log)).ValueOrDie();
-    for(const auto& t : tables){
-      local_row_count += t->num_rows();
-      auto t3 = processors::java(t, "CleanupWrapper", node);
-      std::map<std::string, uint64_t> units = utils::toUnits(t3);
-      auto schema = utils::fromArrow(t3->schema(), units);
-      auto mtable = utils::fromArrow(t3, units, node);
-      auto t5 = processors::shuffle(mtable, schema->fields.at(0), [](size_t key, int rank, int world) {
-        return key % world;
-      });
-      t5->verifyShuffle(schema->fields.at(0), [](size_t key, int rank, int world) {
-        return key % world;
-      });
-      auto at5 = utils::toArrow(t5);
-      auto t6 = processors::java(at5, "AggregateWrapper", node);
-    }
+    auto signal = engine::java(metric_log, "CleanupWrapper", node);
+    auto parition = engine::shuffle(signal, node);
+    auto snapshot = engine::java(parition, "AggregateWrapper", node);
+    auto outputs = cp::DeclarationToBatches(std::move(snapshot)).ValueOrDie();
+    
     size_t global_row_count = 0;
     MPI_Allreduce(&local_row_count, &global_row_count, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
 
