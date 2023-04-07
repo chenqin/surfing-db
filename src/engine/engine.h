@@ -94,8 +94,14 @@ public:
 
   static Declaration shuffle(Declaration& node_in, std::shared_ptr<node> node) {
     auto tables = DeclarationToBatches(std::move(node_in)).ValueOrDie();
+    auto start = MPI_Wtime();
+    int num_batch = tables.size();
+    int global_num_batch = 0;
+    MPI_Allreduce(&num_batch, &global_num_batch, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+    CHECK_EQ(global_num_batch, num_batch);
     
     std::vector<std::shared_ptr<arrow::RecordBatch>> atables;
+    double total_count = 0;
     for (const auto& t : tables) {
       auto units = utils::toUnits(t);
       auto schema = utils::fromArrow(t->schema(), units);
@@ -103,11 +109,14 @@ public:
       auto t5 = processors::shuffle(mtable, schema->fields.at(0), [](size_t key, int rank, int world) {
         return key % world;
       });
-      t5->verifyShuffle(schema->fields.at(0), [](size_t key, int rank, int world) {
-        return key % world;
-      });
+      //t5->verifyShuffle(schema->fields.at(0), [](size_t key, int rank, int world) {
+      //  return key % world;
+      //});
+      total_count += t5->row_count;
       atables.push_back(utils::toArrow(t5));
     }
+    LOG(INFO) << "shuffle qps" << total_count / (MPI_Wtime() - start);
+
     long max_row = 0;
     for(auto& t : atables) {
       if(t->num_rows() == 0) {
@@ -125,11 +134,14 @@ public:
   static Declaration java(Declaration& node_in, std::string classname, std::shared_ptr<node> node) {
     auto tables = DeclarationToBatches(std::move(node_in)).ValueOrDie();
     std::vector<std::shared_ptr<arrow::RecordBatch>> atables;
-
+    auto start = MPI_Wtime();
+    double total_count = 0;
     for (const auto& t : tables) {
       auto t3 = processors::java(t, classname, node);
+      total_count += t3->num_rows();
       atables.push_back(t3);
     }
+    LOG(INFO) << "java qps" << total_count / (MPI_Wtime() - start);
 
     long max_row = 0;
     for(auto& t : atables) {

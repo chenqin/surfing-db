@@ -90,7 +90,7 @@ int main(int argc, char** argv) {
     auto parition = engine::shuffle(signal, node);
     auto snapshot = engine::java(parition, "AggregateWrapper", node);
     auto outputs = cp::DeclarationToBatches(std::move(snapshot)).ValueOrDie();
-    if (node->rank == 0) std::cout << "iteration" << BATCH_SIZE * node->world << std::endl;
+    if (node->rank == 0) std::cout << "iteration " << BATCH_SIZE * node->world / (MPI_Wtime() - start) << " qps"<< std::endl;
   }
   return terminal_signal;
 }
