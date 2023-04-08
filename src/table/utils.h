@@ -189,179 +189,189 @@ public:
         auto mtype = (arrow::MapType*)field->type().get();
         SchemaUtils::initMapField(r, field->name(), getRowType(mtype->key_type()), getRowType(mtype->item_type()), max_unit, MAX_STR_LEN, MAX_STR_LEN);
       } else {
-        auto type = getRowType( field->type());
+        auto type = getRowType(field->type());
         SchemaUtils::initField(r, field->name(), type, max_unit);
       }
     }
     return std::make_shared<mschema>(r);
   }
 
-  static std::map<std::string, uint64_t> toUnits(std::shared_ptr<arrow::RecordBatch> record_ptr) {
-     auto vc = record_ptr->columns();
-     std::map<std::string, uint64_t> units;
-     /**
-      * @brief iterate all rows in arrow recordbatch
-      *
-      * @param i
-      */
-     CHECK(record_ptr->num_rows() > 0);
-     int i;
-     for (i = 0; i < record_ptr->num_rows(); i++) {
-       for (auto j = 0; j < vc.size(); j++) {
-         auto field = record_ptr->schema()->field(j);
-         auto col = record_ptr->column(j);
+  static std::map<std::string, uint64_t> toUnits(std::vector<std::shared_ptr<arrow::RecordBatch>> records) {
+    std::map<std::string, uint64_t> units;
 
-         auto result = col->GetScalar(i).ValueOrDie();
-         Value v;
-         auto type = field->type()->id();
-         auto name = field->name();
-
-         if (type == arrow::Type::STRING) {
-           auto bc = (arrow::StringScalar*)result.get();
-           if (auto search = units.find(name); search != units.end()) {
-             units[name] = units[name] > bc->ToString().length() ? units[name] : bc->ToString().length();
-           } else {
-             units[name] = bc->ToString().length();
-           }
-         }
-         if (type == arrow::Type::LIST) {
-          auto bc = (arrow::ListScalar*)result.get();
-          auto list = bc->value;
-          units[name] = list->length();
-          int max_str_len = 0;
-          for (int k = 0; k < list->length(); k++) {
-            auto item = list->GetScalar(k).ValueOrDie();
-            if (list->type_id() == arrow::Type::STRING) {
-              auto bc = (arrow::StringScalar*)item.get();
-              int len = bc->ToString().length();
-              max_str_len = len > max_str_len ? len : max_str_len;
-            }
-          }
-          units[name + "#"] = max_str_len;
-         }
-         if (type == arrow::Type::MAP) {
-          auto bc = (arrow::MapScalar*)result.get();
-          units[name] = bc->value->length();
-          size_t key_len = 0;
-          size_t val_len = 0;
-          for (int k = 0; k < bc->value->length(); k++) {
-            auto pairval = bc->value->GetScalar(k).ValueOrDie();
-            auto structval = (arrow::StructScalar*)pairval.get();
-            std::shared_ptr<arrow::Scalar> keyval = structval->field("key").ValueOrDie();
-            std::shared_ptr<arrow::Scalar> itemval = structval->field("value").ValueOrDie();
-            PValue keyp, valuep;
-            writeV(valuep, itemval->type->id(), itemval.get());
-
-            if (keyval->type->id() == arrow::Type::STRING) {
-              auto bc = (arrow::StringScalar*)keyval.get();
-              int len = bc->ToString().length();
-              key_len = len > key_len ? len : key_len;
-            }
-            if (itemval->type->id() == arrow::Type::STRING) {
-              auto bc = (arrow::StringScalar*)itemval.get();
-              int len = bc->ToString().length();
-              val_len = len > val_len ? len : val_len;
-            }
-          }
-          units[name + "#1"] = key_len;
-          units[name + "#2"] = val_len;
-         }
-       }
-     }
-     size_t unit_max[units.size()];
-     i = 0;
-     for(auto u : units) {
-      unit_max[i++] = u.second;
-     }
-     size_t global_unit_max[units.size()];
-     MPI_Allreduce(&unit_max, &global_unit_max, units.size(), MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
-     i = 0;
-     for(auto u : units) {
-        u.second = global_unit_max[i++] + 1;
-     }
-     return units;
-   }
-
-  static std::shared_ptr<mtable> fromArrow(std::shared_ptr<arrow::RecordBatch> record_ptr, std::map<std::string, uint64_t>& units, std::shared_ptr<node> node_ptr) {
-    auto schema = fromArrow(record_ptr->schema(), units);
-    auto table = std::make_shared<mtable>(node_ptr, schema, record_ptr->num_rows() * schema->rowSize());
-    auto vc = record_ptr->columns();
-    /**
-     * @brief iterate all rows in arrow recordbatch
-     *
-     * @param i
-     */
-    for (auto i = 0; i < record_ptr->num_rows(); i++) {
-
-      mrow r(schema);
+    for (auto& record_ptr : records) {
+      auto vc = record_ptr->columns();
       /**
-       * @brief iterate all fields in schema with j
+       * @brief iterate all rows in arrow recordbatch
        *
+       * @param i
        */
-      for (auto j = 0; j < vc.size(); j++) {
-        auto field = record_ptr->schema()->field(j);
-        auto col = record_ptr->column(j);
+      CHECK(record_ptr->num_rows() > 0);
+      for (int i = 0; i < record_ptr->num_rows(); i++) {
+        for (auto j = 0; j < vc.size(); j++) {
+          auto field = record_ptr->schema()->field(j);
+          auto col = record_ptr->column(j);
 
-        auto result = col->GetScalar(i).ValueOrDie();
-        Value v;
-        auto type = field->type()->id();
+          auto result = col->GetScalar(i).ValueOrDie();
+          Value v;
+          auto type = field->type()->id();
+          auto name = field->name();
 
-        if (type == arrow::Type::BOOL) {
-          auto bc = (arrow::BooleanScalar*)result.get();
-          v.p_val.bool_val = bc->value;
-        }
-        if (type == arrow::Type::INT32) {
-          auto bc = (arrow::Int32Scalar*)result.get();
-          v.p_val.int_val = bc->value;
-        }
-        if (type == arrow::Type::INT64) {
-          auto bc = (arrow::Int64Scalar*)result.get();
-          v.p_val.long_val = bc->value;
-        }
-        if (type == arrow::Type::FLOAT) {
-          auto bc = (arrow::FloatScalar*)result.get();
-          v.p_val.double_val = bc->value;
-        }
-        if (type == arrow::Type::STRING) {
-          auto bc = (arrow::StringScalar*)result.get();
-          v.p_val.string_val = bc->ToString();
-        }
-        if (type == arrow::Type::LIST) {
-          auto bc = (arrow::ListScalar*)result.get();
-          auto list = bc->value;
-          CHECK_LE(list->length(), schema->fields.at(j).max_unit_size);
-          for (int k = 0; k < list->length(); k++) {
-            auto item = list->GetScalar(k).ValueOrDie();
-            PValue pval;
-            writeV(pval, list->type_id(), item.get());
-            v.list_value.push_back(pval);
+          if (type == arrow::Type::STRING) {
+            auto bc = (arrow::StringScalar*)result.get();
+            if (auto search = units.find(name); search != units.end()) {
+              units[name] = units[name] > bc->ToString().length() ? units[name] : bc->ToString().length();
+            } else {
+              units[name] = bc->ToString().length();
+            }
+          }
+          if (type == arrow::Type::LIST) {
+            auto bc = (arrow::ListScalar*)result.get();
+            auto list = bc->value;
+            units[name] = list->length();
+            int max_str_len = 0;
+            for (int k = 0; k < list->length(); k++) {
+              auto item = list->GetScalar(k).ValueOrDie();
+              if (list->type_id() == arrow::Type::STRING) {
+                auto bc = (arrow::StringScalar*)item.get();
+                int len = bc->ToString().length();
+                max_str_len = len > max_str_len ? len : max_str_len;
+              }
+            }
+            units[name + "#"] = max_str_len;
+          }
+          if (type == arrow::Type::MAP) {
+            auto bc = (arrow::MapScalar*)result.get();
+            units[name] = bc->value->length();
+            size_t key_len = 0;
+            size_t val_len = 0;
+            for (int k = 0; k < bc->value->length(); k++) {
+              auto pairval = bc->value->GetScalar(k).ValueOrDie();
+              auto structval = (arrow::StructScalar*)pairval.get();
+              std::shared_ptr<arrow::Scalar> keyval = structval->field("key").ValueOrDie();
+              std::shared_ptr<arrow::Scalar> itemval = structval->field("value").ValueOrDie();
+              PValue keyp, valuep;
+              writeV(valuep, itemval->type->id(), itemval.get());
+
+              if (keyval->type->id() == arrow::Type::STRING) {
+                auto bc = (arrow::StringScalar*)keyval.get();
+                int len = bc->ToString().length();
+                key_len = len > key_len ? len : key_len;
+              }
+              if (itemval->type->id() == arrow::Type::STRING) {
+                auto bc = (arrow::StringScalar*)itemval.get();
+                int len = bc->ToString().length();
+                val_len = len > val_len ? len : val_len;
+              }
+            }
+            units[name + "#1"] = key_len;
+            units[name + "#2"] = val_len;
           }
         }
-        if (type == arrow::Type::MAP) {
-          auto bc = (arrow::MapScalar*)result.get();
-          /**
-           * @brief insert number of items in map
-           *
-           */
-          CHECK_LE(bc->value->length(), schema->fields.at(j).max_unit_size);
-          for (int k = 0; k < bc->value->length(); k++) {
-            auto pairval = bc->value->GetScalar(k).ValueOrDie();
-            auto structval = (arrow::StructScalar*)pairval.get();
-            std::shared_ptr<arrow::Scalar> keyval = structval->field("key").ValueOrDie();
-            std::shared_ptr<arrow::Scalar> itemval = structval->field("value").ValueOrDie();
-            PValue keyp, valuep;
-            writeV(keyp, keyval->type->id(), keyval.get());
-            writeV(valuep, itemval->type->id(), itemval.get());
-            v.map_value.insert({ keyp, valuep });
-          }
-        }
+      }
+    }
+    size_t unit_max[units.size()];
+    int i = 0;
+    for (auto u : units) {
+      unit_max[i++] = u.second;
+    }
+    size_t global_unit_max[units.size()];
+    MPI_Allreduce(&unit_max, &global_unit_max, units.size(), MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
+    i = 0;
+    for (auto u : units) {
+      u.second = global_unit_max[i++] + 1;
+    }
+    return units;
+  }
+
+  static std::shared_ptr<mtable> fromArrow(std::vector<std::shared_ptr<arrow::RecordBatch>> records, std::map<std::string, uint64_t>& units, std::shared_ptr<node> node_ptr) {
+    CHECK(records.size() > 0);
+    auto schema = fromArrow(records.at(0)->schema(), units);
+    size_t row_count = 0;
+    for (auto& record : records) {
+      row_count += record->num_rows();
+    }
+
+    auto table = std::make_shared<mtable>(node_ptr, schema, row_count * schema->rowSize());
+    for (auto& record_ptr : records) {
+      auto vc = record_ptr->columns();
+      /**
+       * @brief iterate all rows in arrow recordbatch
+       *
+       * @param i
+       */
+      for (auto i = 0; i < record_ptr->num_rows(); i++) {
+
+        mrow r(schema);
         /**
-         * @brief write j field to row
+         * @brief iterate all fields in schema with j
          *
          */
-        r.write(schema->fields.at(j), v);
+        for (auto j = 0; j < vc.size(); j++) {
+          auto field = record_ptr->schema()->field(j);
+          auto col = record_ptr->column(j);
+
+          auto result = col->GetScalar(i).ValueOrDie();
+          Value v;
+          auto type = field->type()->id();
+
+          if (type == arrow::Type::BOOL) {
+            auto bc = (arrow::BooleanScalar*)result.get();
+            v.p_val.bool_val = bc->value;
+          }
+          if (type == arrow::Type::INT32) {
+            auto bc = (arrow::Int32Scalar*)result.get();
+            v.p_val.int_val = bc->value;
+          }
+          if (type == arrow::Type::INT64) {
+            auto bc = (arrow::Int64Scalar*)result.get();
+            v.p_val.long_val = bc->value;
+          }
+          if (type == arrow::Type::FLOAT) {
+            auto bc = (arrow::FloatScalar*)result.get();
+            v.p_val.double_val = bc->value;
+          }
+          if (type == arrow::Type::STRING) {
+            auto bc = (arrow::StringScalar*)result.get();
+            v.p_val.string_val = bc->ToString();
+          }
+          if (type == arrow::Type::LIST) {
+            auto bc = (arrow::ListScalar*)result.get();
+            auto list = bc->value;
+            CHECK_LE(list->length(), schema->fields.at(j).max_unit_size);
+            for (int k = 0; k < list->length(); k++) {
+              auto item = list->GetScalar(k).ValueOrDie();
+              PValue pval;
+              writeV(pval, list->type_id(), item.get());
+              v.list_value.push_back(pval);
+            }
+          }
+          if (type == arrow::Type::MAP) {
+            auto bc = (arrow::MapScalar*)result.get();
+            /**
+             * @brief insert number of items in map
+             *
+             */
+            CHECK_LE(bc->value->length(), schema->fields.at(j).max_unit_size);
+            for (int k = 0; k < bc->value->length(); k++) {
+              auto pairval = bc->value->GetScalar(k).ValueOrDie();
+              auto structval = (arrow::StructScalar*)pairval.get();
+              std::shared_ptr<arrow::Scalar> keyval = structval->field("key").ValueOrDie();
+              std::shared_ptr<arrow::Scalar> itemval = structval->field("value").ValueOrDie();
+              PValue keyp, valuep;
+              writeV(keyp, keyval->type->id(), keyval.get());
+              writeV(valuep, itemval->type->id(), itemval.get());
+              v.map_value.insert({ keyp, valuep });
+            }
+          }
+          /**
+           * @brief write j field to row
+           *
+           */
+          r.write(schema->fields.at(j), v);
+        }
+        table->appendRow(r);
       }
-      table->appendRow(r);
     }
     return table;
   }
@@ -411,7 +421,6 @@ public:
       builders.push_back(getBuilder(type));
     }
 
- 
     CHECK(schema_ptr->fields.size() == builders.size());
     for (auto k = 0; k < schema_ptr->fields.size(); k++) {
       auto field = schema_ptr->fields.at(k);
@@ -419,7 +428,6 @@ public:
       Value v;
       append(builder_ptr.get(), field, v.p_val, v);
     }
-    
 
     for (auto b : builders) {
       std::shared_ptr<arrow::Array> _array;

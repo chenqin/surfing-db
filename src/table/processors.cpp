@@ -277,7 +277,7 @@ const std::shared_ptr<mtable> processors::java(std::shared_ptr<mtable> input, st
   release_malloced_array(&arrowArrayOut);
   release_malloced_type(&arrowSchemaIn);
   release_malloced_type(&arrowSchemaOut);
-  return utils::fromArrow(recordBatch, units, node);
+  return utils::fromArrow({std::move(recordBatch)}, units, node);
 }
 
 const std::shared_ptr<arrow::RecordBatch> processors::java(std::shared_ptr<arrow::RecordBatch> batch, std::string class_name, std::shared_ptr<node> node) {

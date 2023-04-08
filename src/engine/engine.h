@@ -62,31 +62,26 @@ class engine {
 public:
   static Declaration source(std::shared_ptr<mtable> t1) {
     auto arrow_t1 = utils::toArrow(t1);
-    auto units = utils::toUnits(arrow_t1);
-    return source(arrow_t1, units);
+    auto units = utils::toUnits({ arrow_t1 });
+    return source({arrow_t1}, units);
   }
 
   static Declaration source(std::shared_ptr<arrow::RecordBatch> arrow_t1) {
-    
-    if(arrow_t1->num_rows() == 0) {
-      std::map<std::string, uint64_t> units;
-      arrow_t1 = utils::placeholder(arrow_t1->schema(), units);
-    }
-    int max_row = arrow_t1->num_rows();
-    CHECK_GT(max_row, 0); // table source needs not be empty
-    auto table_1 = arrow::Table::FromRecordBatches({ std::move(arrow_t1) }).ValueOrDie();
-    auto table_source_options = TableSourceNodeOptions(table_1, max_row);
-    Declaration source("table_source", std::move(table_source_options));
-    return source;
+    auto units = utils::toUnits({ arrow_t1 });
+    return source({arrow_t1}, units);
   }
 
-  static Declaration source(std::shared_ptr<arrow::RecordBatch> arrow_t1, std::map<std::string, uint64_t> units) {
-    if(arrow_t1->num_rows() == 0) {
-      arrow_t1 = utils::placeholder(arrow_t1->schema(), units);
+  static Declaration source(std::vector<std::shared_ptr<arrow::RecordBatch>> records, std::map<std::string, uint64_t> units) {
+    CHECK(records.size() > 0);
+    int max_row = 0;
+    for (auto& arrow_t1 : records) {
+      if (arrow_t1->num_rows() == 0) {
+        arrow_t1 = utils::placeholder(arrow_t1->schema(), units);
+      }
+      max_row += arrow_t1->num_rows();
     }
-    int max_row = arrow_t1->num_rows();
     CHECK_GT(max_row, 0); // table source needs not be empty
-    auto table_1 = arrow::Table::FromRecordBatches({ std::move(arrow_t1) }).ValueOrDie();
+    auto table_1 = arrow::Table::FromRecordBatches(records).ValueOrDie();
     auto table_source_options = TableSourceNodeOptions(table_1, max_row);
     Declaration source("table_source", std::move(table_source_options));
     return source;
@@ -94,46 +89,28 @@ public:
 
   static Declaration shuffle(Declaration& node_in, std::shared_ptr<node> node) {
     auto tables = DeclarationToBatches(std::move(node_in)).ValueOrDie();
-    auto start = MPI_Wtime();
-    int num_batch = tables.size();
-    int global_num_batch = 0;
-    MPI_Allreduce(&num_batch, &global_num_batch, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
-    CHECK_EQ(global_num_batch, num_batch);
-    
-    std::vector<std::shared_ptr<arrow::RecordBatch>> atables;
-    double total_count = 0;
-    for (const auto& t : tables) {
-      auto units = utils::toUnits(t);
-      auto schema = utils::fromArrow(t->schema(), units);
-      auto mtable = utils::fromArrow(t, units, node);
-      auto t5 = processors::shuffle(mtable, schema->fields.at(0), [](size_t key, int rank, int world) {
-        return key % world;
-      });
-      //t5->verifyShuffle(schema->fields.at(0), [](size_t key, int rank, int world) {
-      //  return key % world;
-      //});
-      total_count += t5->row_count;
-      atables.push_back(utils::toArrow(t5));
-    }
-    LOG(INFO) << "shuffle qps" << total_count / (MPI_Wtime() - start);
+    CHECK(tables.size() > 0);
 
-    long max_row = 0;
-    for(auto& t : atables) {
-      if(t->num_rows() == 0) {
-        std::map<std::string, uint64_t> units;
-        t = utils::placeholder(t->schema(), units);
-      }
-      max_row += t->num_rows();
-    }
-    auto table_1 = arrow::Table::FromRecordBatches(atables).ValueOrDie();
-    auto table_source_options = TableSourceNodeOptions(table_1, max_row);
-    Declaration source("table_source", std::move(table_source_options));
-    return source;
+    auto start = MPI_Wtime();
+    auto units = utils::toUnits(tables);
+    auto mtable = utils::fromArrow(tables, units, node);
+    auto schema = utils::fromArrow(tables.at(0)->schema(), units);
+    auto t5 = processors::shuffle(mtable, schema->fields.at(0), [](size_t key, int rank, int world) {
+      return key % world;
+    });
+    // t5->verifyShuffle(schema->fields.at(0), [](size_t key, int rank, int world) {
+    //   return key % world;
+    // });
+    auto t = utils::toArrow(t5);
+
+    LOG(INFO) << "shuffle qps" << t5->row_count / (MPI_Wtime() - start);
+    return source({t}, units);
   }
 
   static Declaration java(Declaration& node_in, std::string classname, std::shared_ptr<node> node) {
     auto tables = DeclarationToBatches(std::move(node_in)).ValueOrDie();
     std::vector<std::shared_ptr<arrow::RecordBatch>> atables;
+    auto units = utils::toUnits(tables);
     auto start = MPI_Wtime();
     double total_count = 0;
     for (const auto& t : tables) {
@@ -142,19 +119,8 @@ public:
       atables.push_back(t3);
     }
     LOG(INFO) << "java qps" << total_count / (MPI_Wtime() - start);
-
-    long max_row = 0;
-    for(auto& t : atables) {
-      if(t->num_rows() == 0) {
-        std::map<std::string, uint64_t> units;
-        t = utils::placeholder(t->schema(), units);
-      }
-      max_row += t->num_rows();
-    }
-    auto table_1 = arrow::Table::FromRecordBatches(atables).ValueOrDie();
-    auto table_source_options = TableSourceNodeOptions(table_1, max_row);
-    Declaration source("table_source", std::move(table_source_options));
-    return source;
+    units = utils::toUnits(atables);
+    return source(atables, units);
   }
 
   static Declaration filter(Declaration& node_in, Expression& expression) {
