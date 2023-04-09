@@ -62,11 +62,22 @@ class engine {
 public:
   static Declaration source(std::shared_ptr<mtable> t1) {
     auto arrow_t1 = utils::toArrow(t1);
-    auto units = utils::toUnits({ arrow_t1 });
-    return source({arrow_t1}, units);
+    if (arrow_t1->num_rows() == 0) {
+        std::map<std::string, uint64_t> units;
+        auto arrow_t2 = utils::placeholder(arrow_t1->schema(), units);
+        units = utils::toUnits({ arrow_t2 });
+        return source({arrow_t2}, units);
+    } else{
+      auto units = utils::toUnits({ arrow_t1 });
+      return source({arrow_t1}, units);
+    }
   }
 
   static Declaration source(std::shared_ptr<arrow::RecordBatch> arrow_t1) {
+    if (arrow_t1->num_rows() == 0) {
+        std::map<std::string, uint64_t> units;
+        arrow_t1 = utils::placeholder(arrow_t1->schema(), units);
+    }
     auto units = utils::toUnits({ arrow_t1 });
     return source({arrow_t1}, units);
   }
