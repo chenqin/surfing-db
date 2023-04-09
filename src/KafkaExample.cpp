@@ -66,8 +66,8 @@ int main(int argc, char** argv) {
   /**
    * pull every 2 seconds
    */
-  int batch = 40000;
-  int interval = 2000;
+  int batch = 4000;
+  int interval = 200;
   int world = node->world;
 
   size_t total = 0;
@@ -158,9 +158,15 @@ int main(int argc, char** argv) {
     auto metric = engine::source(metric_table);
     auto log_table = t2.get();
     local_row_count += log_table->num_rows();
+    MPI_Barrier(MPI_COMM_WORLD);
+
     auto log = engine::source(log_table);
     auto metric_log = engine::union_op(metric, log);
     auto signal = engine::java(metric_log, "CleanupWrapper", node);
+    /**
+     * @brief hard coded first column as sharding key
+     * 
+     */
     auto parition = engine::shuffle(signal, node);
     auto snapshot = engine::java(parition, "AggregateWrapper", node);
     auto outputs = cp::DeclarationToBatches(std::move(snapshot)).ValueOrDie();

@@ -107,18 +107,18 @@ void processors::xgb(std::shared_ptr<mtable> in, std::vector<Field> features, Fi
   }
 }
 
-std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> input, Field& f, std::function<size_t(size_t key, int rank, int world)> partitioner) {
+std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> input, Field& f, std::function<size_t(size_t key, int rank, int world)> partitioner, bool sorted) {
   auto schema_ptr = input->getSchema();
   auto node_ptr = input->getNodePtr();
   int rank = node_ptr->rank;
   int world = node_ptr->world;
   size_t rowsize = schema_ptr->rowSize();
 
-  auto in = input->placement_sort(f, partitioner);
   /**
-   * verify all workers in same stage
+   * @brief sort input rows if not
+   *
    */
-  node_ptr->forward();
+  auto in = sorted ? input : input->placement_sort(f, partitioner);
   /**
    * register and commit schema row size unit to all workers
    */
@@ -277,7 +277,7 @@ const std::shared_ptr<mtable> processors::java(std::shared_ptr<mtable> input, st
   release_malloced_array(&arrowArrayOut);
   release_malloced_type(&arrowSchemaIn);
   release_malloced_type(&arrowSchemaOut);
-  return utils::fromArrow({std::move(recordBatch)}, units, node);
+  return utils::fromArrow({ std::move(recordBatch) }, units, node, [](size_t key, int rank, int world) { return key % world; });
 }
 
 const std::shared_ptr<arrow::RecordBatch> processors::java(std::shared_ptr<arrow::RecordBatch> batch, std::string class_name, std::shared_ptr<node> node) {

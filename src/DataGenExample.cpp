@@ -29,7 +29,7 @@
 #include "table/processors.h"
 
 #define FLUSH_DIR "/tmp/"
-#define BATCH_SIZE 225000
+#define BATCH_SIZE 2250
 
 using namespace surfingdb::meta;
 using namespace surfingdb::table::schema;
@@ -46,6 +46,23 @@ void signal_handler(int signal) {
   terminal_signal = signal;
 }
 
+std::string generateRandomString(int length) {
+    // Define the characters that can be used in the random string
+    const std::string chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+    // Set the random seed using the current time
+    srand(static_cast<unsigned int>(time(nullptr)));
+
+    // Generate the random string
+    std::string random_string;
+    for (int i = 0; i < length; ++i) {
+        random_string += chars[rand() % chars.length()];
+    }
+
+    return random_string;
+}
+
+
 /** run this program with
  * mpirun -np 12 ./Test
  * @return
@@ -57,7 +74,7 @@ int main(int argc, char** argv) {
   // define how data will be stored, as rows in a table
   RowSchema r;
   SchemaUtils::initField(r, "topic", RowType::STRING, 64);
-  SchemaUtils::initField(r, "payload", RowType::STRING, MAX_STR_LEN);
+  SchemaUtils::initField(r, "payload", RowType::STRING, 1024);
   const std::shared_ptr<mschema> schema_ptr = std::make_shared<mschema>(r);
   /**
    * @brief initial constructors
@@ -79,18 +96,16 @@ int main(int argc, char** argv) {
     auto arrow_t2 = con.consume_batch([&schema_ptr](const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders) {
       PValue v1, v2;
       Value placeholder;
-      v1.string_val = "metric";
+      v1.string_val = generateRandomString(16);
       v2.string_val = "{\"timestamp\": 1680480831430, \"host\": \"xenon-prod-001-20220810-dpp-worker-prod-0a02070a\", \"metricName\": \"flink.operator._t_host.xenon-prod-001-20220810-dpp-worker-prod-0a02070a_ec2_pin220_com._t_tm_id.container_1661534748548_105064_01_000025._t_job_id.ebcdb5d6a8e6a51abc2e9c4d34f9508b._t_job_name.K8sAuditStreamExample-prod._t_operator_id.7df19f87deec5680128845fd9a6ca18d._t_operator_name.Flat Map._t_subtask_index.10._t_objectName.tcp--evaluationjob--yzjze390-master-0.k8s_event_object\", \"metricValue\": \"1\" }";
       utils::append(builders.at(0).get(), schema_ptr->fields.at(0), v1, placeholder);
       utils::append(builders.at(1).get(), schema_ptr->fields.at(1), v2, placeholder);
     });
     CHECK(arrow_t2->num_rows() == BATCH_SIZE);
     auto metric = engine::source(arrow_t2);
-    auto signal = engine::java(metric, "CleanupWrapper", node);
-    auto parition = engine::shuffle(signal, node);
-    auto snapshot = engine::java(parition, "AggregateWrapper", node);
-    auto outputs = cp::DeclarationToBatches(std::move(snapshot)).ValueOrDie();
-    if (node->rank == 0) std::cout << "iteration " << BATCH_SIZE * node->world / (MPI_Wtime() - start) << " qps"<< std::endl;
+    auto parition = engine::shuffle(metric, node);
+    auto outputs = cp::DeclarationToBatches(std::move(parition)).ValueOrDie();
+    if (node->rank == 0) std::cout << "iteration " << (BATCH_SIZE * node->world * schema_ptr->rowSize()) / ((MPI_Wtime() - start) *1024*1024) << " MB per seconds"<< std::endl;
   }
   return terminal_signal;
 }

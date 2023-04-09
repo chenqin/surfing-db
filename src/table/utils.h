@@ -284,15 +284,20 @@ public:
     return units;
   }
 
-  static std::shared_ptr<mtable> fromArrow(std::vector<std::shared_ptr<arrow::RecordBatch>> records, std::map<std::string, uint64_t>& units, std::shared_ptr<node> node_ptr) {
+  static std::shared_ptr<mtable> fromArrow(std::vector<std::shared_ptr<arrow::RecordBatch>> records, std::map<std::string, uint64_t>& units, std::shared_ptr<node> node_ptr, std::function<size_t(size_t key, int rank, int world)> partitioner) {
     CHECK(records.size() > 0);
     auto schema = fromArrow(records.at(0)->schema(), units);
+    CHECK(schema->fields.size() > 0);
+    
     size_t row_count = 0;
+    ValueHasher value_hasher;
     for (auto& record : records) {
       row_count += record->num_rows();
     }
 
     auto table = std::make_shared<mtable>(node_ptr, schema, row_count * schema->rowSize());
+    Field f = schema->fields.at(0);
+    std::vector<mrow> rows;
     for (auto& record_ptr : records) {
       auto vc = record_ptr->columns();
       /**
@@ -370,9 +375,45 @@ public:
            */
           r.write(schema->fields.at(j), v);
         }
-        table->appendRow(r);
+        Value v;
+        r.read(f, v);
+        size_t key = value_hasher.operator()(v);
+        if (table->key_groups->find(key) == table->key_groups->end()) {
+          std::vector<size_t> arr;
+          table->key_groups->insert({ key, arr });
+        }
+        table->key_groups->at(key).emplace_back(i);
+        rows.push_back(r);
       }
     }
+
+    int index = 0;
+    for (int i = 0; i < node_ptr->world; i++) {
+      table->placement_index->insert({ i, index });
+      for (auto g : *table->key_groups) {
+        size_t rank = partitioner(g.first, node_ptr->rank, node_ptr->world);
+        /**
+         * @brief if placment of a key equals to a specific rank i
+         *
+         */
+        if (rank == (size_t)i) {
+          for (auto item : g.second) {
+            auto row = rows.at(item);
+            Value v;
+            row.read(f, v);
+            size_t key = value_hasher.operator()(v);
+            if (table->key_groups->find(key) == table->key_groups->end()) {
+              std::vector<size_t> arr;
+              table->key_groups->insert({ key, arr });
+            }
+            table->key_groups->at(key).emplace_back(index);
+            table->appendRow(row);
+            index++;
+          }
+        }
+      }
+    }
+
     return table;
   }
 

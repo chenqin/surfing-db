@@ -38,7 +38,7 @@ namespace meta {
 
 #define MAX_STR_LEN 52400
 #define HEADER_SIZE sizeof(long)
-#define MEM_PAGE_SIZE 5368709120 // 5GB
+#define MEM_PAGE_SIZE 53687091200 // 50GB
 #define FLUSH_SIZE 10737418240   // 10GB
 #define FILE_IO_VECTOR 8
 #define SSD_CHUNK_SIZ 65536 // read/write ssd per 64KB chunk

@@ -47,7 +47,7 @@ public:
    *
    * @return std::shared_ptr<mtable>
    */
-  static std::shared_ptr<mtable> shuffle(std::shared_ptr<mtable>, Field&, std::function<size_t(size_t, int, int)>);
+  static std::shared_ptr<mtable> shuffle(std::shared_ptr<mtable>, Field&, std::function<size_t(size_t, int, int)>, bool sorted);
   /**
    * @brief call java class with static BRIDGE_METHOD_NAME function defined
    *
