@@ -295,9 +295,12 @@ public:
       row_count += record->num_rows();
     }
 
+    auto placeholder = std::make_shared<mtable>(node_ptr, schema, 1 * schema->rowSize());
     auto table = std::make_shared<mtable>(node_ptr, schema, row_count * schema->rowSize());
+    
     Field f = schema->fields.at(0);
     std::vector<mrow> rows;
+    int row_index = 0;
     for (auto& record_ptr : records) {
       auto vc = record_ptr->columns();
       /**
@@ -378,19 +381,20 @@ public:
         Value v;
         r.read(f, v);
         size_t key = value_hasher.operator()(v);
-        if (table->key_groups->find(key) == table->key_groups->end()) {
+        if (placeholder->key_groups->find(key) == placeholder->key_groups->end()) {
           std::vector<size_t> arr;
-          table->key_groups->insert({ key, arr });
+          placeholder->key_groups->insert({ key, arr });
         }
-        table->key_groups->at(key).emplace_back(i);
+        placeholder->key_groups->at(key).emplace_back(row_index);
         rows.push_back(r);
+        row_index++;
       }
     }
 
     int index = 0;
     for (int i = 0; i < node_ptr->world; i++) {
       table->placement_index->insert({ i, index });
-      for (auto g : *table->key_groups) {
+      for (auto g : *placeholder->key_groups) {
         size_t rank = partitioner(g.first, node_ptr->rank, node_ptr->world);
         /**
          * @brief if placment of a key equals to a specific rank i
@@ -398,7 +402,7 @@ public:
          */
         if (rank == (size_t)i) {
           for (auto item : g.second) {
-            auto row = rows.at(item);
+            auto row = rows[item];
             Value v;
             row.read(f, v);
             size_t key = value_hasher.operator()(v);
@@ -413,6 +417,7 @@ public:
         }
       }
     }
+    CHECK_EQ(index, row_count);
 
     return table;
   }
