@@ -17,19 +17,16 @@
 #include <math.h> /* isnan, sqrt */
 #include <sys/uio.h>
 #include <unistd.h>
+#include "KMeanOperator.h"
 #include "arrow/io/file.h"
 #include "parquet/stream_writer.h"
-#include "KMeanOperator.h"
 #include "xgbop.h"
 
 namespace surfingdb {
 namespace table {
 
 mtable::~mtable() {
-  capacity = 0;
-  key_dist->clear();
-  key_groups->clear();
-  placement_index->clear();
+  release();
 }
 
 mtable::mtable(const std::shared_ptr<node> node_ptr, const std::shared_ptr<mschema> schema_ptr,
@@ -38,10 +35,8 @@ mtable::mtable(const std::shared_ptr<node> node_ptr, const std::shared_ptr<msche
   this->capacity = capacity;
   this->schema_ptr = schema_ptr;
   this->node_ptr = node_ptr;
-  auto maybe_buffer = arrow::AllocateBuffer(capacity);
-  CHECK(maybe_buffer.ok());
-  buffer = *std::move(maybe_buffer);
-  payload = buffer->mutable_data();
+  CHECK(sizeof(uint8_t) == sizeof(char));
+  MPI_Alloc_mem(capacity*sizeof(uint8_t), MPI_INFO_NULL, &payload);
   schedule_size = -1;
   key_dist = std::make_unique<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>>();
   key_groups = std::make_unique<std::map<size_t, std::vector<size_t>, std::less<size_t>>>();
@@ -436,134 +431,12 @@ std::shared_ptr<node> mtable::getNodePtr() {
   return this->node_ptr;
 }
 
-std::shared_ptr<mschema> mtable::getCompactSchema() {
-  std::vector<size_t> max_units;
-  auto compact_schema_ptr = std::make_shared<mschema>(*schema_ptr.get());
-  /**
-   * find list and map type max_unit per mtable rows
-   */
-  for (auto field : schema_ptr->fields) {
-
-    if (field.list_type != RowType::VOID) {
-      max_units.push_back(0); // max unit
-      max_units.push_back(0); // max list unit
-    }
-    if (field.map_value_type != RowType::VOID) {
-      max_units.push_back(0); // max unit
-      max_units.push_back(0); // max key unit
-      max_units.push_back(0); // max value unit
-    }
-    if (field.type == RowType::STRING) {
-      max_units.push_back(0); // max unit
-    }
-  }
-
-  for (size_t i = 0; i < row_count; i++) {
-    size_t index = 0;
-    auto r = this->readRow(i);
-    for (auto field : schema_ptr->fields) {
-      CHECK_GE(schema_ptr->_offsets->size(), 0);
-      CHECK(schema_ptr->_offsets->find(field) != schema_ptr->_offsets->end());
-      uint64_t offset = schema_ptr->_offsets->at(field);
-
-      if (field.list_type != RowType::VOID) {
-        std::vector<size_t> list_lens = r->readLen(field, offset);
-        max_units.at(index) = max_units.at(index) < list_lens.at(0) ? list_lens.at(0) : max_units.at(index);
-        max_units.at(index + 1) = max_units.at(index) < list_lens.at(1) ? list_lens.at(1) : max_units.at(index);
-        index += 2;
-      }
-      if (field.map_value_type != RowType::VOID) {
-        std::vector<size_t> map_lens = r->readLen(field, offset);
-        max_units.at(index) = max_units.at(index) < map_lens.at(0) ? map_lens.at(0) : max_units.at(index);
-        max_units.at(index + 1) = max_units.at(index) < map_lens.at(1) ? map_lens.at(1) : max_units.at(index);
-        max_units.at(index + 2) = max_units.at(index) < map_lens.at(2) ? map_lens.at(2) : max_units.at(index);
-        index += 3;
-      }
-      if (field.type == RowType::STRING) {
-        std::vector<size_t> map_lens = r->readLen(field, offset);
-        // leave extra space for \0
-        max_units.at(index) = max_units.at(index) < map_lens.at(0) + 1 ? map_lens.at(0) + 1 : max_units.at(index);
-        index += 1;
-      }
-    }
-  }
-  size_t global_units[max_units.size()];
-  memcpy(global_units, &max_units[0], sizeof(size_t) * max_units.size());
-  const int max_size = max_units.size();
-  /**
-   * use tag to support multiple threads calling allreduce caused confusion
-   */
-  if (node_ptr != nullptr) {
-    if (node_ptr->rank == 0) {
-      for (int i = 1; i < node_ptr->world; i++) {
-        size_t local_units[max_units.size()];
-        MPI_Recv(&local_units, max_size, MPI_UNSIGNED_LONG, i, 1, MPI_COMM_WORLD,
-                 MPI_STATUS_IGNORE);
-        for (int i = 0; i < max_size; i++) {
-          global_units[i] = local_units[i] > global_units[i] ? local_units[i] : global_units[i];
-        }
-      }
-      // broadcast with tag
-      for (int i = 1; i < node_ptr->world; i++) {
-        MPI_Send(&global_units, max_size, MPI_UNSIGNED_LONG, i, 1, MPI_COMM_WORLD);
-      }
-    } else {
-      MPI_Send(&max_units[0], max_size, MPI_UNSIGNED_LONG, 0, 1, MPI_COMM_WORLD);
-      MPI_Recv(&global_units, max_size, MPI_UNSIGNED_LONG, 0, 1, MPI_COMM_WORLD,
-               MPI_STATUS_IGNORE);
-    }
-  }
-
-  // MPI_Allreduce(&max_units[0], &global_units, max_size, MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
-
-  int index = 0;
-  for (auto& field : compact_schema_ptr->fields) {
-    if (field.list_type != RowType::VOID) {
-      field.max_unit_size = global_units[index++];
-      field.max_list_unit_size = global_units[index++];
-    }
-    if (field.map_value_type != RowType::VOID) {
-      field.max_unit_size = global_units[index++];
-      field.max_map_key_unit_size = global_units[index++];
-      field.max_map_value_unit_size = global_units[index++];
-    }
-    if (field.type == RowType::STRING) {
-      field.max_unit_size = global_units[index++];
-    }
-  }
-  compact_schema_ptr->updateRowSize();
-  return compact_schema_ptr;
-}
-
-std::shared_ptr<mtable> mtable::compactTable() {
-  auto compact_schema_ptr = getCompactSchema();
-
-  auto compact_table_ptr = std::make_shared<mtable>(node_ptr, compact_schema_ptr,
-                                                    compact_schema_ptr->rowSize() * row_count);
-  for (size_t index = 0; index < row_size(); index++) {
-    auto r = readRow(index);
-    auto rcompact = mrow(compact_schema_ptr);
-    for (auto f : schema_ptr->fields) {
-      if (f.type != RowType::LIST && f.type != RowType::MAP && f.type != RowType::STRING) continue;
-      Value v;
-      r->read(f, v);
-      for (auto f1 : compact_schema_ptr->fields) {
-        if (f1 == f) {
-          rcompact.write(f1, v);
-        }
-      }
-    }
-    compact_table_ptr->appendRow(rcompact);
-  }
-  CHECK_LE(compact_schema_ptr->rowSize(), schema_ptr->rowSize());
-  LOG(INFO) << "reduced row size " << compact_schema_ptr->rowSize() << "v.s" << schema_ptr->rowSize();
-  return compact_table_ptr;
-}
-
 void mtable::release() {
   key_dist->clear();
   key_groups->clear();
   placement_index->clear();
+  MPI_Free_mem(payload);
+  if (win != MPI_WIN_NULL) MPI_Win_free(&win);
 }
 
 void mtable::appendRows(std::vector<std::shared_ptr<mrow>>& rows) {
@@ -571,5 +444,12 @@ void mtable::appendRows(std::vector<std::shared_ptr<mrow>>& rows) {
     appendRow(*m.get());
   }
 }
+
+void mtable::build_window() {
+  MPI_Aint window_size;
+  window_size = this->capacity;
+  CHECK(MPI_Win_create(payload, window_size, sizeof(char), node_ptr->info, MPI_COMM_WORLD, &win) == 0);
+}
+
 } // namespace table
 } // namespace surfingdb

@@ -27,17 +27,12 @@ namespace surfingdb {
 namespace meta {
 
 class node {
-private:
-  /**
-   * @brief if connector running on this node produce data
-   *
-   */
-  bool* issubscriber;
 public:
   node(int* argc, char*** argv);
   node(int, int, std::string);
   ~node(){
     MPI_Comm_free(&role_comm);
+    MPI_Info_free(&info);
     MPI_Finalize();
     jvm->DestroyJavaVM();
   }
@@ -64,7 +59,8 @@ public:
    *
    */
   int trainer = 0;
-  MPI_Comm role_comm;
+  MPI_Comm role_comm = MPI_COMM_NULL;
+  MPI_Info info = MPI_INFO_NULL;
   int role_rank;
   int role_world;
   /**

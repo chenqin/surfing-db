@@ -20,16 +20,6 @@
 namespace surfingdb {
 namespace meta {
 
-void node::setissubscriber(bool* is) {
-  CHECK_NOTNULL(is);
-  this->issubscriber = is;
-}
-
-int node::getissubscriber() {
-  if (issubscriber == nullptr) return 0;
-  return *issubscriber ? 1 : -1;
-}
-
 node::node(int* argc, char*** argv) {
   // Initialize the MPI environment
   int supported;
@@ -38,7 +28,7 @@ node::node(int* argc, char*** argv) {
   int name_len;
   /**
    * @brief check if pytorch already run initialize
-   * 
+   *
    */
   int flag = 0;
   MPI_Initialized(&flag);
@@ -51,12 +41,14 @@ node::node(int* argc, char*** argv) {
   MPI_Get_processor_name(processor_name, &name_len);
 
   processor = std::string(processor_name);
+  MPI_Info_create(&info);
+  CHECK(MPI_Info_set(info, "no_locks", "true") == 0);
+
   std::cout << processor << " on " << rank << std::endl;
   stage = 0;
   LOG(INFO) << "cluster size " << world << " node rank " << rank << " alias " << processor;
 
-  // TODO: FIXME determine role of each node
-  trainer = rank == 0 ? 1 : 0; // 
+  trainer = 0;
 
   MPI_Comm_split(MPI_COMM_WORLD, trainer, rank, &role_comm);
   MPI_Comm_rank(role_comm, &role_rank);

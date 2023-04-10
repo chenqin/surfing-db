@@ -58,9 +58,7 @@ public:
    * @brief expose current offset and buffer to construct mrow in table buffer
    */
   size_t offset = 0;    // current offset position
-  std::shared_ptr<arrow::Buffer> buffer;
-
-  MPI_Win win;
+  MPI_Win win = MPI_WIN_NULL;
   uint8_t* schedule;
   size_t row_count = 0; // number of rows in table
   // partition field
@@ -73,10 +71,13 @@ public:
   ~mtable();
   void release();
   void group(const Field& f, bool);
-  std::shared_ptr<mschema> getCompactSchema();
-  std::shared_ptr<mtable> compactTable();
   std::shared_ptr<mtable> placement_sort(const Field& f, std::function<size_t(size_t, int, int)>);
   uint8_t* range_ptr(int dest);
+  /**
+   * @brief build RDMA window for remote memory access, local memory no longer able to mutabe window, remote allow to mutate only once
+   * 
+   */
+  void build_window();
   void flush_rma_memory(size_t rows);
   void copy_rma_memory(size_t rows); // deprecated
   void reserve_rma_memory(size_t rows);

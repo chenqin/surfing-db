@@ -37,7 +37,7 @@ std::shared_ptr<mtable> processors::map(std::shared_ptr<mtable> in, std::shared_
     /**
      * @brief use out table memory to avoid memcpy
      */
-    mrow shaddlow_out_row(out_table_ptr->getSchema(), out_table_ptr->buffer->mutable_data() + out_table_ptr->offset);
+    mrow shaddlow_out_row(out_table_ptr->getSchema(), out_table_ptr->payload_ptr() + out_table_ptr->offset);
     bool append = transform(*in_row.get(), shaddlow_out_row, *out_schema_ptr.get());
     CHECK_EQ(shaddlow_out_row.schema_sig(), out_schema_ptr->signature());
 
@@ -126,9 +126,9 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> input, Field
   MPI_Type_contiguous(rowsize, MPI_CHAR, &row_type);
   MPI_Type_commit(&row_type);
 
-  MPI_Request sends[node_ptr->world];
-  MPI_Request recvs[node_ptr->world];
-  MPI_Status statuses[node_ptr->world];
+  MPI_Request sends[world];
+  MPI_Request recvs[world];
+  MPI_Status statuses[world];
 
   size_t send_to_vec[world], recv_from_vec[world];
 
@@ -151,12 +151,13 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> input, Field
     transfered_row_index_rank[i] = (i == 0) ? 0 : recv_from_vec[i - 1] + transfered_row_index_rank[i - 1];
   }
   auto table = std::make_shared<mtable>(node_ptr, schema_ptr, recv_row_count * rowsize);
+  //table->build_window();
 
   CHECK_LT((recv_row_count * rowsize), MEM_PAGE_SIZE); // no more than given table size
 
   int send_count = 0, recv_count = 0;
 
-  for (int i = 0; i < node_ptr->world; i++) {
+  for (int i = 0; i < world; i++) {
     int send_rank_offset = i;
     /**
      * @brief current rank has data sending to send_rank_offset
@@ -189,6 +190,7 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> input, Field
   }
   MPI_Waitall(send_count, sends, statuses);
   MPI_Waitall(recv_count, recvs, statuses);
+
   table->offset = recv_row_count * rowsize;
   table->row_count = recv_row_count;
 

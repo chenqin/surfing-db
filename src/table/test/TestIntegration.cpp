@@ -84,7 +84,7 @@ TEST(TableTest, testCompact) {
    * @brief borrow table memory
    *
    */
-  mrow shaddow(tpr, t.buffer->mutable_data() + t.offset);
+  mrow shaddow(tpr, t.payload_ptr() + t.offset);
   shaddow.write(field1, v1);
   shaddow.write(field2, v2);
   shaddow.write(field3, v3);
@@ -108,7 +108,7 @@ TEST(TableTest, testCompact) {
    */
   size_t tight_offset = 0;
   // |HEADER|field1|field2|...
-  mrow s1(tpr, t.buffer->mutable_data() + tight_offset + HEADER_SIZE);
+  mrow s1(tpr, t.payload_ptr() + tight_offset + HEADER_SIZE);
   tight_offset += s1.write(field1, v1);
   tight_offset += s1.write(field2, v2);
   tight_offset += s1.write(field3, v3);
@@ -260,9 +260,6 @@ TEST(TableTest, testmrow) {
   Value v;
   sptr->read(field7, v);
   EXPECT_EQ(v.map_value.size(), 1);
-  std::shared_ptr<mtable> ptr = t->compactTable();
-
-  EXPECT_EQ(ptr->row_size(), 10002);
   sptr = t->readRow(1);
   Value vm;
   sptr->read(field7, vm);
