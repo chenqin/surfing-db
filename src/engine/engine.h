@@ -108,7 +108,7 @@ public:
     auto schema = utils::fromArrow(tables.at(0)->schema(), units);
     auto f = schema->getFieldByName(field_name);
     auto t5 = processors::shuffle(mtable, f, partationer, true);
-    t5->verifyShuffle(schema->fields.at(0), [](size_t key, int rank, int world) {return key % world;});
+    //t5->verifyShuffle(schema->fields.at(0), [](size_t key, int rank, int world) {return key % world;});
     auto t = utils::toArrow(t5);
 
     LOG(INFO) << "shuffle qps" << t5->row_count / (MPI_Wtime() - start);

@@ -136,60 +136,34 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> input, Field
     size_t send_to_i = in->range_row_size(j);
     send_to_vec[j] = send_to_i;
   }
-
+  // tell recv rank number of rows sender would like to send in recv_from_vec[sender_rank]
   MPI_Alltoall(&send_to_vec, 1, MPI_UNSIGNED_LONG, recv_from_vec, 1, MPI_UNSIGNED_LONG, MPI_COMM_WORLD);
 
   size_t recv_row_count = 0;
-  size_t transfered_row_index_rank[world];
-  /**
-   * @brief transfered_row_index_rank determins placement of newly transfered row
-   * we don't differentiate local move v.s remote as MPI
-   *
-   */
+  size_t recv_row_index_rank[world], put_row_index_ran[world];
+
+  // ensure we put start offset of data from rank i in recv_row_index_rank th row of table
   for (int i = 0; i < world; i++) {
+    // std::cout << rank << " <->" << i << " <" << send_to_vec[i] << ", " << recv_from_vec[i] << ">"<< std::endl;
     recv_row_count += recv_from_vec[i];
-    transfered_row_index_rank[i] = (i == 0) ? 0 : recv_from_vec[i - 1] + transfered_row_index_rank[i - 1];
+    recv_row_index_rank[i] = (i == 0) ? 0 : recv_from_vec[i - 1] + recv_row_index_rank[i - 1];
   }
+  // tell sender starting row index in each recv rank sender should start put data in put_row_index_ran[reciever]
+  MPI_Alltoall(&recv_row_index_rank, 1, MPI_UNSIGNED_LONG, put_row_index_ran, 1, MPI_UNSIGNED_LONG, MPI_COMM_WORLD);
+  for (int i = 0; i < world; i++) {
+    LOG(INFO) << rank << " -> " << i << "= [ " << put_row_index_ran[i] << " , " << send_to_vec[i] << ")";
+  }
+
   auto table = std::make_shared<mtable>(node_ptr, schema_ptr, recv_row_count * rowsize);
-  //table->build_window();
-
-  CHECK_LT((recv_row_count * rowsize), MEM_PAGE_SIZE); // no more than given table size
-
-  int send_count = 0, recv_count = 0;
-
+  table->build_window();
+  MPI_Win_fence(MPI_MODE_NOPRECEDE, table->win);
   for (int i = 0; i < world; i++) {
     int send_rank_offset = i;
-    /**
-     * @brief current rank has data sending to send_rank_offset
-     *
-     */
-    if (send_to_vec[send_rank_offset] > 0) {
-      // LOG(INFO) << node_ptr->rank << "-> " << i << " size " << in->range_row_size(i);
-      /**
-       * @brief tag is unqiue value from sender to reciever with two dim array
-       *
-       */
-      int tag = rank * world + send_rank_offset;
-      MPI_Isend(in->range_ptr(send_rank_offset), send_to_vec[send_rank_offset], row_type, send_rank_offset, tag, MPI_COMM_WORLD, &sends[send_count++]);
-    }
-    int recv_rank_offset = i;
-    /**
-     * @brief current rank has data recieveing form recv_rank_offset
-     *
-     */
-    if (recv_from_vec[recv_rank_offset] > 0) {
-      CHECK_LE(transfered_row_index_rank[recv_rank_offset], recv_row_count);
-      // LOG(INFO) << node_ptr->rank << " <- " << i << " size " << recv_lens[i];
-      /**
-       * @brief tag is unqiue value from sender to reciever with two dim array
-       * matching sender side
-       */
-      int tag = recv_rank_offset * world + rank;
-      MPI_Irecv(table->payload_ptr() + transfered_row_index_rank[recv_rank_offset] * rowsize, recv_from_vec[recv_rank_offset], row_type, recv_rank_offset, tag, MPI_COMM_WORLD, &recvs[recv_count++]);
-    }
+    MPI_Aint offset = put_row_index_ran[i];
+    MPI_Put(in->range_ptr(send_rank_offset), send_to_vec[send_rank_offset], row_type, send_rank_offset, offset, send_to_vec[i], row_type, table->win);
   }
-  MPI_Waitall(send_count, sends, statuses);
-  MPI_Waitall(recv_count, recvs, statuses);
+  MPI_Win_fence((MPI_MODE_NOSTORE | MPI_MODE_NOSUCCEED), table->win);
+  LOG(INFO) << rank << "=" << recv_row_count;
 
   table->offset = recv_row_count * rowsize;
   table->row_count = recv_row_count;
