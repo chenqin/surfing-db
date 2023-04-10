@@ -138,7 +138,7 @@ int main(int argc, char** argv) {
         utils::append(builders.at(1).get(), schema_ptr->fields.at(1), v2, placeholder);
       });
     });
-    
+
     auto t2 = std::async(std::launch::async, [&metrics_log_prod] {
       RowSchema r;
       SchemaUtils::initField(r, "topic", RowType::STRING, 64);
@@ -165,12 +165,13 @@ int main(int argc, char** argv) {
     auto signal = engine::java(metric_log, "CleanupWrapper", node);
     /**
      * @brief hard coded first column as sharding key
-     * 
+     *
      */
-    auto parition = engine::shuffle(signal, node);
+    auto parition = engine::shuffle(
+      signal, "jobid", [](size_t hash, int rank, int workers) { return hash % workers; }, node);
     auto snapshot = engine::java(parition, "AggregateWrapper", node);
     auto outputs = cp::DeclarationToBatches(std::move(snapshot)).ValueOrDie();
-    
+
     size_t global_row_count = 0;
     MPI_Allreduce(&local_row_count, &global_row_count, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
 

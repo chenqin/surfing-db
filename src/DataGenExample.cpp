@@ -47,21 +47,20 @@ void signal_handler(int signal) {
 }
 
 std::string generateRandomString(int length) {
-    // Define the characters that can be used in the random string
-    const std::string chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  // Define the characters that can be used in the random string
+  const std::string chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
-    // Set the random seed using the current time
-    srand(static_cast<unsigned int>(time(nullptr)));
+  // Set the random seed using the current time
+  srand(static_cast<unsigned int>(time(nullptr)));
 
-    // Generate the random string
-    std::string random_string;
-    for (int i = 0; i < length; ++i) {
-        random_string += chars[rand() % chars.length()];
-    }
+  // Generate the random string
+  std::string random_string;
+  for (int i = 0; i < length; ++i) {
+    random_string += chars[rand() % chars.length()];
+  }
 
-    return random_string;
+  return random_string;
 }
-
 
 /** run this program with
  * mpirun -np 12 ./Test
@@ -103,9 +102,10 @@ int main(int argc, char** argv) {
     });
     CHECK(arrow_t2->num_rows() == BATCH_SIZE);
     auto metric = engine::source(arrow_t2);
-    auto parition = engine::shuffle(metric, node);
+    auto parition = engine::shuffle(
+      metric, "topic", [](size_t key, int rank, int world) { return key % world; }, node);
     auto outputs = cp::DeclarationToBatches(std::move(parition)).ValueOrDie();
-    if (node->rank == 0) std::cout << "iteration " << (BATCH_SIZE * node->world * schema_ptr->rowSize()) / ((MPI_Wtime() - start) *1024*1024) << " MB per seconds"<< std::endl;
+    if (node->rank == 0) std::cout << "iteration " << (BATCH_SIZE * node->world * schema_ptr->rowSize()) / ((MPI_Wtime() - start) * 1024 * 1024) << " MB per seconds" << std::endl;
   }
   return terminal_signal;
 }

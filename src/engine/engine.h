@@ -98,17 +98,16 @@ public:
     return source;
   }
 
-  static Declaration shuffle(Declaration& node_in, std::shared_ptr<node> node) {
+  static Declaration shuffle(Declaration& node_in, std::string field_name, std::function<size_t(size_t, int, int)> partationer, std::shared_ptr<node> node) {
     auto tables = DeclarationToBatches(std::move(node_in)).ValueOrDie();
     CHECK(tables.size() > 0);
 
     auto start = MPI_Wtime();
     auto units = utils::toUnits(tables);
-    auto mtable = utils::fromArrow(tables, units, node, [](size_t key, int rank, int world) { return key % world; });
+    auto mtable = utils::fromArrow(tables, units, node, partationer);
     auto schema = utils::fromArrow(tables.at(0)->schema(), units);
-    auto t5 = processors::shuffle(mtable, schema->fields.at(0), [](size_t key, int rank, int world) {
-      return key % world;
-    }, true);
+    auto f = schema->getFieldByName(field_name);
+    auto t5 = processors::shuffle(mtable, f, partationer, true);
     t5->verifyShuffle(schema->fields.at(0), [](size_t key, int rank, int world) {return key % world;});
     auto t = utils::toArrow(t5);
 

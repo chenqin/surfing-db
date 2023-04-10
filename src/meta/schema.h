@@ -187,6 +187,7 @@ public:
         return this->fields.at(i);
       }
     }
+    CHECK(false);
   }
 
   std::string getName() {
