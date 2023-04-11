@@ -29,7 +29,7 @@
 #include "table/processors.h"
 
 #define FLUSH_DIR "/tmp/"
-#define BATCH_SIZE 1
+#define BATCH_SIZE 1000
 
 using namespace surfingdb::meta;
 using namespace surfingdb::table::schema;
@@ -67,7 +67,7 @@ int main(int argc, char** argv) {
    */
   // auto pg = c10d::ProcessGroupMPI::createProcessGroupMPI();
   const auto node = std::make_shared<surfingdb::meta::node>(&argc, &argv);
-  auto con = DataGenConnector(node, "source", BATCH_SIZE, 10000, schema_ptr);
+  auto con = DataGenConnector(node, "source", BATCH_SIZE * node->rank, 10000, schema_ptr);
 
   std::signal(SIGTERM | SIGINT, signal_handler);
 
@@ -85,13 +85,12 @@ int main(int argc, char** argv) {
       utils::append(builders.at(0).get(), schema_ptr->fields.at(0), v1, placeholder);
       utils::append(builders.at(1).get(), schema_ptr->fields.at(1), v2, placeholder);
     });
-    CHECK(arrow_t2->num_rows() == BATCH_SIZE);
+    CHECK(arrow_t2->num_rows() == BATCH_SIZE * node->rank);
     auto metric = engine::source(arrow_t2);
     auto parition = engine::shuffle(
       metric, "topic", [](size_t key, int rank, int world) { return key % world; }, node);
     auto outputs = cp::DeclarationToBatches(std::move(parition)).ValueOrDie();
     if (node->rank == 0) std::cout << "iteration " << (BATCH_SIZE * node->world * schema_ptr->rowSize()) / ((MPI_Wtime() - start) * 1024 * 1024) << " MB per seconds" << std::endl;
-    break;
   }
   return terminal_signal;
 }

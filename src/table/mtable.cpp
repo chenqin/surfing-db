@@ -125,7 +125,7 @@ void mtable::verifyShuffle(const Field& field, std::function<size_t(size_t, int,
     Value v;
     r->read(field, v);
     size_t key = value_hasher.operator()(v);
-    std::cout << "verify on "<< node_ptr->rank << " key " << key << std::endl;
+    //std::cout << "verify on "<< node_ptr->rank << " key " << key << std::endl;
     CHECK_EQ(partitioner(key, node_ptr->rank, node_ptr->world), node_ptr->rank);
   }
 }
@@ -275,7 +275,7 @@ std::shared_ptr<mtable> mtable::placement_sort(const Field& f, std::function<siz
        *
        */
       if (rank == (size_t)i) {
-        std::cout << "assign on "<< node_ptr->rank << " key " << g.first << " val "<< rank << std::endl;
+        //std::cout << "assign on "<< node_ptr->rank << " key " << g.first << " val "<< rank << std::endl;
         for (auto item : g.second) {
           auto row = this->readRow(item);
           Value v;
