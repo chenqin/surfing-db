@@ -98,7 +98,7 @@ public:
     return source;
   }
 
-  static Declaration shuffle(Declaration& node_in, std::string field_name, std::function<size_t(size_t, int, int)> partationer, std::shared_ptr<node> node) {
+  static Declaration shuffle(Declaration& node_in, std::string field_name, std::function<size_t(size_t, int, int)> partationer, bool oneside, std::shared_ptr<node> node) {
     auto tables = DeclarationToBatches(std::move(node_in)).ValueOrDie();
     CHECK(tables.size() > 0);
 
@@ -108,7 +108,9 @@ public:
     auto schema = utils::fromArrow(tables.at(0)->schema(), units);
     auto f = schema->getFieldByName(field_name);
     //std::cout << mtable->row_count << std::endl;
-    auto t5 = processors::shuffle(mtable, f, partationer);
+    
+    auto t5 = oneside ? processors::shuffle(mtable, f, partationer) : processors::shuffle_two_side(mtable, f, partationer);
+
     //std::cout << t5->row_count << std::endl;
     t5->verifyShuffle(schema->fields.at(0), [](size_t key, int rank, int world) {return key % world;});
     auto t = utils::toArrow(t5);

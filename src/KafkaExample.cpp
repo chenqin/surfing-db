@@ -168,7 +168,7 @@ int main(int argc, char** argv) {
      *
      */
     auto parition = engine::shuffle(
-      signal, "jobid", [](size_t hash, int rank, int workers) { return hash % workers; }, node);
+      signal, "jobid", [](size_t hash, int rank, int workers) { return hash % workers; }, false, node);
     auto snapshot = engine::java(parition, "AggregateWrapper", node);
     auto outputs = cp::DeclarationToBatches(std::move(snapshot)).ValueOrDie();
 

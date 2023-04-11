@@ -70,27 +70,31 @@ int main(int argc, char** argv) {
   auto con = DataGenConnector(node, "source", BATCH_SIZE * node->rank, 10000, schema_ptr);
 
   std::signal(SIGTERM | SIGINT, signal_handler);
-
+  int itr = 0;
   while (terminal_signal == 0) {
     const size_t intial_row_count = BATCH_SIZE;
     size_t total_row_count = intial_row_count;
     double start = MPI_Wtime();
-
-    auto arrow_t2 = con.consume_batch([&schema_ptr](const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders) {
+    size_t total_bytes = 0;
+    auto arrow_t2 = con.consume_batch([&](const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders) {
       PValue v1, v2;
       Value placeholder;
       stringstream ss;
       v1.string_val = string(payload);
+      total_bytes += v1.string_val.length();
       v2.string_val = "{\"timestamp\": 1680480831430, \"host\": \"xenon-prod-001-20220810-dpp-worker-prod-0a02070a\", \"metricName\": \"flink.operator._t_host.xenon-prod-001-20220810-dpp-worker-prod-0a02070a_ec2_pin220_com._t_tm_id.container_1661534748548_105064_01_000025._t_job_id.ebcdb5d6a8e6a51abc2e9c4d34f9508b._t_job_name.K8sAuditStreamExample-prod._t_operator_id.7df19f87deec5680128845fd9a6ca18d._t_operator_name.Flat Map._t_subtask_index.10._t_objectName.tcp--evaluationjob--yzjze390-master-0.k8s_event_object\", \"metricValue\": \"1\" }";
+      total_bytes += v2.string_val.length();
       utils::append(builders.at(0).get(), schema_ptr->fields.at(0), v1, placeholder);
       utils::append(builders.at(1).get(), schema_ptr->fields.at(1), v2, placeholder);
     });
     CHECK(arrow_t2->num_rows() == BATCH_SIZE * node->rank);
     auto metric = engine::source(arrow_t2);
     auto parition = engine::shuffle(
-      metric, "topic", [](size_t key, int rank, int world) { return key % world; }, node);
+      metric, "topic", [](size_t key, int rank, int world) { return key % world; }, itr++ % 2 == 0, node);
     auto outputs = cp::DeclarationToBatches(std::move(parition)).ValueOrDie();
-    if (node->rank == 0) std::cout << "iteration " << (BATCH_SIZE * node->world * schema_ptr->rowSize()) / ((MPI_Wtime() - start) * 1024 * 1024) << " MB per seconds" << std::endl;
+    size_t g_total_bytes = 0;
+    MPI_Allreduce(&total_bytes, &g_total_bytes, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
+    if (node->rank == 0) std::cout << "iteration " << (g_total_bytes) / ((MPI_Wtime() - start) * 1024 * 1024) << " MB per seconds" << std::endl;
   }
   return terminal_signal;
 }

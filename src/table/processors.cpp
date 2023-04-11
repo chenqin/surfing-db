@@ -30,10 +30,10 @@ namespace table {
  * @param transform transform function with simple type
  * @return std::shared_ptr<mtable>  outputtable
  */
-std::shared_ptr<mtable> processors::map(std::shared_ptr<mtable> in, std::shared_ptr<mschema> out_schema_ptr, std::function<bool(mrow&, mrow&, const mschema&)> transform) {
-  auto out_table_ptr = std::make_shared<mtable>(in->getNodePtr(), out_schema_ptr, in->row_count * out_schema_ptr->rowSize());
-  for (size_t i = 0; i < in->row_count; i++) {
-    auto in_row = in->readRow(i);
+std::shared_ptr<mtable> processors::map(std::shared_ptr<mtable> input, std::shared_ptr<mschema> out_schema_ptr, std::function<bool(mrow&, mrow&, const mschema&)> transform) {
+  auto out_table_ptr = std::make_shared<mtable>(input->getNodePtr(), out_schema_ptr, input->row_count * out_schema_ptr->rowSize());
+  for (size_t i = 0; i < input->row_count; i++) {
+    auto in_row = input->readRow(i);
     /**
      * @brief use out table memory to avoid memcpy
      */
@@ -48,8 +48,8 @@ std::shared_ptr<mtable> processors::map(std::shared_ptr<mtable> in, std::shared_
     if (append) {
       out_table_ptr->row_count++;
       out_table_ptr->offset += out_table_ptr->getSchema()->rowSize();
-      CHECK_LE(out_table_ptr->row_count, in->row_count);
-      CHECK_LE(out_table_ptr->offset, in->row_count * out_schema_ptr->rowSize());
+      CHECK_LE(out_table_ptr->row_count, input->row_count);
+      CHECK_LE(out_table_ptr->offset, input->row_count * out_schema_ptr->rowSize());
     } else {
       /**
        * @brief reset memory
@@ -86,29 +86,29 @@ void processors::reduce(std::shared_ptr<mtable> in_ptr,
   }
 }
 
-void processors::xgb(std::shared_ptr<mtable> in, std::vector<Field> features, Field& label, const XGBParameters& parameters) {
-  xgbop op(features, label, parameters, in->getNodePtr()->rank, in->getNodePtr()->world);
+void processors::xgb(std::shared_ptr<mtable> input, std::vector<Field> features, Field& label, const XGBParameters& parameters) {
+  xgbop op(features, label, parameters, input->getNodePtr()->rank, input->getNodePtr()->world);
   std::vector<float> features_matrix;
-  features_matrix.resize(op.features() * in->row_size()); // number of features
-  in->readFields(op.fields, &features_matrix[0]);         // read from temp table
+  features_matrix.resize(op.features() * input->row_size()); // number of features
+  input->readFields(op.fields, &features_matrix[0]);         // read from temp table
 
   std::vector<float> label_matrix;     // number of labels
-  label_matrix.resize(in->row_size()); // number of rows
+  label_matrix.resize(input->row_size()); // number of rows
 
   if (op.parameters.isTraining) {
-    in->readField(op.labelField, &label_matrix[0]);
-    size_t total_row_count = in->row_size();
+    input->readField(op.labelField, &label_matrix[0]);
+    size_t total_row_count = input->row_size();
     op.gather(&features_matrix[0], &label_matrix[0], total_row_count, op.features()); // gather training dataset to root
     op.train(&features_matrix[0], &label_matrix[0], total_row_count, op.features());
     op.syncModel(); // send model to all processes from root
   } else {
-    op.predict(&features_matrix[0], &label_matrix[0], in->row_size(), op.features());
-    in->writeField(op.labelField, &label_matrix[0]);
+    op.predict(&features_matrix[0], &label_matrix[0], input->row_size(), op.features());
+    input->writeField(op.labelField, &label_matrix[0]);
   }
 }
 
 std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> input, Field& f, std::function<size_t(size_t key, int rank, int world)> partitioner) {
-  
+
   CHECK(input->sorted);
 
   auto schema_ptr = input->getSchema();
@@ -126,7 +126,7 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> input, Field
   size_t send_to_vec[world], recv_from_vec[world];
 
   for (int i = 0; i < world; i++) {
-    send_to_vec[i] = input->range_row_size(j);
+    send_to_vec[i] = input->range_row_size(i);
   }
   /**
    * @brief recv_from_vec stores number of rows current rank expect to get from peers
@@ -211,6 +211,89 @@ static void release_malloced_array(struct ArrowArray* array) {
   free(array->buffers);
   // Mark released
   array->release = NULL;
+}
+
+std::shared_ptr<mtable> processors::shuffle_two_side(std::shared_ptr<mtable> input, Field& f, std::function<size_t(size_t key, int rank, int world)> partitioner) {
+  CHECK(input->sorted);
+
+  auto schema_ptr = input->getSchema();
+  auto node_ptr = input->getNodePtr();
+  int rank = node_ptr->rank;
+  int world = node_ptr->world;
+  size_t rowsize = schema_ptr->rowSize();
+
+  MPI_Datatype row_type;
+  MPI_Type_contiguous(rowsize, MPI_CHAR, &row_type);
+  MPI_Type_commit(&row_type);
+
+  MPI_Request sends[node_ptr->world];
+  MPI_Request recvs[node_ptr->world];
+  MPI_Status statuses[node_ptr->world];
+
+  size_t send_to_vec[world], recv_from_vec[world];
+
+  for (int j = 0; j < world; j++) {
+    size_t send_to_i = input->range_row_size(j);
+    send_to_vec[j] = send_to_i;
+  }
+
+  MPI_Alltoall(&send_to_vec, 1, MPI_UNSIGNED_LONG, recv_from_vec, 1, MPI_UNSIGNED_LONG, MPI_COMM_WORLD);
+
+  size_t recv_row_count = 0;
+  size_t transfered_row_index_rank[world];
+  /**
+   * @brief transfered_row_index_rank determins placement of newly transfered row
+   * we don't differentiate local move v.s remote as MPI
+   *
+   */
+  for (int i = 0; i < world; i++) {
+    recv_row_count += recv_from_vec[i];
+    transfered_row_index_rank[i] = (i == 0) ? 0 : recv_from_vec[i - 1] + transfered_row_index_rank[i - 1];
+  }
+  auto table = std::make_shared<mtable>(node_ptr, schema_ptr, recv_row_count * rowsize);
+
+  CHECK_LT((recv_row_count * rowsize), MEM_PAGE_SIZE); // no more than given table size
+
+  int send_count = 0, recv_count = 0;
+
+  for (int i = 0; i < node_ptr->world; i++) {
+    int send_rank_offset = i;
+    /**
+     * @brief current rank has data sending to send_rank_offset
+     *
+     */
+    if (send_to_vec[send_rank_offset] > 0) {
+      // LOG(INFO) << node_ptr->rank << "-> " << i << " size " << input->range_row_size(i);
+      /**
+       * @brief tag is unqiue value from sender to reciever with two dim array
+       *
+       */
+      int tag = rank * world + send_rank_offset;
+      MPI_Isend(input->range_ptr(send_rank_offset), send_to_vec[send_rank_offset], row_type, send_rank_offset, tag, MPI_COMM_WORLD, &sends[send_count++]);
+    }
+    int recv_rank_offset = i;
+    /**
+     * @brief current rank has data recieveing form recv_rank_offset
+     *
+     */
+    if (recv_from_vec[recv_rank_offset] > 0) {
+      CHECK_LE(transfered_row_index_rank[recv_rank_offset], recv_row_count);
+      // LOG(INFO) << node_ptr->rank << " <- " << i << " size " << recv_lens[i];
+      /**
+       * @brief tag is unqiue value from sender to reciever with two dim array
+       * matching sender side
+       */
+      int tag = recv_rank_offset * world + rank;
+      MPI_Irecv(table->payload_ptr() + transfered_row_index_rank[recv_rank_offset] * rowsize, recv_from_vec[recv_rank_offset], row_type, recv_rank_offset, tag, MPI_COMM_WORLD, &recvs[recv_count++]);
+    }
+  }
+  MPI_Waitall(send_count, sends, statuses);
+  MPI_Waitall(recv_count, recvs, statuses);
+  table->offset = recv_row_count * rowsize;
+  table->row_count = recv_row_count;
+
+  MPI_Type_free(&row_type);
+  return table;
 }
 
 const std::shared_ptr<arrow::RecordBatch> processors::java(std::shared_ptr<arrow::RecordBatch> batch, std::string class_name, std::shared_ptr<node> node) {

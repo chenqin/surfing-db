@@ -25,9 +25,9 @@
 #include <iostream>
 #include "mtable.h"
 #include "xgbop.h"
-//#include <torch/csrc/distributed/c10d/ProcessGroupMPI.hpp>
-//#include <torch/csrc/distributed/c10d/Work.hpp>
-//#include <torch/torch.h>
+// #include <torch/csrc/distributed/c10d/ProcessGroupMPI.hpp>
+// #include <torch/csrc/distributed/c10d/Work.hpp>
+// #include <torch/torch.h>
 
 #pragma once
 
@@ -43,17 +43,23 @@ public:
   static void reduce(std::shared_ptr<mtable>, Field&, std::shared_ptr<std::unordered_map<Value, std::shared_ptr<mrow>, ValueHasher>> result_ptr, std::shared_ptr<mschema> result_schema_ptr, std::function<void(Value&, std::vector<std::unique_ptr<mrow>>&, std::shared_ptr<mrow>&)>);
 
   /**
-   * @brief shuffle data based on shuffle function provided, assume already sorted
+   * @brief shuffle sorted data with one side RMA MPI_Get network call
    *
    * @return std::shared_ptr<mtable>
    */
   static std::shared_ptr<mtable> shuffle(std::shared_ptr<mtable>, Field&, std::function<size_t(size_t, int, int)>);
+  /**
+   * @brief shuffle sorted data with two sice isend, irecv network call
+   *
+   * @return std::shared_ptr<mtable>
+   */
+  static std::shared_ptr<mtable> shuffle_two_side(std::shared_ptr<mtable>, Field&, std::function<size_t(size_t, int, int)>);
 
   const static std::shared_ptr<arrow::RecordBatch> java(std::shared_ptr<arrow::RecordBatch>, std::string class_name, std::shared_ptr<node> node);
 
   /**
    * @brief train a xgboost model
-   * 
+   *
    */
   static void xgb(std::shared_ptr<mtable>, std::vector<Field>, Field&, const XGBParameters&);
 };
