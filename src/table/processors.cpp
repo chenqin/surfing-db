@@ -107,18 +107,15 @@ void processors::xgb(std::shared_ptr<mtable> in, std::vector<Field> features, Fi
   }
 }
 
-std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> input, Field& f, std::function<size_t(size_t key, int rank, int world)> partitioner, bool sorted) {
+std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> input, Field& f, std::function<size_t(size_t key, int rank, int world)> partitioner) {
+  
+  CHECK(input->sorted);
+
   auto schema_ptr = input->getSchema();
   auto node_ptr = input->getNodePtr();
   int rank = node_ptr->rank;
   int world = node_ptr->world;
   size_t rowsize = schema_ptr->rowSize();
-
-  /**
-   * @brief sort input rows if not
-   *
-   */
-  auto in = input->placement_sort(f, partitioner);
   /**
    * register and commit schema row size unit to all workers
    */
@@ -126,14 +123,10 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> input, Field
   MPI_Type_contiguous(rowsize, MPI_CHAR, &row_type);
   MPI_Type_commit(&row_type);
 
-  MPI_Request sends[world];
-  MPI_Request recvs[world];
-  MPI_Status statuses[world];
-
   size_t send_to_vec[world], recv_from_vec[world];
 
-  for (int j = 0; j < world; j++) {
-    send_to_vec[j] = in->range_row_size(j);
+  for (int i = 0; i < world; i++) {
+    send_to_vec[i] = input->range_row_size(j);
   }
   /**
    * @brief recv_from_vec stores number of rows current rank expect to get from peers
@@ -163,34 +156,25 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> input, Field
 
   input->build_window();
   MPI_Win_fence(0, input->win);
-  std::vector<std::future<int>*> tasks;
+
   for (int dest = 0; dest < world; dest++) {
-    // mpi put to local rank will silently fail
-    // if (dest == rank) continue;
+    // mpi put to local rank will silently fail, if no data fetching also skip MPI_GET
+    if (dest == rank || recv_from_vec[dest] == 0) continue;
     MPI_Aint offset = get_row_index_rank[dest];
-    auto t = std::async([&]() mutable {
-      CHECK_EQ(MPI_SUCCESS,
-               MPI_Get(table->payload_ptr() + rowsize * recv_row_offset[dest], recv_from_vec[dest], row_type, dest, offset, recv_from_vec[dest], row_type, input->win));
-      return 1;
-    });
-    tasks.push_back(&t);
+    CHECK_EQ(MPI_SUCCESS,
+             MPI_Get(table->payload_ptr() + rowsize * recv_row_offset[dest], recv_from_vec[dest], row_type, dest, offset, recv_from_vec[dest], row_type, input->win));
   }
-
-  for(auto& task : tasks) {
-    task->wait();
-  }
-
-  MPI_Win_fence(0, input->win);
-  input->release_window();
   // copy local rows from input to new table
   void* dest_ptr = table->payload_ptr() + rowsize * get_row_index_rank[rank];
-  memcpy(dest_ptr, in->range_ptr(rank), send_to_vec[rank] * rowsize);
+  memcpy(dest_ptr, input->range_ptr(rank), send_to_vec[rank] * rowsize);
 
-  // LOG(INFO) << rank << "=" << recv_row_count;
+  LOG(INFO) << rank << "=" << recv_row_count;
 
   table->offset = recv_row_count * rowsize;
   table->row_count = recv_row_count;
 
+  MPI_Win_fence(0, input->win);
+  input->release_window();
   MPI_Type_free(&row_type);
   return table;
 }

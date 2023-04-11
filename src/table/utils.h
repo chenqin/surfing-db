@@ -420,7 +420,7 @@ public:
       }
     }
     CHECK_EQ(index, row_count);
-
+    table->sorted = true;
     return table;
   }
 

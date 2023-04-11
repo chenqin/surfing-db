@@ -66,8 +66,8 @@ int main(int argc, char** argv) {
   /**
    * pull every 2 seconds
    */
-  int batch = 4000;
-  int interval = 200;
+  int batch = 1000;
+  int interval = 100;
   int world = node->world;
 
   size_t total = 0;
@@ -109,12 +109,12 @@ int main(int argc, char** argv) {
     return r;
   };
   auto metrics_log_staging = KafkaConnector(
-    node, "kafka-source", 5000, 1000, schema_ptr,
+    node, "kafka-source", batch/10, interval, schema_ptr,
     { "xenon-logs-staging" }, "/var/serverset/discovery.metricskafka07.prod", group_id, false);
   metrics_log_staging.setDeser(metric_log_deser);
 
   auto metrics_log_prod = KafkaConnector(
-    node, "kafka-source", 5000, 1000, schema_ptr,
+    node, "kafka-source", batch/10, interval, schema_ptr,
     { "xenon-logs-prod" }, "/var/serverset/discovery.metricskafka07.prod", group_id, false);
   metrics_log_prod.setDeser(metric_log_deser);
 

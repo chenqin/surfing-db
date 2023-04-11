@@ -108,7 +108,7 @@ public:
     auto schema = utils::fromArrow(tables.at(0)->schema(), units);
     auto f = schema->getFieldByName(field_name);
     //std::cout << mtable->row_count << std::endl;
-    auto t5 = processors::shuffle(mtable, f, partationer, true);
+    auto t5 = processors::shuffle(mtable, f, partationer);
     //std::cout << t5->row_count << std::endl;
     t5->verifyShuffle(schema->fields.at(0), [](size_t key, int rank, int world) {return key % world;});
     auto t = utils::toArrow(t5);

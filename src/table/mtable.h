@@ -54,6 +54,7 @@ private:
   std::shared_ptr<mschema> schema_ptr;
 
 public:
+  bool sorted = false;
   /**
    * @brief expose current offset and buffer to construct mrow in table buffer
    */

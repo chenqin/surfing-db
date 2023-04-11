@@ -43,11 +43,11 @@ public:
   static void reduce(std::shared_ptr<mtable>, Field&, std::shared_ptr<std::unordered_map<Value, std::shared_ptr<mrow>, ValueHasher>> result_ptr, std::shared_ptr<mschema> result_schema_ptr, std::function<void(Value&, std::vector<std::unique_ptr<mrow>>&, std::shared_ptr<mrow>&)>);
 
   /**
-   * @brief shuffle data based on shuffle function provided
+   * @brief shuffle data based on shuffle function provided, assume already sorted
    *
    * @return std::shared_ptr<mtable>
    */
-  static std::shared_ptr<mtable> shuffle(std::shared_ptr<mtable>, Field&, std::function<size_t(size_t, int, int)>, bool sorted);
+  static std::shared_ptr<mtable> shuffle(std::shared_ptr<mtable>, Field&, std::function<size_t(size_t, int, int)>);
 
   const static std::shared_ptr<arrow::RecordBatch> java(std::shared_ptr<arrow::RecordBatch>, std::string class_name, std::shared_ptr<node> node);
 
