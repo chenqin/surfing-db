@@ -104,11 +104,13 @@ public:
 
     auto start = MPI_Wtime();
     auto units = utils::toUnits(tables);
-    auto mtable = utils::fromArrow(tables, units, node, partationer);
+    auto mtable = utils::fromArrow(tables, units, field_name, partationer, node);
     auto schema = utils::fromArrow(tables.at(0)->schema(), units);
     auto f = schema->getFieldByName(field_name);
+    //std::cout << mtable->row_count << std::endl;
     auto t5 = processors::shuffle(mtable, f, partationer, true);
-    //t5->verifyShuffle(schema->fields.at(0), [](size_t key, int rank, int world) {return key % world;});
+    //std::cout << t5->row_count << std::endl;
+    t5->verifyShuffle(schema->fields.at(0), [](size_t key, int rank, int world) {return key % world;});
     auto t = utils::toArrow(t5);
 
     LOG(INFO) << "shuffle qps" << t5->row_count / (MPI_Wtime() - start);

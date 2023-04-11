@@ -284,11 +284,13 @@ public:
     return units;
   }
 
-  static std::shared_ptr<mtable> fromArrow(std::vector<std::shared_ptr<arrow::RecordBatch>> records, std::map<std::string, uint64_t>& units, std::shared_ptr<node> node_ptr, std::function<size_t(size_t key, int rank, int world)> partitioner) {
+  static std::shared_ptr<mtable> fromArrow(std::vector<std::shared_ptr<arrow::RecordBatch>> records,
+                                           std::map<std::string, uint64_t>& units, std::string field_name,
+                                           std::function<size_t(size_t key, int rank, int world)> partitioner, std::shared_ptr<node> node_ptr) {
     CHECK(records.size() > 0);
     auto schema = fromArrow(records.at(0)->schema(), units);
     CHECK(schema->fields.size() > 0);
-    
+
     size_t row_count = 0;
     ValueHasher value_hasher;
     for (auto& record : records) {
@@ -297,7 +299,7 @@ public:
 
     auto placeholder = std::make_shared<mtable>(node_ptr, schema, 1 * schema->rowSize());
     auto table = std::make_shared<mtable>(node_ptr, schema, row_count * schema->rowSize());
-    
+
     Field f = schema->fields.at(0);
     std::vector<mrow> rows;
     int row_index = 0;

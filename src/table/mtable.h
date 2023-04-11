@@ -78,6 +78,7 @@ public:
    * 
    */
   void build_window();
+  void release_window();
   void flush_rma_memory(size_t rows);
   void copy_rma_memory(size_t rows); // deprecated
   void reserve_rma_memory(size_t rows);

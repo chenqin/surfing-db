@@ -29,7 +29,7 @@
 #include "table/processors.h"
 
 #define FLUSH_DIR "/tmp/"
-#define BATCH_SIZE 2250
+#define BATCH_SIZE 1
 
 using namespace surfingdb::meta;
 using namespace surfingdb::table::schema;
@@ -44,22 +44,6 @@ volatile std::sig_atomic_t terminal_signal;
 void signal_handler(int signal) {
   std::cout << "user exit program";
   terminal_signal = signal;
-}
-
-std::string generateRandomString(int length) {
-  // Define the characters that can be used in the random string
-  const std::string chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-
-  // Set the random seed using the current time
-  srand(static_cast<unsigned int>(time(nullptr)));
-
-  // Generate the random string
-  std::string random_string;
-  for (int i = 0; i < length; ++i) {
-    random_string += chars[rand() % chars.length()];
-  }
-
-  return random_string;
 }
 
 /** run this program with
@@ -95,7 +79,8 @@ int main(int argc, char** argv) {
     auto arrow_t2 = con.consume_batch([&schema_ptr](const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders) {
       PValue v1, v2;
       Value placeholder;
-      v1.string_val = generateRandomString(16);
+      stringstream ss;
+      v1.string_val = string(payload);
       v2.string_val = "{\"timestamp\": 1680480831430, \"host\": \"xenon-prod-001-20220810-dpp-worker-prod-0a02070a\", \"metricName\": \"flink.operator._t_host.xenon-prod-001-20220810-dpp-worker-prod-0a02070a_ec2_pin220_com._t_tm_id.container_1661534748548_105064_01_000025._t_job_id.ebcdb5d6a8e6a51abc2e9c4d34f9508b._t_job_name.K8sAuditStreamExample-prod._t_operator_id.7df19f87deec5680128845fd9a6ca18d._t_operator_name.Flat Map._t_subtask_index.10._t_objectName.tcp--evaluationjob--yzjze390-master-0.k8s_event_object\", \"metricValue\": \"1\" }";
       utils::append(builders.at(0).get(), schema_ptr->fields.at(0), v1, placeholder);
       utils::append(builders.at(1).get(), schema_ptr->fields.at(1), v2, placeholder);
@@ -106,6 +91,7 @@ int main(int argc, char** argv) {
       metric, "topic", [](size_t key, int rank, int world) { return key % world; }, node);
     auto outputs = cp::DeclarationToBatches(std::move(parition)).ValueOrDie();
     if (node->rank == 0) std::cout << "iteration " << (BATCH_SIZE * node->world * schema_ptr->rowSize()) / ((MPI_Wtime() - start) * 1024 * 1024) << " MB per seconds" << std::endl;
+    break;
   }
   return terminal_signal;
 }

@@ -118,7 +118,7 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> input, Field
    * @brief sort input rows if not
    *
    */
-  auto in = sorted ? input : input->placement_sort(f, partitioner);
+  auto in = input->placement_sort(f, partitioner);
   /**
    * register and commit schema row size unit to all workers
    */
@@ -155,14 +155,22 @@ std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> input, Field
   }
 
   auto table = std::make_shared<mtable>(node_ptr, schema_ptr, recv_row_count * rowsize);
+
   table->build_window();
-  MPI_Win_fence(MPI_MODE_NOPRECEDE, table->win);
-  for (int i = 0; i < world; i++) {
-    int send_rank_offset = i;
-    MPI_Aint offset = put_row_index_ran[i];
-    MPI_Put(in->range_ptr(send_rank_offset), send_to_vec[send_rank_offset], row_type, send_rank_offset, offset, send_to_vec[i], row_type, table->win);
+  MPI_Win_fence(0, table->win);
+  for (int dest = 0; dest < world; dest++) {
+    // mpi put to local rank will silently fail
+    if (dest == rank) continue;
+    MPI_Aint offset = put_row_index_ran[dest];
+    CHECK_EQ(MPI_SUCCESS,
+             MPI_Put(in->range_ptr(dest), send_to_vec[dest], row_type, dest, offset, send_to_vec[dest], row_type, table->win));
   }
-  MPI_Win_fence((MPI_MODE_NOSTORE | MPI_MODE_NOSUCCEED), table->win);
+  MPI_Win_fence(0, table->win);
+  table->release_window();
+  // copy local rows from input to new table
+  void* dest_ptr = table->payload_ptr() + rowsize * put_row_index_ran[rank];
+  memcpy(dest_ptr, in->range_ptr(rank), send_to_vec[rank] * rowsize);
+
   LOG(INFO) << rank << "=" << recv_row_count;
 
   table->offset = recv_row_count * rowsize;
@@ -204,56 +212,6 @@ static void release_malloced_array(struct ArrowArray* array) {
   free(array->buffers);
   // Mark released
   array->release = NULL;
-}
-
-const std::shared_ptr<mtable> processors::java(std::shared_ptr<mtable> input, std::string class_name, std::map<std::string, uint64_t> units) {
-  auto node = input->getNodePtr();
-  const jclass bridge = node->env->FindClass(class_name.c_str());
-  CHECK_NOTNULL(bridge);
-  struct ArrowSchema arrowSchemaIn, arrowSchemaOut;
-  struct ArrowArray arrowArrayIn, arrowArrayOut;
-  const jmethodID invoke_method = node->env->GetStaticMethodID(bridge, std::string(BRIDGE_METHOD_NAME).c_str(), "(JJJJ)V");
-  CHECK_NOTNULL(invoke_method);
-
-  /**
-   * @brief export schema and data
-   *
-   */
-  auto batch = utils::toArrow(input);
-  auto schema_ptr = utils::toArrow(input->getSchema());
-  arrow::ExportSchema(*schema_ptr.get(), &arrowSchemaIn);
-  arrow::ExportRecordBatch(*batch.get(), &arrowArrayIn, &arrowSchemaIn);
-  /**
-   * @brief invoke java method, passing pointers
-   *
-   */
-  node->env->CallStaticVoidMethod(bridge, invoke_method,
-                                  static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchemaIn)),
-                                  static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArrayIn)),
-                                  static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchemaOut)),
-                                  static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArrayOut)));
-
-  if (node->env->ExceptionCheck()) {
-    LOG(ERROR) << "fail to call jni";
-    node->env->DeleteLocalRef(bridge);
-    release_malloced_array(&arrowArrayIn);
-    release_malloced_array(&arrowArrayOut);
-    release_malloced_type(&arrowSchemaIn);
-    release_malloced_type(&arrowSchemaOut);
-    return java(input, class_name, units);
-  }
-  node->env->DeleteLocalRef(bridge);
-  /**
-   * @brief import schema and data from java
-   *
-   */
-  const auto resultImportVectorSchemaRoot = arrow::ImportRecordBatch(&arrowArrayOut, &arrowSchemaOut);
-  std::shared_ptr<arrow::RecordBatch> recordBatch = resultImportVectorSchemaRoot.ValueOrDie();
-  release_malloced_array(&arrowArrayIn);
-  release_malloced_array(&arrowArrayOut);
-  release_malloced_type(&arrowSchemaIn);
-  release_malloced_type(&arrowSchemaOut);
-  return utils::fromArrow({ std::move(recordBatch) }, units, node, [](size_t key, int rank, int world) { return key % world; });
 }
 
 const std::shared_ptr<arrow::RecordBatch> processors::java(std::shared_ptr<arrow::RecordBatch> batch, std::string class_name, std::shared_ptr<node> node) {

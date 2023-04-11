@@ -125,6 +125,7 @@ void mtable::verifyShuffle(const Field& field, std::function<size_t(size_t, int,
     Value v;
     r->read(field, v);
     size_t key = value_hasher.operator()(v);
+    std::cout << "verify on "<< node_ptr->rank << " key " << key << std::endl;
     CHECK_EQ(partitioner(key, node_ptr->rank, node_ptr->world), node_ptr->rank);
   }
 }
@@ -250,6 +251,9 @@ std::shared_ptr<mtable> mtable::placement_sort(const Field& f, std::function<siz
     Value v;
     r->read(f, v);
     size_t key = value_hasher.operator()(v);
+    
+    //std::cout << "partition on "<< node_ptr->rank << " key " << key << " val "<< v.p_val.string_val << std::endl;
+
     if (key_groups->find(key) == key_groups->end()) {
       std::vector<size_t> arr;
       key_groups->insert({ key, arr });
@@ -271,6 +275,7 @@ std::shared_ptr<mtable> mtable::placement_sort(const Field& f, std::function<siz
        *
        */
       if (rank == (size_t)i) {
+        std::cout << "assign on "<< node_ptr->rank << " key " << g.first << " val "<< rank << std::endl;
         for (auto item : g.second) {
           auto row = this->readRow(item);
           Value v;
@@ -436,7 +441,6 @@ void mtable::release() {
   key_groups->clear();
   placement_index->clear();
   MPI_Free_mem(payload);
-  if (win != MPI_WIN_NULL) MPI_Win_free(&win);
 }
 
 void mtable::appendRows(std::vector<std::shared_ptr<mrow>>& rows) {
@@ -449,6 +453,10 @@ void mtable::build_window() {
   MPI_Aint window_size;
   window_size = this->capacity;
   CHECK(MPI_Win_create(payload, window_size, sizeof(char), node_ptr->info, MPI_COMM_WORLD, &win) == 0);
+}
+
+void mtable::release_window() {
+  if (win != MPI_WIN_NULL) MPI_Win_free(&win);
 }
 
 } // namespace table

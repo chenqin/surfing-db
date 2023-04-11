@@ -48,13 +48,6 @@ public:
    * @return std::shared_ptr<mtable>
    */
   static std::shared_ptr<mtable> shuffle(std::shared_ptr<mtable>, Field&, std::function<size_t(size_t, int, int)>, bool sorted);
-  /**
-   * @brief call java class with static BRIDGE_METHOD_NAME function defined
-   *
-   * @param class_name
-   * @return const std::shared_ptr<mtable>
-   */
-  const static std::shared_ptr<mtable> java(std::shared_ptr<mtable>, std::string class_name, std::map<std::string, uint64_t> units);
 
   const static std::shared_ptr<arrow::RecordBatch> java(std::shared_ptr<arrow::RecordBatch>, std::string class_name, std::shared_ptr<node> node);
 

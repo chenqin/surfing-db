@@ -79,7 +79,10 @@ std::shared_ptr<arrow::RecordBatch> DataGenConnector::consume_batch(std::functio
   }
 
   while ((MPI_Wtime() - start) * 1000 < timeout && total < max_batch_size) {
-    deser(nullptr, builders);
+    stringstream ss;
+    ss << node_ptr->rank;
+    string str = ss.str();
+    deser(str.c_str(), builders);
     total++;
   }
   for (auto b : builders) {
