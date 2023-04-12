@@ -33,6 +33,9 @@ size_t SchemaUtils::getFieldSize(const Field& f) {
   case RowType::BOOL: {
     return sizeof(bool);
   }
+  case RowType::CHAR: {
+    return sizeof(char);
+  }
   case RowType::INT: {
     return sizeof(int);
   }
@@ -73,6 +76,8 @@ uint64_t getTypeSize(const RowType::type type) {
   switch (type) {
   case RowType::BOOL:
     return sizeof(bool);
+  case RowType::CHAR:
+    return sizeof(char);
   case RowType::INT:
     return sizeof(int32_t);
   case RowType::LONG:

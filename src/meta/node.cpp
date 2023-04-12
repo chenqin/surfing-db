@@ -30,9 +30,8 @@ node::node(int* argc, char*** argv) {
    * @brief check if pytorch already run initialize
    *
    */
-  int flag = 0;
-  MPI_Initialized(&flag);
-  if (!flag) {
+  MPI_Initialized(&mpi_inited);
+  if (!mpi_inited) {
     MPI_Init_thread(argc, argv, MPI_THREAD_FUNNELED, &supported);
     CHECK_EQ(supported, MPI_THREAD_FUNNELED);
   }

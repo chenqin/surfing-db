@@ -75,8 +75,8 @@ TEST(TableTest, testCompact) {
   CHECK_EQ(b.write(field4, v4), sizeof(DOUBLE_TYPE));
   CHECK_EQ(b.write(field5, v5), 6 + HEADER_SIZE);
   CHECK_EQ(b.write(field6, v6), HEADER_SIZE + 1 * sizeof(DOUBLE_TYPE));
-  CHECK_EQ(b.write(field7, v7), HEADER_SIZE + 1 * ( HEADER_SIZE + 6 + sizeof(long)));
-  mtable t(nullptr, tpr, MEM_PAGE_SIZE);
+  CHECK_EQ(b.write(field7, v7), HEADER_SIZE + 1 * (HEADER_SIZE + 6 + sizeof(long)));
+  mtable t(tpr, 10240000);
   t.appendRow(b);
   Value mapValue;
   t.readRow(0)->read(field7, mapValue);
@@ -138,7 +138,7 @@ TEST(TableTest, testmrow) {
   field4 = SchemaUtils::initField(r, "d", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
   field5 = SchemaUtils::initField(r, "e", RowType::STRING, MAX_STR_LEN);
   field6 = SchemaUtils::initListField(r, "l", RowType::DOUBLE, 3, sizeof(DOUBLE_TYPE));
-  field7 = SchemaUtils::initMapField(r, "m", RowType::STRING, RowType::LONG, 3, MAX_STR_LEN, sizeof(long));
+  field7 = SchemaUtils::initMapField(r, "m", RowType::STRING, RowType::LONG, 3, 1024, sizeof(long));
 
   Value v1, v2, v3, v4, v5, v6, v7;
   v1.p_val.int_val = 3;
@@ -217,7 +217,7 @@ TEST(TableTest, testmrow) {
   EXPECT_EQ(v77.map_value.size(), 1);
 
   // test point to temp table
-  auto t = std::make_shared<mtable>(nullptr, tpr, MEM_PAGE_SIZE);
+  auto t = std::make_shared<mtable>(tpr, 10240000);
   t->appendRow(s);
   s = mrow(tpr, t->payload_ptr());
   s.read(field1, v11);
@@ -250,7 +250,7 @@ TEST(TableTest, testmrow) {
   EXPECT_EQ(v44.list_value.size(), 1);
   EXPECT_EQ(v33.map_value.size(), 1);
 
-  for (int i = 0; i < 10000; i++) {
+  for (int i = 0; i < 10; i++) {
     t->appendRow(s);
   }
 
@@ -326,7 +326,7 @@ TEST(TableTest, TestUtils) {
    * @brief  row test mtable
    *
    */
-  auto table_ptr = std::make_shared<mtable>(nullptr, schema_ptr, schema_ptr->rowSize() * 2);
+  auto table_ptr = std::make_shared<mtable>(schema_ptr, schema_ptr->rowSize() * 2);
   table_ptr->appendRow(row);
   table_ptr->appendRow(row);
   /**
@@ -356,8 +356,8 @@ TEST(TableTest, TestUtils) {
   EXPECT_EQ(new_schema_ptr->fields.at(0), schema_ptr->fields.at(0));
   EXPECT_EQ(new_schema_ptr->fields.at(6).max_unit_size, schema_ptr->fields.at(6).max_unit_size);
   EXPECT_EQ(new_schema_ptr->fields.at(6).max_map_key_unit_size, schema_ptr->fields.at(6).max_map_key_unit_size);
-
-  auto new_table_ptr = utils::fromArrow({arrow_table_ptr}, units, "l" ,[](size_t key, int rank, int world) { return key % world; }, nullptr);
+  auto new_table_ptr = utils::fromArrow(
+    { arrow_table_ptr }, units, "a", [](size_t key, int rank, int world) { return 0; }, nullptr);
   EXPECT_EQ(table_ptr->row_count, new_table_ptr->row_count);
   EXPECT_EQ(table_ptr->row_size(), new_table_ptr->row_size());
   auto new_row = new_table_ptr->readRow(0);

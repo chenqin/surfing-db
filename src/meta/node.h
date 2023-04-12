@@ -59,6 +59,7 @@ public:
    *
    */
   int trainer = 0;
+  int mpi_inited = 0;
   MPI_Comm role_comm = MPI_COMM_NULL;
   MPI_Info info = MPI_INFO_NULL;
   int role_rank;

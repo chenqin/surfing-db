@@ -19,12 +19,13 @@ struct RowType {
   enum type {
     VOID = 0,
     BOOL = 1,
-    INT = 2,
-    LONG = 3,
-    DOUBLE = 4,
-    STRING = 5,
-    LIST = 6,
-    MAP = 7
+    CHAR = 2,
+    INT = 3,
+    LONG = 4,
+    DOUBLE = 5,
+    STRING = 6,
+    LIST = 7,
+    MAP = 8
   };
 };
 

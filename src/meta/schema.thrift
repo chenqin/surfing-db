@@ -3,6 +3,7 @@ namespace cpp surfingdb.meta.schema //
 enum RowType {
     VOID,
     BOOL,
+    CHAR,
     INT,
     LONG,
     DOUBLE,

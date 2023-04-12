@@ -13,6 +13,7 @@ namespace surfingdb { namespace meta { namespace schema {
 int _kRowTypeValues[] = {
   RowType::VOID,
   RowType::BOOL,
+  RowType::CHAR,
   RowType::INT,
   RowType::LONG,
   RowType::DOUBLE,
@@ -23,6 +24,7 @@ int _kRowTypeValues[] = {
 const char* _kRowTypeNames[] = {
   "VOID",
   "BOOL",
+  "CHAR",
   "INT",
   "LONG",
   "DOUBLE",

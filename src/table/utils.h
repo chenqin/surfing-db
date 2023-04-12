@@ -207,7 +207,7 @@ public:
        * @param i
        */
       CHECK(record_ptr->num_rows() > 0);
-      for (int i = 0; i < record_ptr->num_rows(); i++) {
+      for (int64_t i = 0; i < record_ptr->num_rows(); i++) {
         for (auto j = 0; j < vc.size(); j++) {
           auto field = record_ptr->schema()->field(j);
           auto col = record_ptr->column(j);
@@ -289,19 +289,21 @@ public:
                                            std::function<size_t(size_t key, int rank, int world)> partitioner, std::shared_ptr<node> node_ptr) {
     CHECK(records.size() > 0);
     auto schema = fromArrow(records.at(0)->schema(), units);
-    CHECK(schema->fields.size() > 0);
 
     size_t row_count = 0;
     ValueHasher value_hasher;
     for (auto& record : records) {
       row_count += record->num_rows();
     }
+    int rank = node_ptr == nullptr ? 0 : node_ptr->rank;
+    int world = node_ptr == nullptr ? 1 : node_ptr->world;
 
-    auto placeholder = std::make_shared<mtable>(node_ptr, schema, 1 * schema->rowSize());
-    auto table = std::make_shared<mtable>(node_ptr, schema, row_count * schema->rowSize());
-
+    auto placeholder = node_ptr == nullptr ? std::make_shared<mtable>(schema, 1 * schema->rowSize()) : std::make_shared<mtable>(node_ptr, schema, 1 * schema->rowSize());
+    auto table = node_ptr == nullptr ? std::make_shared<mtable>(schema, row_count * schema->rowSize()) : std::make_shared<mtable>(node_ptr, schema, row_count * schema->rowSize());
+    CHECK(schema->fields.size() > 0);
     Field f = schema->fields.at(0);
     std::vector<mrow> rows;
+    
     int row_index = 0;
     for (auto& record_ptr : records) {
       auto vc = record_ptr->columns();
@@ -394,10 +396,10 @@ public:
     }
 
     int index = 0;
-    for (int i = 0; i < node_ptr->world; i++) {
+    for (int i = 0; i < world; i++) {
       table->placement_index->insert({ i, index });
       for (auto g : *placeholder->key_groups) {
-        size_t rank = partitioner(g.first, node_ptr->rank, node_ptr->world);
+        size_t rank = partitioner(g.first, rank, world);
         /**
          * @brief if placment of a key equals to a specific rank i
          *

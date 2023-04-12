@@ -27,16 +27,17 @@ namespace table {
 
 mtable::~mtable() {
   release();
+  if (node_ptr != nullptr) MPI_Free_mem(payload);
+  if (node_ptr == nullptr) free(payload);
 }
 
-mtable::mtable(const std::shared_ptr<node> node_ptr, const std::shared_ptr<mschema> schema_ptr,
-               size_t capacity) {
+mtable::mtable(const std::shared_ptr<mschema> schema_ptr, size_t capacity) {
   CHECK_GE(capacity, 0);
   this->capacity = capacity;
   this->schema_ptr = schema_ptr;
-  this->node_ptr = node_ptr;
+  this->node_ptr = nullptr;
   CHECK(sizeof(uint8_t) == sizeof(char));
-  MPI_Alloc_mem(capacity*sizeof(uint8_t), MPI_INFO_NULL, &payload);
+  payload = (uint8_t*) malloc(capacity * sizeof(uint8_t));
   schedule_size = -1;
   key_dist = std::make_unique<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>>();
   key_groups = std::make_unique<std::map<size_t, std::vector<size_t>, std::less<size_t>>>();
@@ -46,39 +47,21 @@ mtable::mtable(const std::shared_ptr<node> node_ptr, const std::shared_ptr<msche
   row_count = 0;
 }
 
-void mtable::flush_rma_memory(size_t rows) {
-  key_dist->clear();
-  key_groups->clear();
-  placement_index->clear();
-  std::string filepath = FLUSH_DIR + std::to_string(node_ptr->rank) + "-" + ".flush_rma_memory";
-  this->flush(filepath, schedule, rows, rows * schema_ptr->rowSize());
-  MPI_Free_mem(schedule);
-  MPI_Win_free(&win);
+mtable::mtable(const std::shared_ptr<node> node_ptr, const std::shared_ptr<mschema> schema_ptr,
+               size_t capacity) {
+  CHECK_GE(capacity, 0);
+  this->capacity = capacity;
+  this->schema_ptr = schema_ptr;
+  this->node_ptr = node_ptr;
+  CHECK(sizeof(uint8_t) == sizeof(char));
+  MPI_Alloc_mem(capacity * sizeof(uint8_t), MPI_INFO_NULL, &payload);
   schedule_size = -1;
-  this->load(filepath);
-}
+  key_dist = std::make_unique<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>>();
+  key_groups = std::make_unique<std::map<size_t, std::vector<size_t>, std::less<size_t>>>();
+  placement_index = std::make_unique<std::map<int, size_t>>();
 
-void mtable::copy_rma_memory(size_t rows) {
-  reserveRow(rows);
-  key_dist->clear();
-  key_groups->clear();
-  placement_index->clear();
-  memcpy(payload_ptr(), schedule, schema_ptr->rowSize() * rows);
-  MPI_Free_mem(schedule);
-  MPI_Win_free(&win);
-  schedule_size = -1;
-  offset = rows * schema_ptr->rowSize();
-  row_count = rows;
-}
-
-void mtable::reserve_rma_memory(size_t rows) {
-  if (schedule_size != -1 && schedule_size < rows * schema_ptr->rowSize()) {
-    MPI_Free_mem(schedule);
-    MPI_Win_free(&win);
-  }
-  schedule_size = rows * schema_ptr->rowSize();
-  MPI_Alloc_mem(schedule_size, MPI_INFO_NULL, &schedule); // allocate memory in temptable directly
-  MPI_Win_create(schedule, schedule_size, schema_ptr->rowSize(), MPI_INFO_NULL, MPI_COMM_WORLD, &win);
+  offset = 0;
+  row_count = 0;
 }
 
 void mtable::reserveRow(size_t rows) {
@@ -125,7 +108,7 @@ void mtable::verifyShuffle(const Field& field, std::function<size_t(size_t, int,
     Value v;
     r->read(field, v);
     size_t key = value_hasher.operator()(v);
-    //std::cout << "verify on "<< node_ptr->rank << " key " << key << std::endl;
+    // std::cout << "verify on "<< node_ptr->rank << " key " << key << std::endl;
     CHECK_EQ(partitioner(key, node_ptr->rank, node_ptr->world), node_ptr->rank);
   }
 }
@@ -251,8 +234,8 @@ std::shared_ptr<mtable> mtable::placement_sort(const Field& f, std::function<siz
     Value v;
     r->read(f, v);
     size_t key = value_hasher.operator()(v);
-    
-    //std::cout << "partition on "<< node_ptr->rank << " key " << key << " val "<< v.p_val.string_val << std::endl;
+
+    // std::cout << "partition on "<< node_ptr->rank << " key " << key << " val "<< v.p_val.string_val << std::endl;
 
     if (key_groups->find(key) == key_groups->end()) {
       std::vector<size_t> arr;
@@ -275,7 +258,7 @@ std::shared_ptr<mtable> mtable::placement_sort(const Field& f, std::function<siz
        *
        */
       if (rank == (size_t)i) {
-        //std::cout << "assign on "<< node_ptr->rank << " key " << g.first << " val "<< rank << std::endl;
+        // std::cout << "assign on "<< node_ptr->rank << " key " << g.first << " val "<< rank << std::endl;
         for (auto item : g.second) {
           auto row = this->readRow(item);
           Value v;
@@ -440,7 +423,6 @@ void mtable::release() {
   key_dist->clear();
   key_groups->clear();
   placement_index->clear();
-  MPI_Free_mem(payload);
 }
 
 void mtable::appendRows(std::vector<std::shared_ptr<mrow>>& rows) {

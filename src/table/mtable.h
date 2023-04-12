@@ -69,6 +69,12 @@ public:
   std::unordered_map<Field, size_t, FieldHasher> max_unit_size;
 
   mtable(const std::shared_ptr<node>, const std::shared_ptr<mschema>, size_t capacity);
+  /**
+   * @brief for non mpi use case single host
+   * 
+   * @param capacity 
+   */
+  mtable(const std::shared_ptr<mschema>, size_t capacity);
   ~mtable();
   void release();
   void group(const Field& f, bool);
@@ -80,9 +86,6 @@ public:
    */
   void build_window();
   void release_window();
-  void flush_rma_memory(size_t rows);
-  void copy_rma_memory(size_t rows); // deprecated
-  void reserve_rma_memory(size_t rows);
   size_t range_row_size(int dest);
   uint8_t* payload_ptr();
   size_t placement(size_t key);
