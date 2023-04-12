@@ -88,13 +88,17 @@ size_t mrow::write(const Field& f, const Value& v, const uint64_t& offset) {
     assert(false);
     return 0;
   }
-  case surfingdb::meta::schema::RowType::INT: {
-    _pwrite(f, &v.p_val.int_val, offset);
-    return sizeof(int);
-  }
   case surfingdb::meta::schema::RowType::BOOL: {
     _pwrite(f, &v.p_val.bool_val, offset);
     return sizeof(bool);
+  }
+  case surfingdb::meta::schema::RowType::CHAR: {
+    _pwrite(f, &v.p_val.byte_val, offset);
+    return sizeof(char);
+  }
+  case surfingdb::meta::schema::RowType::INT: {
+    _pwrite(f, &v.p_val.int_val, offset);
+    return sizeof(int);
   }
   case RowType::LONG: {
     _pwrite(f, &v.p_val.long_val, offset);
@@ -165,13 +169,17 @@ size_t mrow::read(const Field& f, Value& v, const uint64_t& offset) {
     case surfingdb::meta::schema::RowType::VOID: {
       return 0;
     }
-    case surfingdb::meta::schema::RowType::INT: {
-      _pread(f, &v.p_val.int_val, offset);
-      return sizeof(int);
-    }
     case surfingdb::meta::schema::RowType::BOOL: {
       _pread(f, &v.p_val.bool_val, offset);
       return sizeof(bool);
+    }
+    case surfingdb::meta::schema::RowType::CHAR: {
+      _pread(f, &v.p_val.byte_val, offset);
+      return sizeof(char);
+    }
+    case surfingdb::meta::schema::RowType::INT: {
+      _pread(f, &v.p_val.int_val, offset);
+      return sizeof(int);
     }
     case RowType::LONG: {
       _pread(f, &v.p_val.long_val, offset);
@@ -248,12 +256,16 @@ void mrow::_pwrite(const Field& f, const void* data, const uint64_t& offset) {
   case surfingdb::meta::schema::RowType::VOID: {
     break;
   }
-  case surfingdb::meta::schema::RowType::INT: {
-    memcpy((int*)(_payload + offset), data, sizeof(int));
-    break;
-  }
   case surfingdb::meta::schema::RowType::BOOL: {
     memcpy((bool*)(_payload + offset), data, sizeof(bool));
+    break;
+  }
+  case surfingdb::meta::schema::RowType::CHAR: {
+    memcpy((char*)(_payload + offset), data, sizeof(char));
+    break;
+  }
+  case surfingdb::meta::schema::RowType::INT: {
+    memcpy((int*)(_payload + offset), data, sizeof(int));
     break;
   }
   case RowType::LONG: {
@@ -289,15 +301,20 @@ size_t mrow::_pread(const Field& f, void* dataptr, const uint64_t& offset) {
   case surfingdb::meta::schema::RowType::VOID: {
     assert(false);
   }
-  case surfingdb::meta::schema::RowType::INT: {
-    int* int_ptr = (int*)(_payload + offset);
-    memcpy(dataptr, int_ptr, sizeof(int));
-    return sizeof(int);
-  }
   case surfingdb::meta::schema::RowType::BOOL: {
     bool* bool_ptr = (bool*)(_payload + offset);
     memcpy(dataptr, bool_ptr, sizeof(bool));
     return sizeof(bool);
+  }
+  case surfingdb::meta::schema::RowType::CHAR: {
+    char* char_ptr = (char*)(_payload + offset);
+    memcpy(dataptr, char_ptr, sizeof(char));
+    return sizeof(char);
+  }
+  case surfingdb::meta::schema::RowType::INT: {
+    int* int_ptr = (int*)(_payload + offset);
+    memcpy(dataptr, int_ptr, sizeof(int));
+    return sizeof(int);
   }
   case RowType::LONG: {
     long* long_ptr = (long*)(_payload + offset);

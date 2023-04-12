@@ -132,7 +132,7 @@ TEST(TableTest, testmrow) {
 
   Field field1, field2, field3, field4, field5, field6, field7;
 
-  field1 = SchemaUtils::initField(r, "a", RowType::INT, sizeof(int));
+  field1 = SchemaUtils::initField(r, "a", RowType::CHAR, sizeof(char));
   field2 = SchemaUtils::initField(r, "b", RowType::LONG, sizeof(long));
   field3 = SchemaUtils::initField(r, "c", RowType::BOOL, sizeof(bool));
   field4 = SchemaUtils::initField(r, "d", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
@@ -141,7 +141,7 @@ TEST(TableTest, testmrow) {
   field7 = SchemaUtils::initMapField(r, "m", RowType::STRING, RowType::LONG, 3, 1024, sizeof(long));
 
   Value v1, v2, v3, v4, v5, v6, v7;
-  v1.p_val.int_val = 3;
+  v1.p_val.byte_val = 'a';
 
   v2.p_val.long_val = 4;
 
@@ -181,6 +181,7 @@ TEST(TableTest, testmrow) {
   b.read(field5, v6);
   b.read(field6, v5);
   b.read(field7, v3);
+  EXPECT_EQ(v1.p_val.byte_val, 'a');
   EXPECT_EQ(v6.p_val.string_val, "hello");
   EXPECT_EQ(v5.list_value.size(), 1);
   EXPECT_EQ(v3.map_value.size(), 1);
@@ -221,7 +222,7 @@ TEST(TableTest, testmrow) {
   t->appendRow(s);
   s = mrow(tpr, t->payload_ptr());
   s.read(field1, v11);
-  EXPECT_EQ(v11.p_val.int_val, 3);
+  EXPECT_EQ(v11.p_val.byte_val, 'a');
 
   auto sptr = t->readRow(0);
   sptr->read(field1, v11);
@@ -231,7 +232,7 @@ TEST(TableTest, testmrow) {
   sptr->read(field5, v55);
   sptr->read(field6, v66);
   sptr->read(field7, v77);
-  EXPECT_EQ(v11.p_val.int_val, 3);
+  EXPECT_EQ(v11.p_val.byte_val, 'a');
   EXPECT_EQ(v55.p_val.string_val, "hello");
   EXPECT_EQ(v66.list_value.size(), 1);
   EXPECT_EQ(v77.map_value.size(), 1);
@@ -245,7 +246,7 @@ TEST(TableTest, testmrow) {
   sptr->read(field5, v22);
   sptr->read(field6, v44);
   sptr->read(field7, v33);
-  EXPECT_EQ(v77.p_val.int_val, 3);
+  EXPECT_EQ(v77.p_val.byte_val, 'a');
   EXPECT_EQ(v22.p_val.string_val, "hello");
   EXPECT_EQ(v44.list_value.size(), 1);
   EXPECT_EQ(v33.map_value.size(), 1);
@@ -281,7 +282,7 @@ TEST(TableTest, TestUtils) {
   field4 = SchemaUtils::initField(r, "d", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
   field5 = SchemaUtils::initField(r, "e", RowType::STRING, MAX_STR_LEN);
 
-  field6 = SchemaUtils::initListField(r, "l", RowType::DOUBLE, 3, sizeof(DOUBLE_TYPE));
+  field6 = SchemaUtils::initListField(r, "l", RowType::CHAR, 3, sizeof(char)); // binary
   field7 = SchemaUtils::initMapField(r, "m", RowType::STRING, RowType::LONG, 3, MAX_STR_LEN, sizeof(long));
 
   std::shared_ptr<mschema> schema_ptr = std::make_shared<mschema>(r);
@@ -301,9 +302,12 @@ TEST(TableTest, TestUtils) {
 
   v5.p_val.string_val = "hello";
   PValue p;
-  p.double_val = 0.1;
+  p.byte_val = 'c';
   std::vector<PValue> lval;
   lval.push_back(p);
+  lval.push_back(p);
+  lval.push_back(p);
+
   v6.list_value = lval;
   PValue key, value;
   key.string_val = "hello";
