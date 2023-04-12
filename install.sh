@@ -1,3 +1,6 @@
+mkdir build
+cd build
+
 sudo apt update
 
 sudo apt install -y python3.10 python3-testresources python3-pip libthrift-dev maven
@@ -15,23 +18,24 @@ echo 'export CMAKE_HOME=~/cmake-3.22.6-linux-x86_64' >> ~/.bashrc
 echo 'export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64' >> ~/.bashrc 
 
 #install cuda-11-8 and depdencies, build pytorch 1.13.1
-sudo wget -O /etc/apt/preferences.d/cuda-repository-pin-600 https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-ubuntu2004.pin
-sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/3bf863cc.pub
-sudo add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/ /"
-sudo apt update
-sudo apt install -y cuda-11-8 
-sudo apt install -y cuda-toolkit-11-8
-echo 'export CUDA_ROOT=/usr/local/cuda' >> ~/.bashrc 
+#sudo wget -O /etc/apt/preferences.d/cuda-repository-pin-600 https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-ubuntu2004.pin
+#sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/3bf863cc.pub
+#sudo add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/ /"
+#sudo apt update
+#sudo apt install -y cuda-11-8 
+#sudo apt install -y cuda-toolkit-11-8
+#echo 'export CUDA_ROOT=/usr/local/cuda' >> ~/.bashrc 
 
 #sudo ln -s /usr/bin/gcc $CUDA_ROOT/bin/gcc
 #sudo ln -s /usr/bin/g++ $CUDA_ROOT/bin/g++
 
-wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/libcudnn8-dev_8.7.0.84-1+cuda11.8_amd64.deb
-wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/libcudnn8_8.7.0.84-1+cuda11.8_amd64.deb
-sudo dpkg -i libcudnn8*
-rm libcudnn8*
+#wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/libcudnn8-dev_8.7.0.84-1+cuda11.8_amd64.deb
+#wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/libcudnn8_8.7.0.84-1+cuda11.8_amd64.deb
+#sudo dpkg -i libcudnn8*
+#rm libcudnn8*
 
-echo 'export PATH=$PATH:$CMAKE_HOME/bin:$JAVA_HOME/bin:$CUDA_ROOT/bin' >> ~/.bashrc
+#echo 'export PATH=$PATH:$CMAKE_HOME/bin:$JAVA_HOME/bin:$CUDA_ROOT/bin' >> ~/.bashrc
+echo 'export PATH=$PATH:$CMAKE_HOME/bin:$JAVA_HOME/bin' >> ~/.bashrc
 source ~/.bashrc
 
 #https://arrow.apache.org/install/
@@ -43,9 +47,9 @@ rm ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
 sudo apt update
 sudo apt install -y libarrow-dev libarrow-cuda-dev libarrow-glib-dev libarrow-dataset-dev libarrow-dataset-glib-dev libarrow-flight-dev libarrow-flight-glib-dev libgandiva-dev libgandiva-glib-dev libparquet-dev libparquet-glib-dev
 
-sudo pip install "pybind11[global]"
+#sudo pip install "pybind11[global]"
 
-git clone https://github.com/edenhill/librdkafka.git
+git clone https://github.com/edenhill/librdkafka.git 
 cd librdkafka
 ./configure --prefix /usr
 make

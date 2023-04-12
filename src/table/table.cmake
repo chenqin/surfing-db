@@ -4,7 +4,7 @@ set(TABLE surftable)
 include_directories(${DATASKETCHES_INCLUDE_DIRS})
 
 include_directories(${THRIFT_INCLUDE_DIR})
-include_directories(${SURFINGDB_SRC}/table/gen-cpp)
+include_directories(${SURFINGDB_SRC}/meta/gen-cpp)
 
 if(APPLE)
     include_directories(/usr/local/include)
@@ -21,8 +21,6 @@ add_library(${TABLE} STATIC
 target_link_libraries(${TABLE}
         PUBLIC Threads::Threads
         PUBLIC MPI::MPI_CXX
-        PUBLIC ${OPENSSL_LIBRARY}
-        PUBLIC ${CRYPTO_LIBRARY}
         PUBLIC ${THRIFT_LIBRARY}
         PUBLIC ${GLOG_LIBRARY}
         PUBLIC ${GFLAGS_LIBRARY}

@@ -14,12 +14,11 @@ set(THRIFT_LIBRARY libthrift)
             -DBUILD_C_GLIB=OFF
             -DBUILD_KOTLIN=OFF
             -DBUILD_JAVA=OFF
-            -DBUILD_COMPILER=ON
             -DBUILD_PYTHON=OFF
             -DBUILD_HASKELL=OFF
             -DBUILD_JAVASCRIPT=OFF
             -DBUILD_NODEJS=OFF
-            -DWITH_OPENSSL=ON
+            -DWITH_OPENSSL=OFF
             -DBUILD_PYTHON=OFF
             -DCMAKE_BUILD_TYPE=Release)
 
@@ -31,8 +30,7 @@ set(THRIFT_LIBRARY libthrift)
             INSTALL_COMMAND ""
             LOG_DOWNLOAD ON
             LOG_CONFIGURE ON
-            LOG_BUILD ON
-            DEPENDS ${OPENSSL_LIBRARY})
+            LOG_BUILD ON)
 
     # get source dir after download step
     ExternalProject_Get_Property(thrift SOURCE_DIR)

@@ -17,7 +17,6 @@ target_link_libraries(${META}
         PUBLIC ${GFLAGS_LIBRARY}
         PUBLIC ${JSON_LIBRARY}
         PUBLIC ${FMT_LIBRARY}
-        PUBLIC ${DUCKDB_LIBRARY}
         PUBLIC ${ARROW_LIBRARY}
         PUBLIC ${JNI_LIBRARIES})
 

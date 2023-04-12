@@ -5,6 +5,7 @@ include(ExternalProject)
 ExternalProject_Add(fmt
         PREFIX fmt
         GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+        GIT_TAG 9.1.0
         UPDATE_COMMAND ""
         INSTALL_COMMAND ""
         LOG_DOWNLOAD ON
