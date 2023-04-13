@@ -365,7 +365,13 @@ TEST(TableTest, TestUtils) {
   EXPECT_EQ(table_ptr->row_count, new_table_ptr->row_count);
   EXPECT_EQ(table_ptr->row_size(), new_table_ptr->row_size());
   auto new_row = new_table_ptr->readRow(0);
-  Value newv7;
+  Value newv6, newv7;
+  new_row->read(new_table_ptr->getSchema()->getFieldByName("l"), newv6);
+
+  EXPECT_EQ(v6.list_value.size(), newv6.list_value.size());
+  for (auto& t : newv6.list_value) {
+    EXPECT_EQ(t.byte_val, 'c');
+  }
   new_row->read(field7, newv7);
 
   EXPECT_EQ(v7.map_value.size(), newv7.map_value.size());

@@ -48,6 +48,9 @@ public:
     if (type == RowType::BOOL) {
       return std::make_shared<arrow::BooleanBuilder>();
     }
+    if (type == RowType::CHAR) {
+      return std::make_shared<arrow::Int8Builder>();
+    }
     if (type == RowType::INT) {
       return std::make_shared<arrow::Int32Builder>();
     }
@@ -69,6 +72,9 @@ public:
     }
     if (field.type == RowType::INT) {
       ARROW_RETURN_NOT_OK(((arrow::Int32Builder*)builder)->Append(p_val.int_val));
+    }
+    if (field.type == RowType::CHAR) {
+      ARROW_RETURN_NOT_OK(((arrow::Int8Builder*)builder)->Append(p_val.byte_val));
     }
     if (field.type == RowType::LONG) {
       ARROW_RETURN_NOT_OK(((arrow::Int64Builder*)builder)->Append(p_val.long_val));
@@ -112,6 +118,8 @@ public:
   static auto getArrowType(const RowType::type& type, const RowType::type& type1, const RowType::type& type2, size_t units) {
     if (type == RowType::BOOL) {
       return arrow::boolean();
+    } else if (type == RowType::CHAR){
+      return arrow::int8();
     } else if (type == RowType::INT) {
       return arrow::int32();
     } else if (type == RowType::LONG) {
@@ -133,6 +141,8 @@ public:
     switch (type->id()) {
     case arrow::Type::BOOL:
       return RowType::BOOL;
+    case arrow::Type::INT8:
+      return RowType::CHAR;
     case arrow::Type::INT32:
     case arrow::Type::INT16:
       return RowType::INT;
@@ -184,10 +194,13 @@ public:
       if (id == arrow::Type::LIST) {
         auto ltype = (arrow::ListType*)field->type().get();
         auto type = getRowType(ltype->value_type());
-        SchemaUtils::initListField(r, field->name(), type, 1024, max_unit);
+        auto unit_size = units.find(field->name() + "#") == units.end() ? MAX_STR_LEN : units[field->name() + "#"];
+        SchemaUtils::initListField(r, field->name(), type, unit_size, max_unit);
       } else if (id == arrow::Type::MAP) {
         auto mtype = (arrow::MapType*)field->type().get();
-        SchemaUtils::initMapField(r, field->name(), getRowType(mtype->key_type()), getRowType(mtype->item_type()), max_unit, MAX_STR_LEN, MAX_STR_LEN);
+        auto key_unit_size = units.find(field->name() + "#1") == units.end() ? MAX_STR_LEN : units[field->name() + "#1"];
+        auto val_unit_size = units.find(field->name() + "#2") == units.end() ? MAX_STR_LEN : units[field->name() + "#2"];
+        SchemaUtils::initMapField(r, field->name(), getRowType(mtype->key_type()), getRowType(mtype->item_type()), max_unit, key_unit_size, val_unit_size);
       } else {
         auto type = getRowType(field->type());
         SchemaUtils::initField(r, field->name(), type, max_unit);
@@ -331,6 +344,10 @@ public:
             auto bc = (arrow::BooleanScalar*)result.get();
             v.p_val.bool_val = bc->value;
           }
+          if (type == arrow::Type::INT8) {
+            auto bc = (arrow::Int8Scalar*)result.get();
+            v.p_val.byte_val = bc->value;
+          }
           if (type == arrow::Type::INT32) {
             auto bc = (arrow::Int32Scalar*)result.get();
             v.p_val.int_val = bc->value;
@@ -431,6 +448,10 @@ public:
     if (type == arrow::Type::BOOL) {
       auto bc = (arrow::BooleanScalar*)s;
       v.bool_val = bc->value;
+    }
+    if (type == arrow::Type::INT8) {
+      auto bc = (arrow::Int8Scalar*)s;
+      v.byte_val = bc->value;
     }
     if (type == arrow::Type::INT32) {
       auto bc = (arrow::Int32Scalar*)s;
