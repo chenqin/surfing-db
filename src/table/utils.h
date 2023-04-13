@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "frequent_items_sketch.hpp"
 #include "KMeanOperator.h"
 #include "mrow.h"
 #include "xgbop.h"
@@ -38,6 +39,7 @@ namespace surfingdb {
 namespace table {
 using namespace surfingdb::meta;
 
+typedef datasketches::frequent_items_sketch<std::string> frequent_strings_sketch;
 /**
  * @brief convert surfing db internal data struct to arrow types and vice versa
  *
@@ -318,6 +320,8 @@ public:
     std::vector<mrow> rows;
     
     int row_index = 0;
+    frequent_strings_sketch sketch1(MAX_STR_LEN);
+
     for (auto& record_ptr : records) {
       auto vc = record_ptr->columns();
       /**
@@ -363,6 +367,7 @@ public:
           if (type == arrow::Type::STRING) {
             auto bc = (arrow::StringScalar*)result.get();
             v.p_val.string_val = bc->ToString();
+            sketch1.update(v.p_val.string_val);
           }
           if (type == arrow::Type::LIST) {
             auto bc = (arrow::ListScalar*)result.get();
@@ -410,6 +415,14 @@ public:
         rows.push_back(r);
         row_index++;
       }
+    }
+
+    auto items = sketch1.get_frequent_items(datasketches::NO_FALSE_POSITIVES);
+    LOG(INFO) << "Frequent strings: " << items.size();
+    LOG(INFO) << "Str\tEst\tLB\tUB";
+    for (auto& row : items) {
+      LOG(INFO) << row.get_item() << "\t" << row.get_estimate() << "\t"
+                << row.get_lower_bound() << "\t" << row.get_upper_bound();
     }
 
     int index = 0;
