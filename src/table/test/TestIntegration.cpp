@@ -280,7 +280,7 @@ TEST(TableTest, TestUtils) {
   field2 = SchemaUtils::initField(r, "b", RowType::LONG, sizeof(long));
   field3 = SchemaUtils::initField(r, "c", RowType::BOOL, sizeof(bool));
   field4 = SchemaUtils::initField(r, "d", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
-  field5 = SchemaUtils::initField(r, "e", RowType::STRING, MAX_STR_LEN);
+  field5 = SchemaUtils::initField(r, "e", RowType::STRING, 5);
 
   field6 = SchemaUtils::initListField(r, "l", RowType::CHAR, 3, sizeof(char)); // binary
   field7 = SchemaUtils::initMapField(r, "m", RowType::STRING, RowType::LONG, 3, MAX_STR_LEN, sizeof(long));
@@ -355,7 +355,7 @@ TEST(TableTest, TestUtils) {
    * @brief convert to internal data structure from arrow
    *
    */
-  std::map<std::string, uint64_t> units{ { "l", 3 }, { "m", 3 } };
+  std::map<std::string, uint64_t> units{ { "l", 3 }, { "m", 3 }, {"e", 6} };
   auto new_schema_ptr = utils::fromArrow(arrow_schema_ptr, units);
   EXPECT_EQ(new_schema_ptr->fields.at(0), schema_ptr->fields.at(0));
   EXPECT_EQ(new_schema_ptr->fields.at(6).max_unit_size, schema_ptr->fields.at(6).max_unit_size);
@@ -365,8 +365,10 @@ TEST(TableTest, TestUtils) {
   EXPECT_EQ(table_ptr->row_count, new_table_ptr->row_count);
   EXPECT_EQ(table_ptr->row_size(), new_table_ptr->row_size());
   auto new_row = new_table_ptr->readRow(0);
-  Value newv6, newv7;
+  Value newv5, newv6, newv7;
+  new_row->read(new_table_ptr->getSchema()->getFieldByName("e"), newv5);
   new_row->read(new_table_ptr->getSchema()->getFieldByName("l"), newv6);
+  EXPECT_EQ(newv5.p_val.string_val, "hello");
 
   EXPECT_EQ(v6.list_value.size(), newv6.list_value.size());
   for (auto& t : newv6.list_value) {
