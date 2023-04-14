@@ -22,33 +22,36 @@ import java.util.List;
  * function
  */
 public class Bridge {
-  protected static final BufferAllocator allocator = new RootAllocator();
-  protected static final Logger LOG = LoggerFactory.getLogger(Bridge.class);
-  protected static long total = 0;
+    protected static final BufferAllocator allocator = new RootAllocator();
+    protected static final Logger LOG = LoggerFactory.getLogger(Bridge.class);
+    protected static long total = 0;
 
-  /**
-   * Create a {@link VectorSchemaRoot} and export it via the C Data Interface
-   *
-   * @param schemaAddress Schema memory address to wrap
-   * @param arrayAddress Array memory address to wrap
-   */
-  public static void _internal_invoke(long schemaIn, long arrayIn, long schemaOut, long arrayOut) {
-    try (ArrowArray array_in = ArrowArray.wrap(arrayIn);
-        ArrowSchema schema_in = ArrowSchema.wrap(schemaIn);
-        ArrowArray array_out = ArrowArray.wrap(arrayOut);
-        ArrowSchema schema_out = ArrowSchema.wrap(schemaOut)) {
-      VectorSchemaRoot input = Data.importVectorSchemaRoot(allocator, array_in, schema_in, null);
-      try {
-        Data.exportVectorSchemaRoot(allocator, process(input), null, array_out, schema_out);
-      } catch (Exception e) {
-
-      } finally {
-        input.clear();
-      }
+    /**
+     * Create a {@link VectorSchemaRoot} and export it via the C Data Interface
+     *
+     * @param schemaAddress Schema memory address to wrap
+     * @param arrayAddress  Array memory address to wrap
+     */
+    public static void _internal_invoke(long schemaIn, long arrayIn, long schemaOut, long arrayOut) {
+        try (ArrowArray array_in = ArrowArray.wrap(arrayIn);
+             ArrowSchema schema_in = ArrowSchema.wrap(schemaIn);
+             ArrowArray array_out = ArrowArray.wrap(arrayOut);
+             ArrowSchema schema_out = ArrowSchema.wrap(schemaOut)) {
+            VectorSchemaRoot input = null;
+            VectorSchemaRoot output = null;
+            try {
+                input = Data.importVectorSchemaRoot(allocator, array_in, schema_in, null);
+                output = process(input);
+                Data.exportVectorSchemaRoot(allocator, output, null, array_out, schema_out);
+            } catch (Exception e) {
+            } finally {
+                if (input != null) input.close();
+                if (output != null) output.close();
+            }
+        }
     }
-  }
 
-  protected static VectorSchemaRoot process(VectorSchemaRoot input) throws Exception {
+    protected static VectorSchemaRoot process(VectorSchemaRoot input) throws Exception {
         total += input.getRowCount();
         BitVector bitVector = new BitVector("boolean", allocator);
         VarCharVector varCharVector = new VarCharVector("varchar", allocator);

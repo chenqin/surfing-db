@@ -109,12 +109,12 @@ int main(int argc, char** argv) {
     return r;
   };
   auto metrics_log_staging = KafkaConnector(
-    node, "kafka-source", batch/10, interval, schema_ptr,
+    node, "kafka-source", batch / 10, interval, schema_ptr,
     { "xenon-logs-staging" }, "/var/serverset/discovery.metricskafka07.prod", group_id, false);
   metrics_log_staging.setDeser(metric_log_deser);
 
   auto metrics_log_prod = KafkaConnector(
-    node, "kafka-source", batch/10, interval, schema_ptr,
+    node, "kafka-source", batch / 10, interval, schema_ptr,
     { "xenon-logs-prod" }, "/var/serverset/discovery.metricskafka07.prod", group_id, false);
   metrics_log_prod.setDeser(metric_log_deser);
 
@@ -163,14 +163,20 @@ int main(int argc, char** argv) {
     auto log = engine::source(log_table);
     auto metric_log = engine::union_op(metric, log);
     auto signal = engine::java(metric_log, "CleanupWrapper", node);
-    /**
-     * @brief hard coded first column as sharding key
-     *
-     */
-    auto parition = engine::shuffle(
+    
+    auto job_signals = engine::shuffle(
       signal, "jobid", [](size_t hash, int rank, int workers) { return hash % workers; }, false, node);
-    auto snapshot = engine::java(parition, "AggregateWrapper", node);
-    auto outputs = cp::DeclarationToBatches(std::move(snapshot)).ValueOrDie();
+    auto app_signals = engine::shuffle(
+      signal, "appid", [](size_t hash, int rank, int workers) { return hash % workers; }, false, node);
+    
+    auto app_state = engine::java(app_signals, "AggregateWrapper", node);
+
+    auto job_app_state = engine::shuffle(
+      app_state, "jobid", [](size_t hash, int rank, int workers) { return hash % workers; }, false, node);
+
+    auto job_app_state = engine::union_op(job_app_state, job_signals);
+
+    auto outputs = cp::DeclarationToBatches(std::move(job_app_state)).ValueOrDie();
 
     size_t global_row_count = 0;
     MPI_Allreduce(&local_row_count, &global_row_count, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
