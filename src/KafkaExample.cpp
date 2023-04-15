@@ -230,7 +230,11 @@ int main(int argc, char** argv) {
     */
     auto job_signals = engine::shuffle(
         app_state, "jobid", [](size_t hash, int rank, int workers) { return hash % workers; }, false, node);
-
+    auto job_info = engine::java(job_signals, "JobInfoWrapper", node);
+    /**
+     * @brief todo write formatted seralizedjobinfo to kafka
+     * 
+     */
     auto outputs = cp::DeclarationToBatches(std::move(job_signals)).ValueOrDie();
 
     size_t global_row_count = 0;

@@ -25,9 +25,9 @@ import java.util.Map;
 public class Aggregate {
     protected static final BufferAllocator allocator = new RootAllocator();
     protected static final Logger LOG = LoggerFactory.getLogger(Aggregate.class);
+    private static final ObjectMapper mapper = new ObjectMapper();
     protected static long total = 0;
     static Map<String, State> states = new HashMap<>();
-    private static final ObjectMapper mapper = new ObjectMapper();
 
     /**
      * Create a {@link VectorSchemaRoot} and export it via the C Data Interface
@@ -55,14 +55,43 @@ public class Aggregate {
         }
     }
 
+    /**
+     * generate app_state from appId, pass through signals with non empty jobid
+     *
+     * @param input
+     * @return
+     * @throws Exception
+     */
     protected static VectorSchemaRoot process(VectorSchemaRoot input) throws Exception {
-        VarCharVector appid = (VarCharVector) input.getVector("appid");
-        VarCharVector type = (VarCharVector) input.getVector("type");
-        VarCharVector binary = (VarCharVector) input.getVector("json");
+        /**
+         * input vectors
+         */
+        VarCharVector appid_in = (VarCharVector) input.getVector("appid");
+        VarCharVector jobid_in = (VarCharVector) input.getVector("jobid");
+        VarCharVector type_in = (VarCharVector) input.getVector("type");
+        VarCharVector json_in = (VarCharVector) input.getVector("json");
+
+        /**
+         * output vectors
+         */
+        VarCharVector jobid_out = new VarCharVector("jobid", allocator);
+        VarCharVector type_out = new VarCharVector("type", allocator);
+        VarCharVector json_out = new VarCharVector("json", allocator);
+
+        jobid_out.allocateNew();
+        type_out.allocateNew();
+        json_out.allocateNew();
+        int count = 0;
+
+
         for (int i = 0; i < input.getRowCount(); i++) {
-            String appID = Text.decode(appid.get(i));
-            String JobType = Text.decode(type.get(i));
-            String jsonstr = Text.decode(binary.get(i));
+            String appID = Text.decode(appid_in.get(i));
+            String jobId = Text.decode(jobid_in.get(i));
+            String JobType = Text.decode(type_in.get(i));
+            String jsonstr = Text.decode(json_in.get(i));
+            /**
+             * build per app_id state
+             */
             if (states.get(appID.toLowerCase()) == null) {
                 State s = new State();
                 s.maxNumOfLatestExceptions = 20;
@@ -76,31 +105,39 @@ public class Aggregate {
                 RawLog rawLog = mapper.readValue(jsonstr, RawLog.class);
                 states.get(appID.toLowerCase()).update(rawLog);
             }
+
+            /**
+             * pass through metric with job id not null
+             */
+            if (jobId == null && JobType.equalsIgnoreCase("metric")) {
+                jobid_out.setSafe(count, jobId.getBytes(StandardCharsets.UTF_8));
+                type_out.setSafe(count, JobType.getBytes(StandardCharsets.UTF_8));
+                json_out.setSafe(count, jsonstr.getBytes(StandardCharsets.UTF_8));
+                count++;
+            }
+
         }
 
-        VarCharVector jobId = new VarCharVector("jobid", allocator);
-        VarCharVector snapshot = new VarCharVector("json", allocator);
-        jobId.allocateNew();
-        snapshot.allocateNew();
-        int count = 0;
 
         for (Map.Entry<String, State> state : states.entrySet()) {
             if (!inTTL(state.getValue())) continue;
-            jobId.setSafe(count, state.getValue().getJobId().getBytes(StandardCharsets.UTF_8));
+            jobid_out.setSafe(count, state.getValue().getJobId().getBytes(StandardCharsets.UTF_8));
+            type_out.setSafe(count, "state".getBytes(StandardCharsets.UTF_8));
             String json_str = mapper.writeValueAsString(state.getValue());
-            snapshot.setSafe(count, json_str.getBytes(StandardCharsets.UTF_8));
+            json_out.setSafe(count, json_str.getBytes(StandardCharsets.UTF_8));
             count++;
         }
         /**
          * insert a placeholder for now
          */
-        jobId.setSafe(count, new Text(""));
-        snapshot.setSafe(count, new Text());
+        jobid_out.setSafe(count, new Text(""));
+        type_out.setSafe(count, new Text());
+        json_out.setSafe(count, new Text());
         count++;
 
-        jobId.setValueCount(count);
-        snapshot.setValueCount(count);
-        List<FieldVector> vectors = Arrays.asList(jobId, snapshot);
+        jobid_out.setValueCount(count);
+        json_out.setValueCount(count);
+        List<FieldVector> vectors = Arrays.asList(jobid_out, type_out, json_out);
         VectorSchemaRoot vectorSchemaRoot = new VectorSchemaRoot(vectors);
         vectorSchemaRoot.setRowCount(count);
         return vectorSchemaRoot;
