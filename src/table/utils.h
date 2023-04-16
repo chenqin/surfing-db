@@ -301,7 +301,7 @@ public:
 
   static std::shared_ptr<mtable> fromArrow(std::vector<std::shared_ptr<arrow::RecordBatch>> records,
                                            std::map<std::string, uint64_t>& units, std::string field_name,
-                                           std::function<size_t(size_t key, int rank, int world)> partitioner, std::shared_ptr<node> node_ptr) {
+                                           std::function<size_t(size_t key, int rank, int world)> partitioner, std::shared_ptr<node> node_ptr, int world) {
     CHECK(records.size() > 0);
     auto schema = fromArrow(records.at(0)->schema(), units);
 
@@ -311,11 +311,13 @@ public:
       row_count += record->num_rows();
     }
     int rank = node_ptr == nullptr ? 0 : node_ptr->rank;
-    int world = node_ptr == nullptr ? 1 : node_ptr->world;
+    if (node_ptr != nullptr) world = node_ptr->world;
     CHECK(world > 0);
 
     auto placeholder = std::make_shared<mtable>(node_ptr, schema, 1 * schema->rowSize());
     auto table = std::make_shared<mtable>(node_ptr, schema, row_count * schema->rowSize());
+    table->rank = rank;
+    table->world = world;
     CHECK(schema->fields.size() > 0);
     Field f = schema->fields.at(0);
     std::vector<mrow> rows;

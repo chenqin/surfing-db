@@ -104,7 +104,7 @@ public:
 
     auto start = MPI_Wtime();
     auto units = utils::toUnits(tables);
-    auto mtable = utils::fromArrow(tables, units, field_name, partationer, node);
+    auto mtable = utils::fromArrow(tables, units, field_name, partationer, node, node->world);
     auto schema = utils::fromArrow(tables.at(0)->schema(), units);
     auto f = schema->getFieldByName(field_name);
     //std::cout << mtable->row_count << std::endl;

@@ -286,24 +286,25 @@ TEST(TableTest, TestPlacementSort) {
   org->appendRow(row3);
   CHECK_EQ(org->row_count, 3);
 
+  org->world = 3;
   auto sorted = org->placement_sort(field1, [](int key, int rank, int world) {
     return key % world;
   });
-  CHECK(sorted->world == 1);
+  sorted->world = 3;
 
   sorted->verifyShuffle(field1, [](int key, int rank, int world) {
-    return key % 1;
+    return key % world;
   });
 
   auto arrow_org = utils::toArrow(org);
   std::map<std::string, uint64_t> units;
   auto sorted_arrow = utils::fromArrow(
     { arrow_org }, units, "a", [](int key, int rank, int world) {
-      return key % 1;
+      return key % world;
     },
-    nullptr);
+    nullptr, 3);
   sorted_arrow->verifyShuffle(sorted_arrow->getSchema()->fields.at(0), [](int key, int rank, int world) {
-    return key % 1;
+    return key % world;
   });
 }
 
@@ -412,7 +413,7 @@ TEST(TableTest, TestUtils) {
   EXPECT_EQ(new_schema_ptr->fields.at(6).max_map_key_unit_size, schema_ptr->fields.at(6).max_map_key_unit_size);
 
   auto new_table_ptr = utils::fromArrow(
-    { arrow_table_ptr }, units, "a", [](size_t key, int rank, int world) { return 0; }, nullptr);
+    { arrow_table_ptr }, units, "a", [](size_t key, int rank, int world) { return 0; }, nullptr, 1);
 
   EXPECT_EQ(table_ptr->row_count, new_table_ptr->row_count);
   EXPECT_EQ(table_ptr->row_size(), new_table_ptr->row_size());
