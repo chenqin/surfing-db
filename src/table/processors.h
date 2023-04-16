@@ -47,13 +47,21 @@ public:
    *
    * @return std::shared_ptr<mtable>
    */
-  static std::shared_ptr<mtable> shuffle(std::shared_ptr<mtable>, Field&, std::function<size_t(size_t, int, int)>);
+  static std::shared_ptr<mtable> shuffle_one_side(std::shared_ptr<mtable>, Field&, std::function<size_t(size_t, int, int)>);
   /**
-   * @brief shuffle sorted data with two sice isend, irecv network call
-   *
-   * @return std::shared_ptr<mtable>
+     * @brief shuffle sorted data with two sice isend, irecv network call
+     *
+     * @return std::shared_ptr<mtable>
+     */
+    static std::shared_ptr<mtable> shuffle_two_side(std::shared_ptr<mtable>, Field&, std::function<size_t(size_t, int, int)>);
+  // arrow format apis
+  /**
+   * @brief merge recordbatches and do one shuffle
+   * 
+   * @param node 
+   * @return std::shared_ptr<arrow::RecordBatch> 
    */
-  static std::shared_ptr<mtable> shuffle_two_side(std::shared_ptr<mtable>, Field&, std::function<size_t(size_t, int, int)>);
+  const static std::shared_ptr<arrow::RecordBatch> shuffle_x(std::vector<std::shared_ptr<arrow::RecordBatch>>, std::string, std::function<size_t(size_t, int, int)>, bool, std::shared_ptr<node>);
 
   const static std::shared_ptr<arrow::RecordBatch> java(std::shared_ptr<arrow::RecordBatch>, std::string class_name, std::shared_ptr<node> node);
 

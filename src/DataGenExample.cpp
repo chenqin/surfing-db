@@ -17,28 +17,22 @@
 #include <chrono>
 #include <csignal>
 #include <fmt/core.h>
-#include <future>
 #include <glog/logging.h>
 #include <iostream>
-#include <jni.h>
-#include <omp.h>
-#include <rapidjson/document.h>
+
 #include "connector/datagen.h"
-#include "engine/engine.h"
 #include "meta/node.h"
 #include "table/processors.h"
+#include "table/utils.h"
 
 #define FLUSH_DIR "/tmp/"
-#define BATCH_SIZE 100
+#define BATCH_SIZE 1000
 
 using namespace surfingdb::meta;
 using namespace surfingdb::table::schema;
 using namespace surfingdb::table;
 using namespace surfingdb::connector;
-using namespace surfingdb::engine;
 using namespace std;
-
-namespace cp = ::arrow::compute;
 
 volatile std::sig_atomic_t terminal_signal;
 void signal_handler(int signal) {
@@ -76,7 +70,7 @@ int main(int argc, char** argv) {
     size_t total_row_count = intial_row_count;
     double start = MPI_Wtime();
     size_t total_bytes = 0;
-    auto arrow_t2 = con.consume_batch([&](const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders) {
+    auto metric = con.consume_batch([&](const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders) {
       PValue v1, v2;
       Value placeholder;
       stringstream ss;
@@ -87,11 +81,18 @@ int main(int argc, char** argv) {
       utils::append(builders.at(0).get(), schema_ptr->fields.at(0), v1, placeholder);
       utils::append(builders.at(1).get(), schema_ptr->fields.at(1), v2, placeholder);
     });
-    CHECK(arrow_t2->num_rows() == BATCH_SIZE * node->rank);
-    auto metric = engine::source(arrow_t2);
-    auto parition = engine::shuffle(
-      metric, "topic", [](size_t key, int rank, int world) { return key % world; }, itr++ % 2 == 0, node);
-    auto outputs = cp::DeclarationToBatches(std::move(parition)).ValueOrDie();
+    CHECK(metric->num_rows() == BATCH_SIZE * node->rank);
+    auto partitioner = [](size_t key, int rank, int world) { return key % world; };
+    auto signal = processors::java(metric, "CleanupWrapper", node);
+    auto app_signals = processors::shuffle_x({ signal }, "appid", partitioner, false, node);
+    auto app_state = processors::java(app_signals, "AggregateWrapper", node);
+    auto job_signals = processors::shuffle_x({ app_state }, "jobid", partitioner, true, node);
+    auto job_info = processors::java(job_signals, "JobInfoWrapper", node);
+    /**
+     * @brief todo write formatted seralizedjobinfo to kafka
+     *
+     */
+
     size_t g_total_bytes = 0;
     MPI_Allreduce(&total_bytes, &g_total_bytes, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
     if (node->rank == 0) std::cout << "iteration " << (g_total_bytes) / ((MPI_Wtime() - start) * 1024 * 1024) << " MB per seconds" << std::endl;

@@ -109,7 +109,7 @@ public:
     auto f = schema->getFieldByName(field_name);
     //std::cout << mtable->row_count << std::endl;
     
-    auto t5 = oneside ? processors::shuffle(mtable, f, partationer) : processors::shuffle_two_side(mtable, f, partationer);
+    auto t5 = oneside ? processors::shuffle_one_side(mtable, f, partationer) : processors::shuffle_two_side(mtable, f, partationer);
 
     //std::cout << t5->row_count << std::endl;
     t5->verifyShuffle(schema->fields.at(0), [](size_t key, int rank, int world) {return key % world;});

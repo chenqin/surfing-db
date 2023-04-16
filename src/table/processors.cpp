@@ -92,22 +92,22 @@ void processors::xgb(std::shared_ptr<mtable> input, std::vector<Field> features,
   features_matrix.resize(op.features() * input->row_size()); // number of features
   input->readFields(op.fields, &features_matrix[0]);         // read from temp table
 
-  std::vector<float> label_matrix;     // number of labels
-  label_matrix.resize(input->row_size()); // number of rows
+  std::vector<float> label_matrix;                           // number of labels
+  label_matrix.resize(input->row_size());                    // number of rows
 
   if (op.parameters.isTraining) {
     input->readField(op.labelField, &label_matrix[0]);
     size_t total_row_count = input->row_size();
     op.gather(&features_matrix[0], &label_matrix[0], total_row_count, op.features()); // gather training dataset to root
     op.train(&features_matrix[0], &label_matrix[0], total_row_count, op.features());
-    op.syncModel(); // send model to all processes from root
+    op.syncModel();                                                                   // send model to all processes from root
   } else {
     op.predict(&features_matrix[0], &label_matrix[0], input->row_size(), op.features());
     input->writeField(op.labelField, &label_matrix[0]);
   }
 }
 
-std::shared_ptr<mtable> processors::shuffle(std::shared_ptr<mtable> input, Field& f, std::function<size_t(size_t key, int rank, int world)> partitioner) {
+std::shared_ptr<mtable> processors::shuffle_one_side(std::shared_ptr<mtable> input, Field& f, std::function<size_t(size_t key, int rank, int world)> partitioner) {
 
   CHECK(input->sorted);
 
@@ -294,6 +294,15 @@ std::shared_ptr<mtable> processors::shuffle_two_side(std::shared_ptr<mtable> inp
 
   MPI_Type_free(&row_type);
   return table;
+}
+
+const std::shared_ptr<arrow::RecordBatch> processors::shuffle_x(std::vector<std::shared_ptr<arrow::RecordBatch>> batch, std::string field_name, std::function<size_t(size_t, int, int)> partitioner, bool singleside, std::shared_ptr<node> node) {
+  auto units = utils::toUnits(batch);
+  auto mtable = utils::fromArrow(
+    batch, units, field_name, partitioner, node);
+  auto out = singleside ? processors::shuffle_one_side(mtable, mtable->getSchema()->getFieldByName(field_name), partitioner) : processors::shuffle_two_side(mtable, mtable->getSchema()->getFieldByName(field_name), partitioner);
+  out->verifyShuffle(mtable->getSchema()->getFieldByName(field_name), partitioner);
+  return utils::toArrow(out);
 }
 
 const std::shared_ptr<arrow::RecordBatch> processors::java(std::shared_ptr<arrow::RecordBatch> batch, std::string class_name, std::shared_ptr<node> node) {

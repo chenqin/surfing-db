@@ -85,11 +85,13 @@ public class Cleanup {
             if (topic.equals("metric")) {
                 FlinkMetric flinkMetric = DrSquirrelUtils.constructFlinkMetric(body);
 
-                if (filterJobApplication(flinkMetric) &&
-                        (flinkMetric.getType() == FlinkMetricType.JOBMANAGER_JOB
+                /**
+                 * (flinkMetric.getType() == FlinkMetricType.JOBMANAGER_JOB
                                 || flinkMetric.getType() == FlinkMetricType.JOBMANAGER
                                 || flinkMetric.getType() == FlinkMetricType.JOBMANAGER_JOB_WITH_APPID
-                                || flinkMetric.getType() == FlinkMetricType.JOBMANAGER_WITH_APPID)) {
+                                || flinkMetric.getType() == FlinkMetricType.JOBMANAGER_WITH_APPID
+                 */
+                if (filterJobApplication(flinkMetric)) {
                     try {
                         jobId.setSafe(count, flinkMetric.getJobId().getBytes(StandardCharsets.UTF_8));
                         appId.setSafe(count, flinkMetric.getApplicationId().getBytes(StandardCharsets.UTF_8));
