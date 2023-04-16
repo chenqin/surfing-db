@@ -76,7 +76,7 @@ TEST(TableTest, testCompact) {
   CHECK_EQ(b.write(field5, v5), 6 + HEADER_SIZE);
   CHECK_EQ(b.write(field6, v6), HEADER_SIZE + 1 * sizeof(DOUBLE_TYPE));
   CHECK_EQ(b.write(field7, v7), HEADER_SIZE + 1 * (HEADER_SIZE + 6 + sizeof(long)));
-  mtable t(tpr, 10240000);
+  mtable t(nullptr, tpr, 10240000);
   t.appendRow(b);
   Value mapValue;
   t.readRow(0)->read(field7, mapValue);
@@ -218,7 +218,7 @@ TEST(TableTest, testmrow) {
   EXPECT_EQ(v77.map_value.size(), 1);
 
   // test point to temp table
-  auto t = std::make_shared<mtable>(tpr, 10240000);
+  auto t = std::make_shared<mtable>(nullptr, tpr, 10240000);
   t->appendRow(s);
   s = mrow(tpr, t->payload_ptr());
   s.read(field1, v11);
@@ -340,7 +340,7 @@ TEST(TableTest, TestUtils) {
    * @brief  row test mtable
    *
    */
-  auto table_ptr = std::make_shared<mtable>(schema_ptr, schema_ptr->rowSize() * 2);
+  auto table_ptr = std::make_shared<mtable>(nullptr, schema_ptr, schema_ptr->rowSize() * 2);
   table_ptr->appendRow(row);
   table_ptr->appendRow(row2);
   /**

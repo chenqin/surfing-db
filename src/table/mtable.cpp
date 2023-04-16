@@ -31,22 +31,6 @@ mtable::~mtable() {
   if (node_ptr == nullptr) free(payload);
 }
 
-mtable::mtable(const std::shared_ptr<mschema> schema_ptr, size_t capacity) {
-  CHECK_GE(capacity, 0);
-  this->capacity = capacity;
-  this->schema_ptr = schema_ptr;
-  this->node_ptr = nullptr;
-  CHECK(sizeof(uint8_t) == sizeof(char));
-  payload = (uint8_t*) malloc(capacity * sizeof(uint8_t));
-  schedule_size = -1;
-  key_dist = std::make_unique<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>>();
-  key_groups = std::make_unique<std::map<size_t, std::vector<size_t>, std::less<size_t>>>();
-  placement_index = std::make_unique<std::map<int, size_t>>();
-
-  offset = 0;
-  row_count = 0;
-}
-
 mtable::mtable(const std::shared_ptr<node> node_ptr, const std::shared_ptr<mschema> schema_ptr,
                size_t capacity) {
   CHECK_GE(capacity, 0);
@@ -54,7 +38,8 @@ mtable::mtable(const std::shared_ptr<node> node_ptr, const std::shared_ptr<msche
   this->schema_ptr = schema_ptr;
   this->node_ptr = node_ptr;
   CHECK(sizeof(uint8_t) == sizeof(char));
-  MPI_Alloc_mem(capacity * sizeof(uint8_t), MPI_INFO_NULL, &payload);
+  if (node_ptr != nullptr) MPI_Alloc_mem(capacity * sizeof(uint8_t), MPI_INFO_NULL, &payload);
+  if (node_ptr == nullptr) payload = (uint8_t*)malloc(capacity * sizeof(uint8_t));
   schedule_size = -1;
   key_dist = std::make_unique<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>>();
   key_groups = std::make_unique<std::map<size_t, std::vector<size_t>, std::less<size_t>>>();

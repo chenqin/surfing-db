@@ -66,7 +66,7 @@ int main(int argc, char** argv) {
   /**
    * pull every 2 seconds
    */
-  int batch = 1000;
+  int batch = 10000;
   int interval = 100;
   int world = node->world;
 
@@ -158,84 +158,13 @@ int main(int argc, char** argv) {
     auto log_table = t2.get();
     local_row_count += log_table->num_rows();
     MPI_Barrier(MPI_COMM_WORLD);
-    /*
-      step 1, get entire raw streams, metric and logs
-    */
-    auto metric = engine::source(metric_table);
-    auto log = engine::source(log_table);
-    /*
-    * step 2, union raw streams
-     DataStream<Signal> signals = allMetrics.union(exceptions);
-    */
-    auto metric_log = engine::union_op(metric, log);
-
-    /*
-    * step 3, clean up raw steams, extract signals
-    DataStream<Signal> allMetrics = metricsStream.filter( m -> m.getJobId() != null)
-        .keyBy(FlinkMetric::getJobId)
-        .process(new MetricProcessor())
-        .name("metric-processor")
-        .setParallelism(parseInt(configuration.getJavaString("metric-processor.parallelism")));
-
-    SingleOutputStreamOperator<Signal> exceptions = logStream.keyBy(RawLog::getSaltKey)
-        .process(new RawLogProcessor())
-        .name("rawLog-processor")
-        .setParallelism(parseInt(configuration.getJavaString("rawLog-processor.parallelism")));
-    */
-    auto signal = engine::java(metric_log, "CleanupWrapper", node);
-    
-    /*
-    * step 4, shuffle by applicationId
-    */
-    auto app_signals = engine::shuffle(
-      signal, "appid", [](size_t hash, int rank, int workers) { return hash % workers; }, false, node);
-    /*
-    * step 5, aggregate signals as application state by applicationId, pass through metric signals
-
-     // Signals with appId (i.e. RawLog + Part of Flink System Metrics that have tmId/appId)
-    DataStream<Signal> appIdSignalStream = signals.rebalance().filter(
-        signal -> signal.getApplicationId() != null
-            && !signal.getApplicationId().equals("application_unknown"))
-        .name("filter-has-AppId")
-        .setParallelism(parseInt(configuration.getJavaString("filter-has-AppId.parallelism")));
-
-    int stateTtlInDays = parseInt(configuration.getJavaString("state.ttl.days"));
-    int maxNumOfLatestExceptions =
-        parseInt(configuration.getJavaString("num-of-latest-exceptions.max"));
-
-    // Transform signals with appId to State group by AppId
-    DataStream<State> appIdStates = appIdSignalStream
-        .keyBy(Signal::getApplicationId)
-        .process(new SignalsToStateProcessor(stateTtlInDays, maxNumOfLatestExceptions))
-        .setParallelism(parseInt(configuration.getJavaString("group-by-AppId.parallelism")));
-
-    // Signals with _only_ jobId (i.e. Flink System Metrics - jm.job)
-    DataStream<Signal> jobIdSignalStream =
-        signals
-            .rebalance()
-            .filter(signal -> signal.getJobId() != null)
-            .name("filter-has-JobId")
-            .setParallelism(parseInt(configuration.getJavaString("filter-has-JobId.parallelism")));
-    */
-    auto app_state = engine::java(app_signals, "AggregateWrapper", node);
-
-    /*
-    * step 6, shuffle application state by job id, together with metric signals
-
-    // join those that only have job id
-    DataStream<FlinkJobInfo> flinkJobInfoStream = appIdStates.connect(jobIdSignalStream)
-        .keyBy(State::getJobId, Signal::getJobId)
-        .process(new StateSignalJoiner(stateTtlInDays))
-        .setParallelism(parseInt(configuration.getJavaString("keyby.parallelism")));
-    */
-    auto job_signals = engine::shuffle(
-        app_state, "jobid", [](size_t hash, int rank, int workers) { return hash % workers; }, false, node);
-    auto job_info = engine::java(job_signals, "JobInfoWrapper", node);
-    /**
-     * @brief todo write formatted seralizedjobinfo to kafka
-     * 
-     */
-    auto outputs = cp::DeclarationToBatches(std::move(job_signals)).ValueOrDie();
+    auto partitioner = [](size_t key, int rank, int world) { return key % world; };
+    auto signal_metric = processors::java(metric_table, "CleanupWrapper", node);
+    auto signal_log = processors::java(log_table, "CleanupWrapper", node);
+    auto app_signals = processors::shuffle_x({signal_metric, signal_log}, "appid", partitioner, false, node);
+    //auto app_state = processors::java(app_signals, "AggregateWrapper", node);
+    //auto job_signals = processors::shuffle_x({ app_state }, "jobid", partitioner, true, node);
+    //auto job_info = processors::java(job_signals, "JobInfoWrapper", node);
 
     size_t global_row_count = 0;
     MPI_Allreduce(&local_row_count, &global_row_count, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);

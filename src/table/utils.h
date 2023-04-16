@@ -313,8 +313,8 @@ public:
     int rank = node_ptr == nullptr ? 0 : node_ptr->rank;
     int world = node_ptr == nullptr ? 1 : node_ptr->world;
 
-    auto placeholder = node_ptr == nullptr ? std::make_shared<mtable>(schema, 1 * schema->rowSize()) : std::make_shared<mtable>(node_ptr, schema, 1 * schema->rowSize());
-    auto table = node_ptr == nullptr ? std::make_shared<mtable>(schema, row_count * schema->rowSize()) : std::make_shared<mtable>(node_ptr, schema, row_count * schema->rowSize());
+    auto placeholder = std::make_shared<mtable>(node_ptr, schema, 1 * schema->rowSize());
+    auto table = std::make_shared<mtable>(node_ptr, schema, row_count * schema->rowSize());
     CHECK(schema->fields.size() > 0);
     Field f = schema->fields.at(0);
     std::vector<mrow> rows;
