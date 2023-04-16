@@ -70,9 +70,13 @@ size_t mrow::schema_sig() {
 
 size_t mrow::read(const Field& f, Value& v) {
   CHECK_GE(schema_ptr->_offsets->size(), 0);
+  Field field = f;
+  if(schema_ptr->_offsets->find(f) != schema_ptr->_offsets->end()) {
+    field = schema_ptr->getFieldByName(f.name);
+  }
   CHECK(schema_ptr->_offsets->find(f) != schema_ptr->_offsets->end());
   uint64_t offset = schema_ptr->_offsets->at(f);
-  size_t mem_size = read(f, v, offset);
+  size_t mem_size = read(field, v, offset);
   return mem_size;
 }
 

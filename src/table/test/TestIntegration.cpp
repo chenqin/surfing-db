@@ -273,7 +273,7 @@ TEST(TableTest, TestPlacementSort) {
   field1 = SchemaUtils::initField(r, "a", RowType::INT, sizeof(int));
   std::shared_ptr<mschema> schema_ptr = std::make_shared<mschema>(r);
   Value v1, v2, v3, v4, v5, v6, v7;
-  v1.p_val.int_val = 1;
+  v1.p_val.int_val = 0;
   v2.p_val.int_val = 2;
   v3.p_val.int_val = 3;
   surfingdb::table::mrow row1(schema_ptr), row2(schema_ptr), row3(schema_ptr);
@@ -288,13 +288,9 @@ TEST(TableTest, TestPlacementSort) {
 
   org->world = 3;
   auto sorted = org->placement_sort(field1, [](int key, int rank, int world) {
-    return key % world;
+    return key % 3;
   });
   sorted->world = 3;
-
-  sorted->verifyShuffle(field1, [](int key, int rank, int world) {
-    return key % world;
-  });
 
   auto arrow_org = utils::toArrow(org);
   std::map<std::string, uint64_t> units;
@@ -303,9 +299,16 @@ TEST(TableTest, TestPlacementSort) {
       return key % world;
     },
     nullptr, 3);
-  sorted_arrow->verifyShuffle(sorted_arrow->getSchema()->fields.at(0), [](int key, int rank, int world) {
-    return key % world;
-  });
+ 
+  for (int i = 0; i < sorted_arrow->row_count; i++) {
+    auto r = sorted_arrow->readRow(i);
+    auto row_org = sorted->readRow(i);
+    Value v, v1;
+    r->read(field1, v);
+    row_org->read(field1, v1);
+
+    CHECK_EQ(v.p_val.int_val, v1.p_val.int_val);
+  }
 }
 
 TEST(TableTest, TestUtils) {

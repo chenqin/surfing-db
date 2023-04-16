@@ -314,7 +314,7 @@ public:
     if (node_ptr != nullptr) world = node_ptr->world;
     CHECK(world > 0);
 
-    auto placeholder = std::make_shared<mtable>(node_ptr, schema, 1 * schema->rowSize());
+    //auto placeholder = std::make_shared<mtable>(node_ptr, schema, 1 * schema->rowSize());
     auto table = std::make_shared<mtable>(node_ptr, schema, row_count * schema->rowSize());
     table->rank = rank;
     table->world = world;
@@ -410,14 +410,14 @@ public:
 
         Value v;
         r.read(f, v);
-        size_t key = value_hasher.operator()(v);
+        size_t key = value_hasher.hash_value(f, v);
         // std::cout << "hash " << v.p_val.int_val << " " << key << std::endl;
 
-        if (placeholder->key_groups->find(key) == placeholder->key_groups->end()) {
+        if (table->key_groups->find(key) == table->key_groups->end()) {
           std::vector<size_t> arr;
-          placeholder->key_groups->insert({ key, arr });
+          table->key_groups->insert({ key, arr });
         }
-        placeholder->key_groups->at(key).emplace_back(row_index);
+        table->key_groups->at(key).emplace_back(row_index);
         rows.push_back(r);
         row_index++;
       }
@@ -433,19 +433,12 @@ public:
     int index = 0;
     for (int i = 0; i < world; i++) {
       table->placement_index->insert({ i, index });
-      for (auto g : *placeholder->key_groups) {
-        size_t rank = partitioner(g.first, rank, world);
-        CHECK_LT(rank, world);
-        /**
-         * @brief if placment of a key equals to a specific rank i
-         *
-         */
-        if (rank == (size_t)i) {
-          /**
-           * @brief for each key, list of row index of same hash key
-           *
-           */
+      for (auto g : *table->key_groups) {
+        size_t placement = partitioner(g.first, rank, world);
+        CHECK_LT(placement, world);
+        if (placement == (size_t)i) {
           for (auto row_index : g.second) {
+            //std::cout << "arrow place to rank " << placement << " with key " << g.first << " from row " << row_index << std::endl;
             auto row = rows[row_index];
             table->appendRow(row);
             index++;
@@ -453,6 +446,8 @@ public:
         }
       }
     }
+    //std::cout << table->placement_index->at(0) << " " << table->placement_index->at(1) << " " << table->placement_index->at(2) << std::endl;
+
     CHECK_EQ(index, row_count);
     table->world = world;
     table->rank = rank;

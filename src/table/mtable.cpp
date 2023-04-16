@@ -196,14 +196,14 @@ void mtable::group(const Field& f, bool local) {
  */
 uint8_t* mtable::range_ptr(int dest) {
   CHECK(!placement_index->empty());
-  CHECK(dest < node_ptr->world);
-
+  CHECK(dest < world);
+  CHECK(placement_index->find(dest) != placement_index->end());
   int index = placement_index->at(dest);
   return &this->payload[index * schema_ptr->rowSize()];
 }
 
 size_t mtable::range_row_size(int dest) {
-  if (dest == node_ptr->world - 1) {
+  if (dest == world - 1) {
     return row_count - placement_index->at(dest);
   } else {
     return placement_index->at(dest + 1) - placement_index->at(dest);
@@ -232,10 +232,6 @@ std::shared_ptr<mtable> mtable::placement_sort(const Field& f, std::function<siz
     }
     key_groups->at(key).emplace_back(i);
   }
-
-  rank = node_ptr == nullptr ? 0 : node_ptr->rank;
-  world = node_ptr == nullptr ? 1 : node_ptr->world;
-
   /***
    * build another table and sort rows based on field key placement to rank
    */
@@ -245,15 +241,15 @@ std::shared_ptr<mtable> mtable::placement_sort(const Field& f, std::function<siz
   for (int i = 0; i < world; i++) {
     sender->placement_index->insert({ i, index });
     for (auto g : *key_groups) {
-      size_t rank = partitioner(g.first, rank, world);
-      CHECK_LT(rank, world);
+      size_t placement = partitioner(g.first, rank, world);
+      CHECK_LT(placement, world);
       /**
        * @brief if placment of a key equals to a specific rank i
        *
        */
-      if (rank == (size_t)i) {
+      if (placement == (size_t)i) {
         for (auto item : g.second) {
-          // std::cout << "assign on " << rank << " key " << g.first << " val " << item << std::endl;
+          // std::cout << "place to rank " << placement << " with key " << g.first << " from row " << item << std::endl;
           CHECK_LT(item, row_count);
           auto row = this->readRow(item);
           Value v;
