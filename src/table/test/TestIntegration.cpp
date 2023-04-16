@@ -267,6 +267,46 @@ TEST(TableTest, testmrow) {
   EXPECT_EQ(vm.map_value.size(), 1);
 }
 
+TEST(TableTest, TestPlacementSort) {
+  RowSchema r;
+  Field field1;
+  field1 = SchemaUtils::initField(r, "a", RowType::INT, sizeof(int));
+  std::shared_ptr<mschema> schema_ptr = std::make_shared<mschema>(r);
+  Value v1, v2, v3, v4, v5, v6, v7;
+  v1.p_val.int_val = 1;
+  v2.p_val.int_val = 2;
+  v3.p_val.int_val = 3;
+  surfingdb::table::mrow row1(schema_ptr), row2(schema_ptr), row3(schema_ptr);
+  row1.write(field1, v1);
+  row2.write(field1, v2);
+  row3.write(field1, v3);
+  auto org = std::make_shared<mtable>(nullptr, schema_ptr, schema_ptr->rowSize() * 3);
+  org->appendRow(row1);
+  org->appendRow(row2);
+  org->appendRow(row3);
+  CHECK_EQ(org->row_count, 3);
+
+  auto sorted = org->placement_sort(field1, [](int key, int rank, int world) {
+    return key % 1;
+  });
+  auto arrow_org = utils::toArrow(org);
+  std::map<std::string, uint64_t> units;
+
+  auto sorted_arrow = utils::fromArrow(
+    { arrow_org }, units, "a", [](int key, int rank, int world) {
+      return key % 1;
+    },
+    nullptr);
+  for (int i = 0; i < sorted_arrow->row_count; i++) {
+    auto sorted_row = sorted->readRow(1);
+    auto sorted_arrow_row = sorted_arrow->readRow(1);
+    Value v1, v2;
+    sorted_row->read(field1, v1);
+    sorted_arrow_row->read(field1, v2);
+    CHECK_EQ(v1.p_val.int_val, v2.p_val.int_val);
+  }
+}
+
 TEST(TableTest, TestUtils) {
   /**
    * @brief build schema of table
@@ -383,7 +423,7 @@ TEST(TableTest, TestUtils) {
     Value v, v1;
     r->read(field1, v);
     row_org->read(field1, v1);
-    //std::cout << "compare " << v.p_val.int_val << " " << v1.p_val.int_val << std::endl;
+    // std::cout << "compare " << v.p_val.int_val << " " << v1.p_val.int_val << std::endl;
   }
 
   // new_table_ptr->verifyShuffle(new_schema_ptr->fields.at(0), [](size_t key, int rank, int world) { return 0; });

@@ -92,7 +92,7 @@ void mtable::verifyShuffle(const Field& field, std::function<size_t(size_t, int,
     auto r = this->readRow(i);
     Value v;
     r->read(field, v);
-    size_t key = value_hasher.operator()(v);
+    size_t key = value_hasher.hash_value(field, v);
     // std::cout << "verify on "<< node_ptr->rank << " key " << key << std::endl;
     CHECK_EQ(partitioner(key, node_ptr->rank, node_ptr->world), node_ptr->rank);
   }
@@ -111,7 +111,7 @@ void mtable::group(const Field& f, bool local) {
     auto r = readRow(i);
     Value v;
     r->read(f, v);
-    size_t key = value_hasher.operator()(v);
+    size_t key = value_hasher.hash_value(f, v);
     if (key_groups->find(key) == key_groups->end()) {
       std::vector<size_t> arr;
       key_groups->insert({ key, arr });
@@ -217,9 +217,9 @@ std::shared_ptr<mtable> mtable::placement_sort(const Field& f, std::function<siz
     auto r = readRow(i);
     Value v;
     r->read(f, v);
-    size_t key = value_hasher.operator()(v);
+    size_t key = value_hasher.hash_value(f, v);
 
-    // std::cout << "partition on "<< node_ptr->rank << " key " << key << " val "<< v.p_val.string_val << std::endl;
+    std::cout << "key " << key << " val "<< v.p_val.int_val << std::endl;
 
     if (key_groups->find(key) == key_groups->end()) {
       std::vector<size_t> arr;
@@ -228,26 +228,31 @@ std::shared_ptr<mtable> mtable::placement_sort(const Field& f, std::function<siz
     key_groups->at(key).emplace_back(i);
   }
 
+  int rank = node_ptr == nullptr ? 0 : node_ptr->rank;
+  int world = node_ptr == nullptr ? 1 : node_ptr->world;
+
   /***
    * build another table and sort rows based on field key placement to rank
    */
   auto sender = std::make_shared<mtable>(node_ptr, schema_ptr, row_count * schema_ptr->rowSize());
   int index = 0;
-  for (int i = 0; i < node_ptr->world; i++) {
+  for (int i = 0; i < world; i++) {
     sender->placement_index->insert({ i, index });
     for (auto g : *key_groups) {
-      size_t rank = partitioner(g.first, node_ptr->rank, node_ptr->world);
+      size_t rank = partitioner(g.first, rank, world);
+      CHECK_LT(rank, world);
       /**
        * @brief if placment of a key equals to a specific rank i
        *
        */
       if (rank == (size_t)i) {
-        // std::cout << "assign on "<< node_ptr->rank << " key " << g.first << " val "<< rank << std::endl;
         for (auto item : g.second) {
+          std::cout << "assign on "<< rank << " key " << g.first << " val "<< item << std::endl;
+          CHECK_LT(item, row_count);
           auto row = this->readRow(item);
           Value v;
           row->read(f, v);
-          size_t key = value_hasher.operator()(v);
+          size_t key = value_hasher.hash_value(f, v);
           if (sender->key_groups->find(key) == sender->key_groups->end()) {
             std::vector<size_t> arr;
             sender->key_groups->insert({ key, arr });
