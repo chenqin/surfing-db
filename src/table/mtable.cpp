@@ -38,6 +38,13 @@ mtable::mtable(const std::shared_ptr<node> node_ptr, const std::shared_ptr<msche
   this->schema_ptr = schema_ptr;
   this->node_ptr = node_ptr;
   CHECK(sizeof(uint8_t) == sizeof(char));
+  if (node_ptr == nullptr) {
+    rank = 0;
+    world = 1;
+  } else {
+    rank = node_ptr->rank;
+    world = node_ptr->world;
+  }
   if (node_ptr != nullptr) MPI_Alloc_mem(capacity * sizeof(uint8_t), MPI_INFO_NULL, &payload);
   if (node_ptr == nullptr) payload = (uint8_t*)malloc(capacity * sizeof(uint8_t));
   schedule_size = -1;
@@ -87,21 +94,19 @@ void mtable::appendRow(mrow& row) {
 }
 
 void mtable::verifyShuffle(const Field& field, std::function<size_t(size_t, int, int)> partitioner) {
-  LOG(INFO) << "verify " << row_count << " rows " << node_ptr->rank;
+  CHECK(world > 0);
+  CHECK_LT(rank, world);
   for (size_t i = 0; i < row_count; i++) {
     auto r = this->readRow(i);
     Value v;
     r->read(field, v);
     size_t key = value_hasher.hash_value(field, v);
-    // std::cout << "verify on "<< node_ptr->rank << " key " << key << std::endl;
-    CHECK_EQ(partitioner(key, node_ptr->rank, node_ptr->world), node_ptr->rank);
+    // std::cout << "verify on "<< rank << " world " << world <<" key " << key << std::endl;
+    CHECK_EQ(partitioner(key, rank, world), rank);
   }
 }
 
 void mtable::group(const Field& f, bool local) {
-  const int world = node_ptr->world;
-  const int rank = node_ptr->rank;
-
   CHECK(schema_ptr->containField(f));
 
   key_groups->clear(); // reset key_groups
@@ -219,7 +224,7 @@ std::shared_ptr<mtable> mtable::placement_sort(const Field& f, std::function<siz
     r->read(f, v);
     size_t key = value_hasher.hash_value(f, v);
 
-    std::cout << "key " << key << " val "<< v.p_val.int_val << std::endl;
+    // std::cout << "key " << key << " val " << v.p_val.int_val << std::endl;
 
     if (key_groups->find(key) == key_groups->end()) {
       std::vector<size_t> arr;
@@ -228,13 +233,14 @@ std::shared_ptr<mtable> mtable::placement_sort(const Field& f, std::function<siz
     key_groups->at(key).emplace_back(i);
   }
 
-  int rank = node_ptr == nullptr ? 0 : node_ptr->rank;
-  int world = node_ptr == nullptr ? 1 : node_ptr->world;
+  rank = node_ptr == nullptr ? 0 : node_ptr->rank;
+  world = node_ptr == nullptr ? 1 : node_ptr->world;
 
   /***
    * build another table and sort rows based on field key placement to rank
    */
   auto sender = std::make_shared<mtable>(node_ptr, schema_ptr, row_count * schema_ptr->rowSize());
+
   int index = 0;
   for (int i = 0; i < world; i++) {
     sender->placement_index->insert({ i, index });
@@ -247,7 +253,7 @@ std::shared_ptr<mtable> mtable::placement_sort(const Field& f, std::function<siz
        */
       if (rank == (size_t)i) {
         for (auto item : g.second) {
-          std::cout << "assign on "<< rank << " key " << g.first << " val "<< item << std::endl;
+          // std::cout << "assign on " << rank << " key " << g.first << " val " << item << std::endl;
           CHECK_LT(item, row_count);
           auto row = this->readRow(item);
           Value v;

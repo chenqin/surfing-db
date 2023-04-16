@@ -312,6 +312,7 @@ public:
     }
     int rank = node_ptr == nullptr ? 0 : node_ptr->rank;
     int world = node_ptr == nullptr ? 1 : node_ptr->world;
+    CHECK(world > 0);
 
     auto placeholder = std::make_shared<mtable>(node_ptr, schema, 1 * schema->rowSize());
     auto table = std::make_shared<mtable>(node_ptr, schema, row_count * schema->rowSize());
@@ -432,7 +433,7 @@ public:
       table->placement_index->insert({ i, index });
       for (auto g : *placeholder->key_groups) {
         size_t rank = partitioner(g.first, rank, world);
-
+        CHECK_LT(rank, world);
         /**
          * @brief if placment of a key equals to a specific rank i
          *
@@ -451,6 +452,8 @@ public:
       }
     }
     CHECK_EQ(index, row_count);
+    table->world = world;
+    table->rank = rank;
     table->sorted = true;
     return table;
   }

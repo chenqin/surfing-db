@@ -55,9 +55,9 @@ private:
 
 public:
   bool sorted = false;
-  /**
-   * @brief expose current offset and buffer to construct mrow in table buffer
-   */
+  int rank;
+  int world;
+  
   size_t offset = 0;    // current offset position
   MPI_Win win = MPI_WIN_NULL;
   uint8_t* schedule;

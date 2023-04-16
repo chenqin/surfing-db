@@ -256,7 +256,7 @@ std::shared_ptr<mtable> processors::shuffle_two_side(std::shared_ptr<mtable> inp
 
   int send_count = 0, recv_count = 0;
 
-  for (int i = 0; i < node_ptr->world; i++) {
+  for (int i = 0; i < world; i++) {
     int send_rank_offset = i;
     /**
      * @brief current rank has data sending to send_rank_offset

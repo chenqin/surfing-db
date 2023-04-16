@@ -287,24 +287,24 @@ TEST(TableTest, TestPlacementSort) {
   CHECK_EQ(org->row_count, 3);
 
   auto sorted = org->placement_sort(field1, [](int key, int rank, int world) {
+    return key % world;
+  });
+  CHECK(sorted->world == 1);
+
+  sorted->verifyShuffle(field1, [](int key, int rank, int world) {
     return key % 1;
   });
+
   auto arrow_org = utils::toArrow(org);
   std::map<std::string, uint64_t> units;
-
   auto sorted_arrow = utils::fromArrow(
     { arrow_org }, units, "a", [](int key, int rank, int world) {
       return key % 1;
     },
     nullptr);
-  for (int i = 0; i < sorted_arrow->row_count; i++) {
-    auto sorted_row = sorted->readRow(1);
-    auto sorted_arrow_row = sorted_arrow->readRow(1);
-    Value v1, v2;
-    sorted_row->read(field1, v1);
-    sorted_arrow_row->read(field1, v2);
-    CHECK_EQ(v1.p_val.int_val, v2.p_val.int_val);
-  }
+  sorted_arrow->verifyShuffle(sorted_arrow->getSchema()->fields.at(0), [](int key, int rank, int world) {
+    return key % 1;
+  });
 }
 
 TEST(TableTest, TestUtils) {
