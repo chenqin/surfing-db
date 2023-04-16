@@ -326,13 +326,23 @@ TEST(TableTest, TestUtils) {
   row.write(field6, v6);
   row.write(field7, v7);
 
+  surfingdb::table::mrow row2(schema_ptr);
+  v1.p_val.int_val = 4;
+  row.write(field1, v1);
+  row.write(field2, v2);
+  row.write(field3, v3);
+  row.write(field4, v4);
+  row.write(field5, v5);
+  row.write(field6, v6);
+  row.write(field7, v7);
+
   /**
    * @brief  row test mtable
    *
    */
   auto table_ptr = std::make_shared<mtable>(schema_ptr, schema_ptr->rowSize() * 2);
   table_ptr->appendRow(row);
-  table_ptr->appendRow(row);
+  table_ptr->appendRow(row2);
   /**
    * @brief convert to arrow from internal data structure
    *
@@ -355,15 +365,29 @@ TEST(TableTest, TestUtils) {
    * @brief convert to internal data structure from arrow
    *
    */
-  std::map<std::string, uint64_t> units{ { "l", 3 }, { "m", 3 }, {"e", 6} };
+  std::map<std::string, uint64_t> units{ { "l", 3 }, { "m", 3 }, { "e", 6 } };
   auto new_schema_ptr = utils::fromArrow(arrow_schema_ptr, units);
   EXPECT_EQ(new_schema_ptr->fields.at(0), schema_ptr->fields.at(0));
   EXPECT_EQ(new_schema_ptr->fields.at(6).max_unit_size, schema_ptr->fields.at(6).max_unit_size);
   EXPECT_EQ(new_schema_ptr->fields.at(6).max_map_key_unit_size, schema_ptr->fields.at(6).max_map_key_unit_size);
+
   auto new_table_ptr = utils::fromArrow(
     { arrow_table_ptr }, units, "a", [](size_t key, int rank, int world) { return 0; }, nullptr);
+
   EXPECT_EQ(table_ptr->row_count, new_table_ptr->row_count);
   EXPECT_EQ(table_ptr->row_size(), new_table_ptr->row_size());
+
+  for (int i = 0; i < new_table_ptr->row_count; i++) {
+    auto r = new_table_ptr->readRow(i);
+    auto row_org = table_ptr->readRow(i);
+    Value v, v1;
+    r->read(field1, v);
+    row_org->read(field1, v1);
+    //std::cout << "compare " << v.p_val.int_val << " " << v1.p_val.int_val << std::endl;
+  }
+
+  // new_table_ptr->verifyShuffle(new_schema_ptr->fields.at(0), [](size_t key, int rank, int world) { return 0; });
+
   auto new_row = new_table_ptr->readRow(0);
   Value newv5, newv6, newv7;
   new_row->read(new_table_ptr->getSchema()->getFieldByName("e"), newv5);
@@ -464,9 +488,9 @@ TEST(TableTest, TestSketchQuantile) {
     std::default_random_engine generator(std::chrono::system_clock::now().time_since_epoch().count());
     std::normal_distribution<float> nd(0, 1); // mean=0, stddev=1
 
-    datasketches::kll_sketch<float> sketch1; // default k=200
+    datasketches::kll_sketch<float> sketch1;  // default k=200
     for (int i = 0; i < 10000; i++) {
-      sketch1.update(nd(generator)); // mean=0, stddev=1
+      sketch1.update(nd(generator));          // mean=0, stddev=1
     }
     std::ofstream os1("kll_sketch_float1.bin");
     sketch1.serialize(os1);

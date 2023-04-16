@@ -205,7 +205,6 @@ void mtable::group(const Field& f, bool local) {
  * @return
  */
 uint8_t* mtable::range_ptr(int dest) {
-  CHECK(!key_groups->empty());
   CHECK(!placement_index->empty());
   CHECK(dest < node_ptr->world);
 

@@ -301,7 +301,7 @@ const std::shared_ptr<arrow::RecordBatch> processors::shuffle_x(std::vector<std:
   auto mtable = utils::fromArrow(
     batch, units, field_name, partitioner, node);
   auto out = singleside ? processors::shuffle_one_side(mtable, mtable->getSchema()->getFieldByName(field_name), partitioner) : processors::shuffle_two_side(mtable, mtable->getSchema()->getFieldByName(field_name), partitioner);
-  out->verifyShuffle(mtable->getSchema()->getFieldByName(field_name), partitioner);
+  out->verifyShuffle(out->getSchema()->getFieldByName(field_name), partitioner);
   return utils::toArrow(out);
 }
 

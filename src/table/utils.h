@@ -28,8 +28,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "frequent_items_sketch.hpp"
 #include "KMeanOperator.h"
+#include "frequent_items_sketch.hpp"
 #include "mrow.h"
 #include "xgbop.h"
 
@@ -120,7 +120,7 @@ public:
   static auto getArrowType(const RowType::type& type, const RowType::type& type1, const RowType::type& type2, size_t units) {
     if (type == RowType::BOOL) {
       return arrow::boolean();
-    } else if (type == RowType::CHAR){
+    } else if (type == RowType::CHAR) {
       return arrow::int8();
     } else if (type == RowType::INT) {
       return arrow::int32();
@@ -318,7 +318,7 @@ public:
     CHECK(schema->fields.size() > 0);
     Field f = schema->fields.at(0);
     std::vector<mrow> rows;
-    
+
     int row_index = 0;
     frequent_strings_sketch sketch1(MAX_STR_LEN);
 
@@ -404,9 +404,12 @@ public:
            */
           r.write(schema->fields.at(j), v);
         }
+
         Value v;
         r.read(f, v);
         size_t key = value_hasher.operator()(v);
+        // std::cout << "hash " << v.p_val.int_val << " " << key << std::endl;
+
         if (placeholder->key_groups->find(key) == placeholder->key_groups->end()) {
           std::vector<size_t> arr;
           placeholder->key_groups->insert({ key, arr });
@@ -421,30 +424,26 @@ public:
     LOG(INFO) << "Frequent strings: " << items.size();
     LOG(INFO) << "Str\tEst\tLB\tUB";
     for (auto& row : items) {
-      LOG(INFO) << row.get_item() << "\t" << row.get_estimate() << "\t"
+      LOG(INFO) << row.get_item().size() << "\t" << row.get_estimate() << "\t"
                 << row.get_lower_bound() << "\t" << row.get_upper_bound();
     }
-
     int index = 0;
     for (int i = 0; i < world; i++) {
       table->placement_index->insert({ i, index });
       for (auto g : *placeholder->key_groups) {
         size_t rank = partitioner(g.first, rank, world);
+
         /**
          * @brief if placment of a key equals to a specific rank i
          *
          */
         if (rank == (size_t)i) {
-          for (auto item : g.second) {
-            auto row = rows[item];
-            Value v;
-            row.read(f, v);
-            size_t key = value_hasher.operator()(v);
-            if (table->key_groups->find(key) == table->key_groups->end()) {
-              std::vector<size_t> arr;
-              table->key_groups->insert({ key, arr });
-            }
-            table->key_groups->at(key).emplace_back(index);
+          /**
+           * @brief for each key, list of row index of same hash key
+           *
+           */
+          for (auto row_index : g.second) {
+            auto row = rows[row_index];
             table->appendRow(row);
             index++;
           }
