@@ -69,6 +69,7 @@ public:
   std::unordered_map<Field, size_t, FieldHasher> max_unit_size;
 
   mtable(const std::shared_ptr<node>, const std::shared_ptr<mschema>, size_t capacity);
+  mtable(const std::shared_ptr<mschema>, size_t capacity);
   ~mtable();
   void release();
   void group(const Field& f, bool);

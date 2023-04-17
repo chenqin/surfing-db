@@ -309,9 +309,6 @@ public:
     for (auto& record : records) {
       row_count += record->num_rows();
     }
-    int rank = node_ptr == nullptr ? 0 : node_ptr->rank;
-    if (node_ptr != nullptr) world = node_ptr->world;
-    CHECK(world > 0);
     auto table = node_ptr == nullptr ? std::make_shared<mtable>(schema, row_count * schema->rowSize()) : std::make_shared<mtable>(node_ptr, schema, row_count * schema->rowSize());
     CHECK(schema->fields.size() > 0);
 
