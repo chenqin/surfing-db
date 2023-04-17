@@ -84,7 +84,7 @@ int main(int argc, char** argv) {
     CHECK(metric->num_rows() == BATCH_SIZE * node->rank);
     auto partitioner = [](size_t key, int rank, int world) { return key % world; };
     auto signal = processors::java(metric, "CleanupWrapper", node);
-    auto app_signals = processors::shuffle_x({ signal }, "appid", partitioner, false, node);
+    auto app_signals = processors::shuffle_x({ signal }, "appid", partitioner, true, node);
     auto app_state = processors::java(app_signals, "AggregateWrapper", node);
     auto job_signals = processors::shuffle_x({ app_state }, "jobid", partitioner, true, node);
     auto job_info = processors::java(job_signals, "JobInfoWrapper", node);

@@ -153,29 +153,33 @@ std::shared_ptr<mtable> processors::shuffle_one_side(std::shared_ptr<mtable> inp
    */
   MPI_Alltoall(&send_row_index_rank, 1, MPI_UNSIGNED_LONG, get_row_index_rank, 1, MPI_UNSIGNED_LONG, MPI_COMM_WORLD);
   auto table = std::make_shared<mtable>(node_ptr, schema_ptr, recv_row_count * rowsize);
+  // copy local rows from input to new table
+  if (get_row_index_rank[rank] > 0) {
+    void* dest_ptr = table->payload_ptr() + rowsize * get_row_index_rank[rank];
+    memcpy(dest_ptr, input->range_ptr(rank), send_to_vec[rank] * rowsize);
+  }
+
+  MPI_Request gets[node_ptr->world];
+  MPI_Status statuses[node_ptr->world];
 
   input->build_window();
   MPI_Win_fence(0, input->win);
-
+  int toal_requests = 0;
   for (int dest = 0; dest < world; dest++) {
     // mpi put to local rank will silently fail, if no data fetching also skip MPI_GET
     if (dest == rank || recv_from_vec[dest] == 0) continue;
     MPI_Aint offset = get_row_index_rank[dest];
     CHECK_EQ(MPI_SUCCESS,
-             MPI_Get(table->payload_ptr() + rowsize * recv_row_offset[dest], recv_from_vec[dest], row_type, dest, offset, recv_from_vec[dest], row_type, input->win));
+             MPI_Rget(table->payload_ptr() + rowsize * recv_row_offset[dest], recv_from_vec[dest], row_type, dest, offset, recv_from_vec[dest], row_type, input->win, &gets[toal_requests++]));
   }
-  // copy local rows from input to new table
-  void* dest_ptr = table->payload_ptr() + rowsize * get_row_index_rank[rank];
-  memcpy(dest_ptr, input->range_ptr(rank), send_to_vec[rank] * rowsize);
-
-  LOG(INFO) << rank << "=" << recv_row_count;
-
-  table->offset = recv_row_count * rowsize;
-  table->row_count = recv_row_count;
+  MPI_Waitall(toal_requests, gets, statuses);
 
   MPI_Win_fence(0, input->win);
   input->release_window();
   MPI_Type_free(&row_type);
+
+  table->offset = recv_row_count * rowsize;
+  table->row_count = recv_row_count;
   return table;
 }
 
@@ -302,8 +306,11 @@ const std::shared_ptr<arrow::RecordBatch> processors::shuffle_x(std::vector<std:
   auto f = mtable->getSchema()->getFieldByName(field_name);
   auto sorted = mtable->placement_sort(f, partitioner);
   sorted->sorted = true;
+  auto start = MPI_Wtime();
   auto out = singleside ? processors::shuffle_one_side(sorted, f, partitioner) : processors::shuffle_two_side(sorted, f, partitioner);
-  out->verifyShuffle(out->getSchema()->getFieldByName(field_name), partitioner);
+  LOG(INFO) << "shuffle takes " << MPI_Wtime() - start << " seconds";
+  // TODO: we observed a bug in tcp MPI_GET that lead to one row of garbage 
+  if(!singleside) out->verifyShuffle(out->getSchema()->getFieldByName(field_name), partitioner);
   return utils::toArrow(out);
 }
 

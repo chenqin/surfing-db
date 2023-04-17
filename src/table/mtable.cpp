@@ -117,7 +117,6 @@ void mtable::verifyShuffle(const Field& field, std::function<size_t(size_t, int,
     Value v;
     r->read(field, v);
     size_t key = value_hasher.hash_value(field, v);
-    // std::cout << "verify on "<< node_ptr->rank << " key " << key << std::endl;
     CHECK_EQ(partitioner(key, node_ptr->rank, node_ptr->world), node_ptr->rank);
   }
 }
