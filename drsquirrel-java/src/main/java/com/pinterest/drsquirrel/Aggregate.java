@@ -108,8 +108,12 @@ public class Aggregate {
             }
 
             /**
-             * pass through metric with job id not null
+             * pass through metric with jobid if stored
              */
+            if(jobId == null || jobId.length() < 1) {
+                jobId = states.get(appID.toLowerCase()).getJobId();
+            }
+
             if (jobId != null && JobType.equalsIgnoreCase("metric")) {
                 jobid_out.setSafe(count, jobId.getBytes(StandardCharsets.UTF_8));
                 type_out.setSafe(count, JobType.getBytes(StandardCharsets.UTF_8));
