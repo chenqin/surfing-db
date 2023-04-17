@@ -298,9 +298,11 @@ std::shared_ptr<mtable> processors::shuffle_two_side(std::shared_ptr<mtable> inp
 
 const std::shared_ptr<arrow::RecordBatch> processors::shuffle_x(std::vector<std::shared_ptr<arrow::RecordBatch>> batch, std::string field_name, std::function<size_t(size_t, int, int)> partitioner, bool singleside, std::shared_ptr<node> node) {
   auto units = utils::toUnits(batch);
-  auto mtable = utils::fromArrow(
-    batch, units, field_name, partitioner, node, node->world);
-  auto out = singleside ? processors::shuffle_one_side(mtable, mtable->getSchema()->getFieldByName(field_name), partitioner) : processors::shuffle_two_side(mtable, mtable->getSchema()->getFieldByName(field_name), partitioner);
+  auto mtable = utils::fromArrow(batch, units, node);
+  auto f = mtable->getSchema()->getFieldByName(field_name);
+  auto sorted = mtable->placement_sort(f, partitioner);
+  sorted->sorted = true;
+  auto out = singleside ? processors::shuffle_one_side(sorted, f, partitioner) : processors::shuffle_two_side(sorted, f, partitioner);
   out->verifyShuffle(out->getSchema()->getFieldByName(field_name), partitioner);
   return utils::toArrow(out);
 }

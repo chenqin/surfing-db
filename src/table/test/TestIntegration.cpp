@@ -415,8 +415,7 @@ TEST(TableTest, TestUtils) {
   EXPECT_EQ(new_schema_ptr->fields.at(6).max_unit_size, schema_ptr->fields.at(6).max_unit_size);
   EXPECT_EQ(new_schema_ptr->fields.at(6).max_map_key_unit_size, schema_ptr->fields.at(6).max_map_key_unit_size);
 
-  auto new_table_ptr = utils::fromArrow(
-    { arrow_table_ptr }, units, "a", [](size_t key, int rank, int world) { return 0; }, nullptr, 1);
+  auto new_table_ptr = utils::fromArrow({ arrow_table_ptr }, units, nullptr);
 
   EXPECT_EQ(table_ptr->row_count, new_table_ptr->row_count);
   EXPECT_EQ(table_ptr->row_size(), new_table_ptr->row_size());
