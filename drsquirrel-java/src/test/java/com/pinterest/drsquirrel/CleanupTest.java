@@ -1,5 +1,11 @@
 package com.pinterest.drsquirrel;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pinterest.drsquirrel.parsers.DrSquirrelUtils;
+import com.pinterest.drsquirrel.schema.FlinkMetric;
+import com.pinterest.drsquirrel.schema.FlinkMetricType;
+import com.pinterest.drsquirrel.schema.RawLog;
+import com.pinterest.drsquirrel.schema.State;
 import junit.framework.Assert;
 import junit.framework.Test;
 import junit.framework.TestCase;
@@ -9,6 +15,7 @@ import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.util.Text;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -71,7 +78,7 @@ public class CleanupTest
             "\":1}},\"jobstatussummary\":{\"0\":\"Complete\"},\"labelSelector\":\"pinterest.com/crd_name=nimbus-pagerduty-sync-integ,pinterest.com/crd_type=PinterestJobSet\"}},{\"apiVersion\":\"pinterest.com/v1\",\"kind\":\"PinterestJobSet\",\"metadata\":{\"annotations\":{\"pinterest.com/identity\":\"nimbus.console.k8s.aws-us-east-1.k8s-use1-prod-shared-001.pinterestjobset.nimbus-s3-sync-integ\",\"pinterest.com/nimbus_id\":\"nimbus://k8s/k8s-use1-prod-shared-001/console/nimbus-s3-sync-integ\",\"pinterest.com/nimbusuuid\":\"a3c9b726-9f95-4c2c-b88e-bf2ddb9dc795\",\"pinterest.com/spiffe_id\":\"spiffe://pin220.com/k8s/console/nimbus-s3-sync-integ\",\"workload.fed.pinterest.com/clusters\":\"fed-k8s-use1-prod-shared-001-1d\"},\"creationTimestamp\":\"2022-02-07T23:01:10Z\",\"generation\":2,\"labels\":{\"kubefed.io/managed\":\"true\"},\"managedFields\":[{\"apiVersion\":\"pinterest.com/v1\",\"fieldsType\":\"FieldsV1\",\"fieldsV1\":{\"f:metadata\":{\"f:annotations\":{\".\":{},\"f:pinterest.com/identity\":{},\"f:pinterest.com/nimbus_id\":{},\"f:pinterest.com/nimbusuuid\":{},\"f:pinterest.com/spiffe_id\":{},\"f:workload.fed.pinterest.com/clusters\":{}},\"f:labels\":{\".\":{},\"f:kubefed.io/managed\":{}}},\"f:spec\":{\".\":{},\"f:build\":{\".\":{},\"f:commit\":{},\"f:name\":{}},\"f:iamrole\":{},\"f:sidecarconfig\":{\".\":{},\"f:envoy\":{\".\":{},\"f:resources\":{\".\":{},\"f:limits\":{\".\":{},\"f:cpu\":{},\"f:memory\":{}}},\"f:sds_resources\":{\".\":{},\"f:limits\":{\".\":{},\"f:cpu\":{},\"f:memory\":{}},\"f:requests\":{\".\":{},\"f:cpu\":{},\"f:memory\":{}}},\"f:service_register\":{\".\":{},\"f:resources\":{\".\":{},\"f:limits\":{\".\":{},\"f:cpu\":{},\"f:memory\":{}},\"f:requests\":{\".\":{},\"f:cpu\":{},\"f:memory\":{}}}}}},\"f:template\":{\".\":{},\"f:metadata\":{\".\":{},\"f:creationTimestamp\":{}},\"f:spec\":{\".\":{},\"f:containers\":{}}}}},\"manager\":\"controller-manager\",\"operation\":\"Update\",\"time\":\"2022-02-07T23:01:10Z\"},{\"apiVersion\":\"pinterest.com/v1\",\"fieldsType\":\"FieldsV1\",\"fieldsV1\":{\"f:spec\":{\"f:sidecarversions\":{\".\":{},\"f:envoy-endpoint-register-sidecar\":{\".\":{},\"f:image\":{}},\"f:envoy-sidecar\":{\".\":{},\"f:image\":{}},\"f:envoy-tcollector-sidecar\":{\".\":{},\"f:image\":{}},\"f:knox-sidecar\":{\".\":{},\"f:image\":{}},\"f:logrotate-sidecar\":{\".\":{},\"f:image\":{}},\"f:mail-sidecar\":{\".\":{},\"f:image\":{}},\"f:mcrouter-sidecar\":{\".\":{},\"f:image\":{}},\"f:metrics-exporter-sidecar\":{\".\":{},\"f:image\":{}},\"f:sds-sidecar\":{\".\":{},\"f:image\":{}},\"f:varnish-rich-register-sidecar\":{\".\":{},\"f:image\":{}}}},\"f:status\":{\".\":{},\"f:condition\":{},\"f:jobstatus\":{\".\":{},\"f:0\":{\".\":{},\"f:completionTime\":{},\"f:conditions\":{},\"f:startTime\":{},\"f:succeeded\":{}}},\"f:jobstatussummary\":{\".\":{},\"f:0\":{}},\"f:labelSelector\":{}}},\"manager\":\"jobsetcontroller\",\"operation\":\"Update\",\"time\":\"2022-02-07T23:03:50Z\"}],\"name\":\"nimbus-s3-sync-integ\",\"namespace\":\"console\",\"resourceVersion\":\"1497659628\",\"selfLink\":\"/apis/pinterest.com/v1/namespaces/console/pinterestjobsets/nimbus-s3-sync-integ\",\"uid\":\"955eb6b0-7a30-4e70-813c-4ee75a77fd3f\"},\"spec\":{\"build\":{\"commit\":\"\",\"name\":\"\"},\"iamrole\":\"Console\",\"sidecarconfig\":{\"envoy\":{\"resources\":{\"limits\":{\"cpu\":\"2\",\"memory\":\"4G\"}},\"sds_resources\":{\"limits\":{\"cpu\":\"300m\",\"memory\":\"50Mi\"},\"requests\":{\"cpu\":\"300m\",\"memory\":\"50Mi\"}},\"service_register\":{\"resources\":{\"limits\":{\"cpu\":\"300m\",\"memory\":\"50Mi\"},\"requests\":{\"cpu\":\"300m\",\"memory\":\"50Mi\"}}}}},\"sidecarversions\":{\"envoy-endpoint-register-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sox-traffic-envoy-endpoint-register:65a8fcedef942eaebbf52ba079503acebd1cc2f3\"},\"envoy-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sox-traffic-envoy:38637be058852d7acdfd51d012e1d47723766c71\"},\"envoy-tcollector-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/tcollector:fa844fbb07d63f1c5fcce4e5e7e9a6fb5ce7ae2e\"},\"knox-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/ubuntu16.04:latest\"},\"logrotate-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/logrotate:bc62d4a49de9727e4380ea5fb2b0c4f2de823fe2\"},\"mail-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/postfix:c1e9fcb055afa6be649b34b60afe3a031773279c\"},\"mcrouter-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/mcrouter:8a5e74743131b37884be7c863599\n" +
             "b2631f75a1bb\"},\"metrics-exporter-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/kubemetricexporter:444f2abe230666d31bfed64d126bbca45196fb31\"},\"sds-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sds:3e1224ecbec58708d4d7d847c1e971a832051398\"},\"varnish-rich-register-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/traffic-envoy-endpoint-register:abf609d556a8b68d19d96b0f85f72914763dc18b\"}},\"template\":{\"metadata\":{\"creationTimestamp\":null},\"spec\":{\"containers\":[{\"command\":[\"./bin/s3-sync\",\"--send\",\"--url\",\"https://nimbus-integ.pinadmin.com/api/v2/platform/s3/buckets\"],\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/nimbus-s3-sync:1bed8ac264bfc37562c35486cb62787593ad67cf\",\"name\":\"nimbus-s3-sync\",\"resources\":{\"limits\":{\"cpu\":\"2\",\"memory\":\"4G\"},\"requests\":{\"cpu\":\"1\",\"memory\":\"513m\"}}}]}}},\"status\":{\"condition\":\"Completed\",\"jobstatus\":{\"0\":{\"completionTime\":\"2022-02-07T23:03:50Z\",\"conditions\":[{\"lastProbeTime\":\"2022-02-07T23:03:50Z\",\"lastTransitionTime\":\"2022-02-07T23:03:50Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2022-02-07T23:01:10Z\",\"succeeded\":1}},\"jobstatussummary\":{\"0\":\"Complete\"},\"labelSelector\":\"pinterest.com/crd_name=nimbus-s3-sync-integ,pinterest.com/crd_type=PinterestJobSet\"}},{\"apiVersion\":\"pinterest.com/v1\",\"kind\":\"PinterestJobSet\",\"metadata\":{\"annotations\":{\"pinterest.com/identity\":\"nimbus.console.k8s.aws-us-east-1.k8s-use1-prod-shared-001.pinterestjobset.nimbus-slack-sync-integ\",\"pinterest.com/nimbus_id\":\"nimbus://k8s/k8s-use1-prod-shared-001/console/nimbus-slack-sync-integ\",\"pinterest.com/nimbusuuid\":\"c122f5a6-368f-4aff-a599-afbef4289223\",\"pinterest.com/spiffe_id\":\"spiffe://pin220.com/k8s/console/nimbus-slack-sync-integ\",\"workload.fed.pinterest.com/clusters\":\"fed-k8s-use1-prod-shared-001-1d\"},\"creationTimestamp\":\"2022-03-04T18:58:08Z\",\"generation\":2,\"labels\":{\"kubefed.io/managed\":\"true\"},\"managedFields\":[{\"apiVersion\":\"pinterest.com/v1\",\"fieldsType\":\"FieldsV1\",\"fieldsV1\":{\"f:metadata\":{\"f:annotations\":{\".\":{},\"f:pinterest.com/identity\":{},\"f:pinterest.com/nimbus_id\":{},\"f:pinterest.com/nimbusuuid\":{},\"f:pinterest.com/spiffe_id\":{},\"f:workload.fed.pinterest.com/clusters\":{}},\"f:labels\":{\".\":{},\"f:kubefed.io/managed\":{}}},\"f:spec\":{\".\":{},\"f:build\":{\".\":{},\"f:commit\":{},\"f:name\":{}},\"f:iamrole\":{},\"f:sidecarconfig\":{\".\":{},\"f:envoy\":{\".\":{},\"f:resources\":{\".\":{},\"f:limits\":{\".\":{},\"f:cpu\":{},\"f:memory\":{}}},\"f:sds_resources\":{\".\":{},\"f:limits\":{\".\":{},\"f:cpu\":{},\"f:memory\":{}},\"f:requests\":{\".\":{},\"f:cpu\":{},\"f:memory\":{}}},\"f:service_register\":{\".\":{},\"f:resources\":{\".\":{},\"f:limits\":{\".\":{},\"f:cpu\":{},\"f:memory\":{}},\"f:requests\":{\".\":{},\"f:cpu\":{},\"f:memory\":{}}}}}},\"f:template\":{\".\":{},\"f:metadata\":{\".\":{},\"f:creationTimestamp\":{}},\"f:spec\":{\".\":{},\"f:containers\":{}}}}},\"manager\":\"controller-manager\",\"operation\":\"Update\",\"time\":\"2022-03-04T18:58:08Z\"},{\"apiVersion\":\"pinterest.com/v1\",\"fieldsType\":\"FieldsV1\",\"fieldsV1\":{\"f:spec\":{\"f:sidecarversions\":{\".\":{},\"f:envoy-endpoint-register-sidecar\":{\".\":{},\"f:image\":{}},\"f:envoy-sidecar\":{\".\":{},\"f:image\":{}},\"f:envoy-tcollector-sidecar\":{\".\":{},\"f:image\":{}},\"f:knox-sidecar\":{\".\":{},\"f:image\":{}},\"f:logrotate-sidecar\":{\".\":{},\"f:image\":{}},\"f:mail-sidecar\":{\".\":{},\"f:image\":{}},\"f:mcrouter-sidecar\":{\".\":{},\"f:image\":{}},\"f:metrics-exporter-sidecar\":{\".\":{},\"f:image\":{}},\"f:sds-sidecar\":{\".\":{},\"f:image\":{}},\"f:varnish-rich-register-sidecar\":{\".\":{},\"f:image\":{}}}},\"f:status\":{\".\":{},\"f:condition\":{},\"f:jobstatus\":{\".\":{},\"f:0\":{\".\":{},\"f:completionTime\":{},\"f:conditions\":{},\"f:startTime\":{},\"f:succeeded\":{}}},\"f:jobstatussummary\":{\".\":{},\"f:0\":{}},\"f:labelSelector\":{}}},\"manager\":\"jobsetcontroller\",\"operation\":\"Update\",\"time\":\"2022-03-04T19:01:25Z\"}],\"name\":\"nimbus-slack-sync-integ\",\"namespace\":\"console\",\"resourceVersion\":\"1497659629\",\"selfLink\":\"/apis/pinterest.com/v1/namespaces/console/pinterestjobsets/nimbus-slack-sync-integ\",\"uid\":\"c750e006-4224-4f78-882e-806538a183dd\"},\"spec\":{\"build\":{\"commit\":\"\",\"name\":\"\"},\"iamrole\":\"Console\",\"sidecarconfig\":{\"envoy\":{\"resources\":{\"limits\":{\"cpu\":\"2\",\"memory\":\"4G\"}},\"sds_resources\":{\"limits\":{\"cpu\":\"300m\",\"memory\":\"50Mi\"},\"requests\":{\"cpu\":\"300m\",\"memory\":\"50Mi\"}},\"service_register\":{\"resources\":{\"limits\":{\"cpu\":\"300m\",\"memory\":\"50Mi\"},\"requests\":{\"cpu\":\"300m\",\"memory\":\"50Mi\"}}}}},\"sidecarversions\":{\"envoy-endpoint-register-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sox-traffic-envoy-endpoint-register:65a8fcedef942eaebbf52ba079503acebd1cc2f3\"},\"envoy-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sox-traffic-envoy:85d8fa0ec50a2129ef2f02b2076a153703b1d661\"},\"envoy-tcollector-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/tcollector:fa844fbb07d63f1c5fcce4e5e7e9a6fb5ce7ae2e\"},\"knox-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/ubuntu18.04:latest\"},\"logrotate-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/logrotate:ec8eba07002fe3b548bb7c7abb932836a99df960\"},\"mail-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/postfix:c1e9fcb055afa6be649b34b60afe3a031773279c\"},\"mcrouter-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/mcrouter:8a5e74743131b37884be7c863599b2631f75a1bb\"},\"metrics-exporter-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/kubemetricexporter:444f2abe230666d31bfed64d126bbca45196fb31\"},\"sds-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sds:3e1224ecbec58708d4d7d847c1e971a832051398\"},\"varnish-rich-register-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/traffic-envoy-endpoint-register:abf609d556a8b68d19d96b0f85f72914763dc18b\"}},\"template\":{\"metadata\":{\"creationTimestamp\":null},\"spec\":{\"containers\":[{\"command\":[\"./bin/slack-sync\",\"--send\",\"--url\",\"https://nimbus-integ.pinadmin.com/api/v2/platform/slack/channels\"],\"env\":[{\"name\":\"KNOX_SLACKBOT_ACCESS_TOKEN\",\"value\":\"nimbus:slackbot:access_token:prod\"}],\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/nimbus-slack-sync:6284c2952418003cabcf238287b8cc25113099f7\",\"name\":\"nimbus-slack-sync\",\"resources\":{\"limits\":{\"cpu\":\"2\",\"memory\":\"4G\"},\"requests\":{\"cpu\":\"1\",\"memory\":\"513m\"}}}]}}},\"status\":{\"condition\":\"Completed\",\"jobstatus\":{\"0\":{\"completionTime\":\"2022-03-04T19:01:25Z\",\"conditions\":[{\"lastProbeTime\":\"2022-03-04T19:01:25Z\",\"lastTransitionTime\":\"2022-03-04T19:01:25Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2022-03-04T18:58:08Z\",\"succeeded\":1}},\"jobstatussummary\":{\"0\":\"Complete\"},\"labelSelector\":\"pinterest.com/crd_name=nimbus-slack-sync-integ,pinterest.com/crd_type=PinterestJobSet\"}},{\"apiVersion\":\"pinterest.com/v1\",\"kind\":\"PinterestJobSet\",\"metadata\":{\"annotations\":{\"pinterest.com/cluster-name\":\"k8s-use1-prod-shared-001\",\"pinterest.com/identity\":\"nimbus.content-modeling-pintext.k8s.aws-us-east-1.k8s-use1-prod-shared-001.pinterestjobset.anno-full-pin-text-v3-2021-10-01-pt\",\"pinterest.com/nimbusuuid\":\"8853249a-7ffd-46b8-9e5a-ba972fde99d1\",\"pinterest.com/spiffe_id\":\"spiffe://pin220.com/k8s/content-modeling-pintext/anno-full-pin-text-v3-2021-10-01-pt\",\"workload.fed.pinterest.com/clusters\":\"fed-k8s-use1-prod-shared-001-1d\"},\"creationTimestamp\":\"2021-10-02T13:22:38Z\",\"generation\":2,\"labels\":{\"kubefed.io/managed\":\"true\"},\"name\":\"anno-full-pin-text-v3-2021-10-01-pt\",\"namespace\":\"content-modeling-pintext\",\"resourceVersion\":\"715045268\",\"selfLink\":\"/apis/pinterest.com/v1/namespaces/content-modeling-pintext/pinterestjobsets/anno-full-pin-text-v3-2021-10-01-pt\",\"uid\":\"aab909e8-38e0-4a67-aba8-466f3f921fc3\"},\"spec\":{\"build\":{\"commit\":\"\",\"name\":\"\"},\"configmap\":{\"candidate_embedding_header\":\"text\",\"candidate_header\":\"text,raw_text\",\"candidate_path\":\"s3://pinterest-lasvegas/ads-retrieval/broadmatch/pintext_permanent/broadmatch_active_keywords/dt=2021-10-01/delta=FULL/lang=pt/\",\"embedding_type\":\"PIN_TEXT_V3\",\"index_type\":\"ivf_flat\",\"input_is_dir\":\"true\",\"language\":\"PT\",\"nearest_neighbor_num\":\"1000\",\"output_candidate_embedding_header\":\"raw_text,text,embedding\",\"output_header\":\"text,text:score\",\"output_path\":\"s3://pinterest-lasvegas/ads-retrieval/broadmatch/pintext_alt/broadmatch_query_keyword_mapping/delta=refreshed_annotation_full/ver=PIN_TEXT_V3/days=30/lang=pt/dt=2021-10-01/\",\"output_query_embedding_header\":\"raw_text,text,embedding\",\"output_query_embedding_path\":\"s3://pinterest-lasvegas/ads-retrieval/broadmatch/pintext_alt/broadmatch_query_embedding/ver=PIN_TEXT_V3/days=refreshed_annotation_30/lang=pt/dt=2021-10-01/\",\"query_embedding_header\":\"text\",\"query_header\":\"text,raw_text\",\"query_path\":\"s3://pinterest-lasvegas/ads-retrieval/broadmatch/pintext_permanent/related_pins_broadmatch_query_list/dt=2021-09-29/days=30/lang=pt/\",\"target\":\"embedding_knn\"},\"iamrole\":\"AdsRetrievalJob\",\"replicas\":10,\"retrylimit\":7,\"sidecarconfig\":{},\"sidecarversions\":{\"envoy-endpoint-register-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sox-traffic-envoy-endpoint-register:65a8fcedef942eaebbf52ba079503acebd1cc2f3\"},\"envoy-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sox-traffic-envoy:d8681d2b996165df72cbd21dc15b3e09d501691e\"},\"envoy-tcollector-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/tcollector:fa844fbb07d63f1c5fcce4e5e7e9a6fb5ce7ae2e\"},\"knox-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/ubuntu16.04:latest\"},\"logrotate-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/logrotate:bc62d4a49de9727e4380ea5fb2b0c4f2de823fe2\"},\"mail-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/postfix:c1e9fcb055afa6be649b34b60afe3a031773279c\"},\"mcrouter-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/mcrouter:1c98279ea29cb13f2758224711b465c4c8a64c66\"},\"metrics-exporter-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/kubemetricexporter:444f2abe230666d31bfed64d126bbca45196fb31\"},\"sds-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sds:73f991bd41dccbbf61c5c81348cc2844b627cdfd\"},\"varnish-rich-register-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/traffic-envoy-endpoint-register:abf609d556a8b68d19d96b0f85f72914763dc18b\"}},\"template\":{\"metadata\":{\"creationTimestamp\":null,\"name\":\"meta.anno.full.pin.text.v3.2021.10.01.pt\"},\"spec\":{\"containers\":[{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/content-modeling-pintext:25732a5983c0\",\"name\":\"anno-full-pin-text-v3-2021-10-01-pt\",\"resources\":{\"limits\":{\"cpu\":\"32\",\"memory\":\"55Gi\"},\"requests\":{\"cpu\":\"32\",\"memory\":\"55Gi\"}}}],\"restartPolicy\":\"OnFailure\"}}},\"status\":{\"condition\":\"Completed\",\"jobstatus\":{\"0\":{\"completionTime\":\"2021-10-02T14:07:41Z\",\"conditions\":[{\"lastProbeTime\":\"2021-10-02T14:07:41Z\",\"lastTransitionTime\":\"2021-10-02T14:07:41Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2021-10-02T13:22:38Z\",\"succeeded\":1},\"1\":{\"completionTime\":\"2021-10-02T14:05:01Z\",\"conditions\":[{\"lastProbeTime\":\"2021-10-02T14:05:01Z\",\"lastTransitionTime\":\"2021-10-02T14:05:01Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2021-10-02T13:22:38Z\",\"succeeded\":1},\"2\":{\"completionTime\":\"2021-10-02T14:06:11Z\",\"conditions\":[{\"lastProbeTime\":\"2021-10-02T14:06:11Z\",\"lastTransitionTime\":\"2021-10-02T14:06:11Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2021-10-02T13:22:38Z\",\"succeeded\":1},\"3\":{\"completionTime\":\"2021-10-02T14:05:22Z\",\"conditions\":[{\"lastProbeTime\":\"2021-10-02T14:05:22Z\",\"lastTransitionTime\":\"2021-10-02T14:05:22Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2021-10-02T13:22:38Z\",\"succeeded\":1},\"4\":{\"completionTime\":\"2021-10-02T14:05:56Z\",\"conditions\":[{\"lastProbeTime\":\"2021-10-02T14:05:56Z\",\"lastTransitionTime\":\"2021-10-02T14:05:56Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2021-10-02T13:22:38Z\",\"succeeded\":1},\"5\":{\"completionTime\":\"2021-10-02T14:05:12Z\",\"conditions\":[{\"lastProbeTime\":\"2021-10-02T14:05:12Z\",\"lastTransitionTime\":\"2021-10-02T14:05:12Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2021-10-02T13:22:39Z\",\"succeeded\":1},\"6\":{\"completionTime\":\"2021-10-02T14:05:37Z\",\"conditions\":[{\"lastProbeTime\":\"2021-10-02T14:05:37Z\",\"lastTransitionTime\":\"2021-10-02T14:05:37Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2021-10-02T13:22:39Z\",\"succeeded\":1},\"7\":{\"completionTime\":\"2021-10-02T14:05:04Z\",\"conditions\":[{\"lastProbeTime\":\"2021-10-02T14:05:04Z\",\"lastTransitionTime\":\"2021-10-02T14:05:04Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2021-10-02T13:22:39Z\",\"succeeded\":1},\"8\":{\"completionTime\":\"2021-10-02T14:07:01Z\",\"conditions\":[{\"lastProbeTime\":\"2021-10-02T14:07:01Z\",\"lastTransitionTime\":\"2021-10-02T14:07:01Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2021-10-02T13:22:39Z\",\"succeeded\":1},\"9\":{\"completionTime\":\"2021-10-02T14:06:15Z\",\"conditions\":[{\"lastProbeTime\":\"2021-10-02T14:06:15Z\",\"lastTransitionTime\":\"2021-10-02T14:06:15Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2021-10-02T13:22:39Z\",\"succeeded\":1}},\"jobstatussummary\":{\"0\":\"Complete\",\"1\":\"Complete\",\"2\":\"Complete\",\"3\":\"Complete\",\"4\":\"Complete\",\"5\":\"Complete\",\"6\":\"Complete\",\"7\":\"Complete\",\"8\":\"Complete\",\"9\":\"Complete\"},\"labelSelector\":\"pinterest.com/crd_name=anno-full-pin-text-v3-2021-10-01-pt,pinterest.com/crd_type=PinterestJobSet\"}},{\"apiVersion\":\"pinterest.com/v1\",\"kind\":\"PinterestJobSet\",\"metadata\":{\"annotations\":{\"pinterest.com/cluster-name\":\"k8s-use1-prod-shared-001\",\"pinterest.com/identity\":\"nimbus.content-modeling-pintext.k8s.aws-us-east-1.k8s-use1-prod-shared-001.pinterestjobset.anno-full-pin-text-v3-2021-10-01-sv\",\"pinterest.com/nimbusuuid\":\"01ee2f18-a43b-459a-8e5a-c909ec4cfb69\",\"pinterest.com/spiffe_id\":\"spiffe://pin220.com/k8s/content-modeling-pintext/anno-full-pin-text-v3-2021-10-01-sv\",\"workload.fed.pinterest.com/clusters\":\"fed-k8s-use1-prod-shared-001-1d\"},\"creationTimestamp\":\"2021-10-02T13:18:36Z\",\"generation\":2,\"labels\":{\"kubefed.io/managed\":\"true\"},\"name\":\"anno-full-pin-text-v3-2021-10-01-sv\",\"namespace\":\"content-modeling-pintext\",\"resourceVersion\":\"715011327\",\"selfLink\":\"/apis/pinterest.com/v1/namespaces/content-modeling-pintext/pinterestjobsets/anno-full-pin-text-v3-2021-10-01-sv\",\"uid\":\"01dde7c1-3ba5-44b2-9198-8a0ab548a882\"},\"spec\":{\"build\":{\"commit\":\"\",\"name\":\"\"},\"configmap\":{\"candidate_embedding_header\":\"text\",\"candidate_header\":\"text,raw_text\",\"candidate_path\":\"s3://pinterest-lasvegas/ads-retrieval/broadmatch/pintext_permanent/broadmatch_active_keywords/dt=2021-10-01/delta=FULL/lang=sv/\",\"embedding_type\":\"PIN_TEXT_V3\",\"index_type\":\"ivf_flat\",\"input_is_dir\":\"true\",\"language\":\"SV\",\"nearest_neighbor_num\":\"1000\",\"output_candidate_embedding_header\":\"raw_text,text,embedding\",\"output_header\":\"text,text:score\",\"output_path\":\"s3://pinterest-lasvegas/ads-retrieval/broadmatch/pintext_alt/broadmatch_query_keyword_mapping/delta=refreshed_annotation_full/ver=PIN_TEXT_V3/days=30/lang=sv/dt=2021-10-01/\",\"output_query_embedding_header\":\"raw_text,text,embedding\",\"output_query_embedding_path\":\"s3://pinterest-lasvegas/ads-retrieval/broadmatch/pintext_alt/broadmatch_query_embedding/ver=PIN_TEXT_V3/days=refreshed_annotation_30/lang=sv/dt=2021-10-01/\",\"query_embedding_header\":\"text\",\"query_header\":\"text,raw_text\",\"query_path\":\"s3://pinterest-lasvegas/ads-retrieval/broadmatch/pintext_permanent/related_pins_broadmatch_query_list/dt=2021-09-29/days=30/lang=sv/\",\"target\":\"embedding_knn\"},\"iamrole\":\"AdsRetrievalJob\",\"replicas\":10,\"retrylimit\":7,\"sidecarconfig\":{},\"sidecarversions\":{\"envoy-endpoint-register-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sox-traffic-envoy-endpoint-register:65a8fcedef942eaebbf52ba079503acebd1cc2f3\"},\"envoy-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sox-traffic-envoy:d8681d2b996165df72cbd21dc15b3e09d501691e\"},\"envoy-tcollector-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/tcollector:fa844fbb07d63f1c5fcce4e5e7e9a6fb5ce7ae2e\"},\"knox-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/ubuntu16.04:latest\"},\"lo \n";
 
-    public void testProcess() throws Exception
+    public void testCleanup() throws Exception
     {
         VarCharVector topic = new VarCharVector("topic", allocator);
         VarCharVector payload = new VarCharVector("payload", allocator);
@@ -94,8 +101,196 @@ public class CleanupTest
         VectorSchemaRoot input = new VectorSchemaRoot(vectors);
         input.setRowCount(count);
         VectorSchemaRoot cleanupdoc = Cleanup.process(input);
-        //Assert.assertEquals(cleanupdoc.getRowCount(), 3);
-        VectorSchemaRoot snapshotdoc = Aggregate.process(cleanupdoc);
-        //Assert.assertEquals(snapshotdoc.getRowCount(), 4);
+        /**
+         * filter both metric and log
+         */
+        Assert.assertEquals(cleanupdoc.getRowCount(), 1);
+    }
+
+    public void testAggregate() throws Exception {
+        VarCharVector jobId = new VarCharVector("jobid", allocator);
+        VarCharVector appId = new VarCharVector("appid", allocator);
+        VarCharVector type = new VarCharVector("type", allocator);
+        VarCharVector json = new VarCharVector("json", allocator);
+        jobId.allocateNew();
+        appId.allocateNew();
+        type.allocateNew();
+        json.allocateNew();
+        int count = 0;
+
+        /**
+         * metric
+         */
+        FlinkMetric metric = DrSquirrelUtils.constructFlinkMetric(metric_str);
+        metric.setApplicationId("b");
+        metric.setTimestamp(System.currentTimeMillis());
+
+        jobId.setSafe(count, metric.getJobId().getBytes(StandardCharsets.UTF_8));
+        appId.setSafe(count, metric.getApplicationId().getBytes(StandardCharsets.UTF_8));
+        type.setSafe(count, "metric".getBytes(StandardCharsets.UTF_8));
+        json.setSafe(count, mapper.writeValueAsString(metric).getBytes(StandardCharsets.UTF_8));
+        count++;
+
+        /**
+         * log
+         */
+        RawLog rawLog = DrSquirrelUtils.constructRawLog(log_str, "a");
+        rawLog.setApplicationId("b");
+        jobId.setSafe(count, new Text());
+        appId.setSafe(count, rawLog.getApplicationId().getBytes(StandardCharsets.UTF_8));
+        type.setSafe(count, "log".getBytes(StandardCharsets.UTF_8));
+        json.setSafe(count, mapper.writeValueAsString(rawLog).getBytes(StandardCharsets.UTF_8));
+        count++;
+
+        jobId.setValueCount(count);
+        appId.setValueCount(count);
+        type.setValueCount(count);
+        json.setValueCount(count);
+        List<FieldVector> vectors = Arrays.asList(jobId, appId, type, json);
+        VectorSchemaRoot vectorSchemaRoot = new VectorSchemaRoot(vectors);
+        vectorSchemaRoot.setRowCount(count);
+        VectorSchemaRoot snapshot = Aggregate.process(vectorSchemaRoot);
+        /**
+         * for a state of app b, a metric pass through and a placeholder
+         */
+        Assert.assertEquals(snapshot.getRowCount(), 3);
+    }
+
+    public void testAggregateTTL() throws Exception {
+        VarCharVector jobId = new VarCharVector("jobid", allocator);
+        VarCharVector appId = new VarCharVector("appid", allocator);
+        VarCharVector type = new VarCharVector("type", allocator);
+        VarCharVector json = new VarCharVector("json", allocator);
+        jobId.allocateNew();
+        appId.allocateNew();
+        type.allocateNew();
+        json.allocateNew();
+        int count = 0;
+
+        /**
+         * metric
+         */
+        FlinkMetric metric = DrSquirrelUtils.constructFlinkMetric(metric_str);
+        metric.setApplicationId("b");
+        metric.setTimestamp(4);
+
+        jobId.setSafe(count, metric.getJobId().getBytes(StandardCharsets.UTF_8));
+        appId.setSafe(count, metric.getApplicationId().getBytes(StandardCharsets.UTF_8));
+        type.setSafe(count, "metric".getBytes(StandardCharsets.UTF_8));
+        json.setSafe(count, mapper.writeValueAsString(metric).getBytes(StandardCharsets.UTF_8));
+        count++;
+
+        /**
+         * log
+         */
+        RawLog rawLog = DrSquirrelUtils.constructRawLog(log_str, "a");
+        rawLog.setApplicationId("b");
+        jobId.setSafe(count, new Text());
+        appId.setSafe(count, rawLog.getApplicationId().getBytes(StandardCharsets.UTF_8));
+        type.setSafe(count, "log".getBytes(StandardCharsets.UTF_8));
+        json.setSafe(count, mapper.writeValueAsString(rawLog).getBytes(StandardCharsets.UTF_8));
+        count++;
+
+        jobId.setValueCount(count);
+        appId.setValueCount(count);
+        type.setValueCount(count);
+        json.setValueCount(count);
+        List<FieldVector> vectors = Arrays.asList(jobId, appId, type, json);
+        VectorSchemaRoot vectorSchemaRoot = new VectorSchemaRoot(vectors);
+        vectorSchemaRoot.setRowCount(count);
+        VectorSchemaRoot snapshot = Aggregate.process(vectorSchemaRoot);
+        Assert.assertEquals(snapshot.getRowCount(), 3);
+
+        Aggregate.TTL = 1;
+        Thread.sleep(10);
+
+        jobId = new VarCharVector("jobid", allocator);
+        appId = new VarCharVector("appid", allocator);
+        type = new VarCharVector("type", allocator);
+        json = new VarCharVector("json", allocator);
+        jobId.allocateNew();
+        appId.allocateNew();
+        type.allocateNew();
+        json.allocateNew();
+        count = 0;
+
+        /**
+         * metric
+         */
+        metric = DrSquirrelUtils.constructFlinkMetric(metric_str);
+        metric.setApplicationId("c");
+        metric.setTimestamp(4);
+
+        jobId.setSafe(count, metric.getJobId().getBytes(StandardCharsets.UTF_8));
+        appId.setSafe(count, metric.getApplicationId().getBytes(StandardCharsets.UTF_8));
+        type.setSafe(count, "metric".getBytes(StandardCharsets.UTF_8));
+        json.setSafe(count, mapper.writeValueAsString(metric).getBytes(StandardCharsets.UTF_8));
+        count++;
+
+        jobId.setValueCount(count);
+        appId.setValueCount(count);
+        type.setValueCount(count);
+        json.setValueCount(count);
+        vectors = Arrays.asList(jobId, appId, type, json);
+        vectorSchemaRoot = new VectorSchemaRoot(vectors);
+        vectorSchemaRoot.setRowCount(count);
+
+        snapshot = Aggregate.process(vectorSchemaRoot);
+        /**
+         * app b state already pass TTL
+         */
+        Assert.assertEquals(snapshot.getRowCount(), 2);
+    }
+
+
+    private static final ObjectMapper mapper = new ObjectMapper();
+
+    public void testJobInfo() throws Exception {
+        VarCharVector jobid_out = new VarCharVector("jobid", allocator);
+        VarCharVector type_out = new VarCharVector("type", allocator);
+        VarCharVector json_out = new VarCharVector("json", allocator);
+
+        jobid_out.allocateNew();
+        type_out.allocateNew();
+        json_out.allocateNew();
+        int count = 0;
+        /**
+         * state mock
+         */
+        State state = new State();
+        state.setUsername("a");
+        state.setJobId("b");
+        state.setApplicationId("c");
+        state.setCluster("d");
+        state.setJobName("e");
+        String json_str = mapper.writeValueAsString(state);
+        jobid_out.setSafe(count, new Text("b"));
+        type_out.setSafe(count, new Text("state"));
+        json_out.setSafe(count, new Text(json_str));
+        count++;
+        /**
+         * metric
+         */
+        FlinkMetric metric = new FlinkMetric();
+        metric.setApplicationId("c");
+        metric.setJobId("b");
+        metric.setJobName("e");
+        metric.setCluster("d");
+        metric.setName("uptime");
+        metric.setValue("1");
+        json_str = mapper.writeValueAsString(metric);
+        jobid_out.setSafe(count, new Text("b"));
+        type_out.setSafe(count, new Text("metric"));
+        json_out.setSafe(count, new Text(json_str));
+        count++;
+
+        jobid_out.setValueCount(count);
+        json_out.setValueCount(count);
+        List<FieldVector> vectors = Arrays.asList(jobid_out, type_out, json_out);
+        VectorSchemaRoot vectorSchemaRoot = new VectorSchemaRoot(vectors);
+        vectorSchemaRoot.setRowCount(count);
+        VectorSchemaRoot job = JobInfo.process(vectorSchemaRoot);
+
+        Assert.assertEquals(job.getRowCount(), 2);
     }
 }

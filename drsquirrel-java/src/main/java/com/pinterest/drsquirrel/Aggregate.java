@@ -17,10 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class Aggregate {
     protected static final BufferAllocator allocator = new RootAllocator();
@@ -97,6 +94,10 @@ public class Aggregate {
                 s.maxNumOfLatestExceptions = 20;
                 states.put(appID.toLowerCase(), s);
             }
+
+            /**
+             * assign jobId of same applicationID and last update time
+             */
             if (JobType.equalsIgnoreCase("metric")) {
                 FlinkMetric flinkMetric = mapper.readValue(jsonstr, FlinkMetric.class);
                 states.get(appID.toLowerCase()).update(flinkMetric);
@@ -109,7 +110,7 @@ public class Aggregate {
             /**
              * pass through metric with job id not null
              */
-            if (jobId == null && JobType.equalsIgnoreCase("metric")) {
+            if (jobId != null && JobType.equalsIgnoreCase("metric")) {
                 jobid_out.setSafe(count, jobId.getBytes(StandardCharsets.UTF_8));
                 type_out.setSafe(count, JobType.getBytes(StandardCharsets.UTF_8));
                 json_out.setSafe(count, jsonstr.getBytes(StandardCharsets.UTF_8));
@@ -118,15 +119,22 @@ public class Aggregate {
 
         }
 
+        Iterator<Map.Entry<String, State>> it = states.entrySet().iterator();
+        while(it.hasNext()) {
+            Map.Entry<String, State> state = it.next();
 
-        for (Map.Entry<String, State> state : states.entrySet()) {
-            if (!inTTL(state.getValue())) continue;
+            if (!inTTL(state.getValue())) {
+                it.remove();
+                continue;
+            }
+
             jobid_out.setSafe(count, state.getValue().getJobId().getBytes(StandardCharsets.UTF_8));
             type_out.setSafe(count, "state".getBytes(StandardCharsets.UTF_8));
             String json_str = mapper.writeValueAsString(state.getValue());
             json_out.setSafe(count, json_str.getBytes(StandardCharsets.UTF_8));
             count++;
         }
+
         /**
          * insert a placeholder for now
          */
@@ -143,7 +151,9 @@ public class Aggregate {
         return vectorSchemaRoot;
     }
 
+    public static long TTL = 24 * 60 * 60 * 1000;
+
     static boolean inTTL(State s) {
-        return s.getLastUpdatedTimestamp() > System.currentTimeMillis() - 24 * 60 * 60 * 1000;
+        return s.getLastUpdatedTimestamp() > System.currentTimeMillis() - TTL;
     }
 }
