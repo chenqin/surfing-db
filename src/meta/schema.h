@@ -102,6 +102,27 @@ struct ValueHasher {
     }
     return result;
   }
+
+  std::size_t hash_value(const Field& f, const Value& v) {
+    if (f.type == RowType::INT) {
+      return v.p_val.int_val;
+    }
+    if (f.type == RowType::LONG) {
+      return v.p_val.long_val;
+    }
+    if (f.type == RowType::CHAR) {
+      return hash<char>()(v.p_val.byte_val);
+    }
+    if (f.type == RowType::STRING) {
+      return hash<string>()(v.p_val.string_val);
+    }
+    if (f.type == RowType::DOUBLE) {
+      return hash<double>()(v.p_val.double_val);
+    }
+    LOG(INFO) << "hash type is not supported";
+    CHECK(false);
+    return 0;
+  }
 };
 
 class SchemaUtils {

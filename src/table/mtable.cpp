@@ -37,7 +37,7 @@ mtable::mtable(const std::shared_ptr<mschema> schema_ptr, size_t capacity) {
   this->schema_ptr = schema_ptr;
   this->node_ptr = nullptr;
   CHECK(sizeof(uint8_t) == sizeof(char));
-  payload = (uint8_t*) malloc(capacity * sizeof(uint8_t));
+  payload = (uint8_t*)malloc(capacity * sizeof(uint8_t));
   schedule_size = -1;
   key_dist = std::make_unique<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>>();
   key_groups = std::make_unique<std::map<size_t, std::vector<size_t>, std::less<size_t>>>();
@@ -107,7 +107,7 @@ void mtable::verifyShuffle(const Field& field, std::function<size_t(size_t, int,
     auto r = this->readRow(i);
     Value v;
     r->read(field, v);
-    size_t key = value_hasher.operator()(v);
+    size_t key = value_hasher.hash_value(field, v);
     // std::cout << "verify on "<< node_ptr->rank << " key " << key << std::endl;
     CHECK_EQ(partitioner(key, node_ptr->rank, node_ptr->world), node_ptr->rank);
   }
@@ -126,7 +126,7 @@ void mtable::group(const Field& f, bool local) {
     auto r = readRow(i);
     Value v;
     r->read(f, v);
-    size_t key = value_hasher.operator()(v);
+    size_t key = value_hasher.hash_value(f, v);
     if (key_groups->find(key) == key_groups->end()) {
       std::vector<size_t> arr;
       key_groups->insert({ key, arr });
@@ -232,7 +232,7 @@ std::shared_ptr<mtable> mtable::placement_sort(const Field& f, std::function<siz
     auto r = readRow(i);
     Value v;
     r->read(f, v);
-    size_t key = value_hasher.operator()(v);
+    size_t key = value_hasher.hash_value(f, v);
 
     // std::cout << "partition on "<< node_ptr->rank << " key " << key << " val "<< v.p_val.string_val << std::endl;
 
@@ -262,7 +262,7 @@ std::shared_ptr<mtable> mtable::placement_sort(const Field& f, std::function<siz
           auto row = this->readRow(item);
           Value v;
           row->read(f, v);
-          size_t key = value_hasher.operator()(v);
+          size_t key = value_hasher.hash_value(f, v);
           if (sender->key_groups->find(key) == sender->key_groups->end()) {
             std::vector<size_t> arr;
             sender->key_groups->insert({ key, arr });

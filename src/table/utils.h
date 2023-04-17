@@ -299,28 +299,20 @@ public:
     return units;
   }
 
-  static std::shared_ptr<mtable> fromArrow(std::vector<std::shared_ptr<arrow::RecordBatch>> records,
-                                           std::map<std::string, uint64_t>& units, std::string field_name,
-                                           std::function<size_t(size_t key, int rank, int world)> partitioner, std::shared_ptr<node> node_ptr) {
+  static std::shared_ptr<mtable> fromArrow(std::vector<std::shared_ptr<arrow::RecordBatch>> records, std::map<std::string, uint64_t>& units, std::shared_ptr<node> node_ptr) {
     CHECK(records.size() > 0);
     auto schema = fromArrow(records.at(0)->schema(), units);
 
     size_t row_count = 0;
-    ValueHasher value_hasher;
+  
     for (auto& record : records) {
       row_count += record->num_rows();
     }
     int rank = node_ptr == nullptr ? 0 : node_ptr->rank;
     int world = node_ptr == nullptr ? 1 : node_ptr->world;
 
-    auto placeholder = node_ptr == nullptr ? std::make_shared<mtable>(schema, 1 * schema->rowSize()) : std::make_shared<mtable>(node_ptr, schema, 1 * schema->rowSize());
     auto table = node_ptr == nullptr ? std::make_shared<mtable>(schema, row_count * schema->rowSize()) : std::make_shared<mtable>(node_ptr, schema, row_count * schema->rowSize());
     CHECK(schema->fields.size() > 0);
-    Field f = schema->fields.at(0);
-    std::vector<mrow> rows;
-
-    int row_index = 0;
-    frequent_strings_sketch sketch1(MAX_STR_LEN);
 
     for (auto& record_ptr : records) {
       auto vc = record_ptr->columns();
@@ -367,7 +359,6 @@ public:
           if (type == arrow::Type::STRING) {
             auto bc = (arrow::StringScalar*)result.get();
             v.p_val.string_val = bc->ToString();
-            sketch1.update(v.p_val.string_val);
           }
           if (type == arrow::Type::LIST) {
             auto bc = (arrow::ListScalar*)result.get();
@@ -404,54 +395,9 @@ public:
            */
           r.write(schema->fields.at(j), v);
         }
-
-        Value v;
-        r.read(f, v);
-        size_t key = value_hasher.operator()(v);
-        // std::cout << "hash " << v.p_val.int_val << " " << key << std::endl;
-
-        if (placeholder->key_groups->find(key) == placeholder->key_groups->end()) {
-          std::vector<size_t> arr;
-          placeholder->key_groups->insert({ key, arr });
-        }
-        placeholder->key_groups->at(key).emplace_back(row_index);
-        rows.push_back(r);
-        row_index++;
+        table->appendRow(r);
       }
     }
-
-    auto items = sketch1.get_frequent_items(datasketches::NO_FALSE_POSITIVES);
-    LOG(INFO) << "Frequent strings: " << items.size();
-    LOG(INFO) << "Str\tEst\tLB\tUB";
-    for (auto& row : items) {
-      LOG(INFO) << row.get_item().size() << "\t" << row.get_estimate() << "\t"
-                << row.get_lower_bound() << "\t" << row.get_upper_bound();
-    }
-    int index = 0;
-    for (int i = 0; i < world; i++) {
-      table->placement_index->insert({ i, index });
-      for (auto g : *placeholder->key_groups) {
-        size_t rank = partitioner(g.first, rank, world);
-
-        /**
-         * @brief if placment of a key equals to a specific rank i
-         *
-         */
-        if (rank == (size_t)i) {
-          /**
-           * @brief for each key, list of row index of same hash key
-           *
-           */
-          for (auto row_index : g.second) {
-            auto row = rows[row_index];
-            table->appendRow(row);
-            index++;
-          }
-        }
-      }
-    }
-    CHECK_EQ(index, row_count);
-    table->sorted = true;
     return table;
   }
 
