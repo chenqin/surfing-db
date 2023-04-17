@@ -39,10 +39,10 @@ namespace meta {
 #define MAX_STR_LEN 52400
 #define HEADER_SIZE sizeof(long)
 #define MEM_PAGE_SIZE 53687091200 // 50GB
-#define FLUSH_SIZE 10737418240   // 10GB
+#define FLUSH_SIZE 10737418240    // 10GB
 #define FILE_IO_VECTOR 8
-#define SSD_CHUNK_SIZ 65536 // read/write ssd per 64KB chunk
-#define DOUBLE_TYPE float   // thrift lack float type
+#define SSD_CHUNK_SIZ 65536       // read/write ssd per 64KB chunk
+#define DOUBLE_TYPE float         // thrift lack float type
 #define FLUSH_DIR "/tmp/"
 #define CONCURRENCY 2
 /**
@@ -176,8 +176,8 @@ public:
 class mschema : public RowSchema {
 private:
   std::string name;
-  size_t _size;       // fixed size of each row
-  size_t _schema_sig; // schema fields hash
+  size_t _size;           // fixed size of each row
+  size_t _schema_sig;     // schema fields hash
   bool _type_set;
   MPI_Datatype _row_type; // type of entire row
   FieldHasher field_hasher;
@@ -203,8 +203,8 @@ public:
 
   Field& getFieldByName(std::string name) {
     int count = this->fields.size();
-    for(int i = 0 ; i < count ; i ++) {
-      if(this->fields.at(i).name == name) {
+    for (int i = 0; i < count; i++) {
+      if (this->fields.at(i).name == name) {
         return this->fields.at(i);
       }
     }

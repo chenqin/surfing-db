@@ -76,7 +76,7 @@ TEST(TableTest, testCompact) {
   CHECK_EQ(b.write(field5, v5), 6 + HEADER_SIZE);
   CHECK_EQ(b.write(field6, v6), HEADER_SIZE + 1 * sizeof(DOUBLE_TYPE));
   CHECK_EQ(b.write(field7, v7), HEADER_SIZE + 1 * (HEADER_SIZE + 6 + sizeof(long)));
-  mtable t(tpr, 10240000);
+  mtable t(nullptr, tpr, 10240000);
   t.appendRow(b);
   Value mapValue;
   t.readRow(0)->read(field7, mapValue);
@@ -218,7 +218,7 @@ TEST(TableTest, testmrow) {
   EXPECT_EQ(v77.map_value.size(), 1);
 
   // test point to temp table
-  auto t = std::make_shared<mtable>(tpr, 10240000);
+  auto t = std::make_shared<mtable>(nullptr, tpr, 10240000);
   t->appendRow(s);
   s = mrow(tpr, t->payload_ptr());
   s.read(field1, v11);
@@ -265,6 +265,50 @@ TEST(TableTest, testmrow) {
   Value vm;
   sptr->read(field7, vm);
   EXPECT_EQ(vm.map_value.size(), 1);
+}
+
+TEST(TableTest, TestPlacementSort) {
+  RowSchema r;
+  Field field1;
+  field1 = SchemaUtils::initField(r, "a", RowType::INT, sizeof(int));
+  std::shared_ptr<mschema> schema_ptr = std::make_shared<mschema>(r);
+  Value v1, v2, v3, v4, v5, v6, v7;
+  v1.p_val.int_val = 0;
+  v2.p_val.int_val = 2;
+  v3.p_val.int_val = 3;
+  surfingdb::table::mrow row1(schema_ptr), row2(schema_ptr), row3(schema_ptr);
+  row1.write(field1, v1);
+  row2.write(field1, v2);
+  row3.write(field1, v3);
+  auto org = std::make_shared<mtable>(nullptr, schema_ptr, schema_ptr->rowSize() * 3);
+  org->appendRow(row1);
+  org->appendRow(row2);
+  org->appendRow(row3);
+  CHECK_EQ(org->row_count, 3);
+
+  org->world = 3;
+  auto sorted = org->placement_sort(field1, [](int key, int rank, int world) {
+    return key % 3;
+  });
+  sorted->world = 3;
+
+  auto arrow_org = utils::toArrow(org);
+  std::map<std::string, uint64_t> units;
+  auto sorted_arrow = utils::fromArrow(
+    { arrow_org }, units, "a", [](int key, int rank, int world) {
+      return key % world;
+    },
+    nullptr, 3);
+ 
+  for (int i = 0; i < sorted_arrow->row_count; i++) {
+    auto r = sorted_arrow->readRow(i);
+    auto row_org = sorted->readRow(i);
+    Value v, v1;
+    r->read(field1, v);
+    row_org->read(field1, v1);
+
+    CHECK_EQ(v.p_val.int_val, v1.p_val.int_val);
+  }
 }
 
 TEST(TableTest, TestUtils) {
@@ -340,7 +384,7 @@ TEST(TableTest, TestUtils) {
    * @brief  row test mtable
    *
    */
-  auto table_ptr = std::make_shared<mtable>(schema_ptr, schema_ptr->rowSize() * 2);
+  auto table_ptr = std::make_shared<mtable>(nullptr, schema_ptr, schema_ptr->rowSize() * 2);
   table_ptr->appendRow(row);
   table_ptr->appendRow(row2);
   /**
@@ -371,8 +415,7 @@ TEST(TableTest, TestUtils) {
   EXPECT_EQ(new_schema_ptr->fields.at(6).max_unit_size, schema_ptr->fields.at(6).max_unit_size);
   EXPECT_EQ(new_schema_ptr->fields.at(6).max_map_key_unit_size, schema_ptr->fields.at(6).max_map_key_unit_size);
 
-  auto new_table_ptr = utils::fromArrow(
-    { arrow_table_ptr }, units, nullptr);
+  auto new_table_ptr = utils::fromArrow({ arrow_table_ptr }, units, nullptr);
 
   EXPECT_EQ(table_ptr->row_count, new_table_ptr->row_count);
   EXPECT_EQ(table_ptr->row_size(), new_table_ptr->row_size());
@@ -383,7 +426,7 @@ TEST(TableTest, TestUtils) {
     Value v, v1;
     r->read(field1, v);
     row_org->read(field1, v1);
-    //std::cout << "compare " << v.p_val.int_val << " " << v1.p_val.int_val << std::endl;
+    // std::cout << "compare " << v.p_val.int_val << " " << v1.p_val.int_val << std::endl;
   }
 
   // new_table_ptr->verifyShuffle(new_schema_ptr->fields.at(0), [](size_t key, int rank, int world) { return 0; });

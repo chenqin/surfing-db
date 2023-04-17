@@ -299,6 +299,7 @@ public:
     return units;
   }
 
+
   static std::shared_ptr<mtable> fromArrow(std::vector<std::shared_ptr<arrow::RecordBatch>> records, std::map<std::string, uint64_t>& units, std::shared_ptr<node> node_ptr) {
     CHECK(records.size() > 0);
     auto schema = fromArrow(records.at(0)->schema(), units);
@@ -309,8 +310,8 @@ public:
       row_count += record->num_rows();
     }
     int rank = node_ptr == nullptr ? 0 : node_ptr->rank;
-    int world = node_ptr == nullptr ? 1 : node_ptr->world;
-
+    if (node_ptr != nullptr) world = node_ptr->world;
+    CHECK(world > 0);
     auto table = node_ptr == nullptr ? std::make_shared<mtable>(schema, row_count * schema->rowSize()) : std::make_shared<mtable>(node_ptr, schema, row_count * schema->rowSize());
     CHECK(schema->fields.size() > 0);
 

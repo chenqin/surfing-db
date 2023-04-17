@@ -55,9 +55,9 @@ private:
 
 public:
   bool sorted = false;
-  /**
-   * @brief expose current offset and buffer to construct mrow in table buffer
-   */
+  int rank;
+  int world;
+  
   size_t offset = 0;    // current offset position
   MPI_Win win = MPI_WIN_NULL;
   uint8_t* schedule;
@@ -69,12 +69,6 @@ public:
   std::unordered_map<Field, size_t, FieldHasher> max_unit_size;
 
   mtable(const std::shared_ptr<node>, const std::shared_ptr<mschema>, size_t capacity);
-  /**
-   * @brief for non mpi use case single host
-   * 
-   * @param capacity 
-   */
-  mtable(const std::shared_ptr<mschema>, size_t capacity);
   ~mtable();
   void release();
   void group(const Field& f, bool);

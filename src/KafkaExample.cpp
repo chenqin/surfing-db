@@ -66,7 +66,7 @@ int main(int argc, char** argv) {
   /**
    * pull every 2 seconds
    */
-  int batch = 1000;
+  int batch = 10000;
   int interval = 100;
   int world = node->world;
 
