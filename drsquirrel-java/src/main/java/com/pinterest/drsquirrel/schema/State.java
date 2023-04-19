@@ -91,12 +91,17 @@ public class State {
   }
 
   /**
-   * To merge a State with another State, there are two steps: 1) merge basic info such as cluster,
+   * To merge a State with another State, there are two steps: 1) merge basic info
+   * such as cluster,
    * appId, jobId to have least Null values possible 2) merge flink metrics
    *
-   * <p>Note that we don't merge state.exceptions because the only usecase we have is merging a
-   * state with JM/TM logs with a metric based state. Exceptions _only_ exist in the JM/TM logs, and
-   * metric based state only has FlinkMetric to merge into but carries no exceptions.
+   * <p>
+   * Note that we don't merge state.exceptions because the only usecase we have is
+   * merging a
+   * state with JM/TM logs with a metric based state. Exceptions _only_ exist in
+   * the JM/TM logs, and
+   * metric based state only has FlinkMetric to merge into but carries no
+   * exceptions.
    */
   public void merge(State state) {
     // merge basic info
@@ -142,8 +147,10 @@ public class State {
   }
 
   /**
-   * To update State with a signal, there are two steps: 1) Update the basic info of the state, such
-   * as appId, jobId and JobName 2) Update either this.exceptions or this.metrics based off of the
+   * To update State with a signal, there are two steps: 1) Update the basic info
+   * of the state, such
+   * as appId, jobId and JobName 2) Update either this.exceptions or this.metrics
+   * based off of the
    * signal type
    */
   public void update(Signal signal) {
@@ -161,6 +168,14 @@ public class State {
       jobName = signal.getJobName();
     }
 
+    if (cluster == null && signal.getCluster() != null) {
+      cluster = signal.getCluster();
+    }
+
+    if (username == null) {
+      username = "unknown_user";
+    }
+
     // Update exceptions or metrics of the current job/app
     if (signal instanceof RawLog) {
       update((RawLog) signal);
@@ -175,13 +190,12 @@ public class State {
     Preconditions.checkState(rawLog.getUsername() != null);
     this.username = rawLog.getUsername();
 
-    JobException jobException =
-        new JobException(
-            rawLog.getException(),
-            rawLog.getHostName(),
-            rawLog.getContainerId(),
-            rawLog.getFile(),
-            rawLog.getTimestamp());
+    JobException jobException = new JobException(
+        rawLog.getException(),
+        rawLog.getHostName(),
+        rawLog.getContainerId(),
+        rawLog.getFile(),
+        rawLog.getTimestamp());
     if (rawLog.getFile().contains("ExecutionGraph")) {
       criticalExceptions.putIfAbsent(rawLog.getDate(), new LinkedList<>());
       criticalExceptions.get(rawLog.getDate()).add(jobException);
@@ -204,7 +218,8 @@ public class State {
   }
 
   // TODO aggregate Operator metrics
-  private void update(FlinkMetric metric) {}
+  private void update(FlinkMetric metric) {
+  }
 
   private void removeEarliestException(TreeMap<Date, List<JobException>> exceptionMap) {
     Date firstTimestamp = exceptionMap.firstKey();

@@ -83,13 +83,56 @@ public:
     return 0;
   }
 
+  void run(volatile std::sig_atomic_t& terminal_signal) {
+    while (terminal_signal == 0) {
+      if(arrow_deser != nullptr){ 
+        std::unique_lock<std::mutex> lock(record_mutex);
+        // wait until record batch contains less than max_batch_size rows
+        record_batch_not_full.wait(lock, [this] { 
+          size_t total = 0;
+          for(auto& batch : record_batch){
+            total += batch->num_rows();
+          }
+          return total < max_batch_size;
+        });
+        auto t = consume_batch(arrow_deser);
+        record_batch.push_back(t);
+        lock.unlock();
+        record_batch_not_empty.notify_one();
+      } else {
+        throw std::runtime_error("no arrow deserializer set");
+      }
+    }
+  }
+
+  std::vector<std::shared_ptr<arrow::RecordBatch>> poll_once() {
+    std::unique_lock<std::mutex> lock(record_mutex);
+    /**
+     * @brief this assumes no partition should be 0 rows all the time
+     * 
+     */
+    record_batch_not_empty.wait(lock, [this] { return !this->record_batch.empty(); });
+    std::vector<std::shared_ptr<arrow::RecordBatch>> ret = std::move(record_batch);
+    record_batch.clear();
+    lock.unlock();
+    record_batch_not_full.notify_one();
+    return ret;
+  }
+  void setDeser(std::function<void(const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders)> deser) {
+    this->arrow_deser = deser;
+  }
+
   void setDeser(std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser) {
     this->deser = deser;
   }
 
 protected:
   std::shared_ptr<node> node_ptr;
+  std::mutex record_mutex;
+  std::condition_variable record_batch_not_full, record_batch_not_empty;
+  std::vector<std::shared_ptr<arrow::RecordBatch>> record_batch;
   std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser;
+  std::function<void(const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders)> arrow_deser;
 };
 } // namespace connector
 

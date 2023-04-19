@@ -26,7 +26,7 @@
 #include "table/utils.h"
 
 #define FLUSH_DIR "/tmp/"
-#define BATCH_SIZE 1000
+#define BATCH_SIZE 10000
 
 using namespace surfingdb::meta;
 using namespace surfingdb::table::schema;
@@ -61,41 +61,31 @@ int main(int argc, char** argv) {
    */
   // auto pg = c10d::ProcessGroupMPI::createProcessGroupMPI();
   const auto node = std::make_shared<surfingdb::meta::node>(&argc, &argv);
-  auto con = DataGenConnector(node, "source", BATCH_SIZE * node->rank, 10000, schema_ptr);
-
-  std::signal(SIGTERM | SIGINT, signal_handler);
-  int itr = 0;
-  while (terminal_signal == 0) {
-    const size_t intial_row_count = BATCH_SIZE;
-    size_t total_row_count = intial_row_count;
-    double start = MPI_Wtime();
-    size_t total_bytes = 0;
-    auto metric = con.consume_batch([&](const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders) {
+  auto con = DataGenConnector(node, "source", BATCH_SIZE, 10, schema_ptr);
+  con.setDeser([&schema_ptr](const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders) {
       PValue v1, v2;
       Value placeholder;
       stringstream ss;
       v1.string_val = string(payload);
-      total_bytes += v1.string_val.length();
       v2.string_val = "{\"timestamp\": 1680480831430, \"host\": \"xenon-prod-001-20220810-dpp-worker-prod-0a02070a\", \"metricName\": \"flink.operator._t_host.xenon-prod-001-20220810-dpp-worker-prod-0a02070a_ec2_pin220_com._t_tm_id.container_1661534748548_105064_01_000025._t_job_id.ebcdb5d6a8e6a51abc2e9c4d34f9508b._t_job_name.K8sAuditStreamExample-prod._t_operator_id.7df19f87deec5680128845fd9a6ca18d._t_operator_name.Flat Map._t_subtask_index.10._t_objectName.tcp--evaluationjob--yzjze390-master-0.k8s_event_object\", \"metricValue\": \"1\" }";
-      total_bytes += v2.string_val.length();
       utils::append(builders.at(0).get(), schema_ptr->fields.at(0), v1, placeholder);
       utils::append(builders.at(1).get(), schema_ptr->fields.at(1), v2, placeholder);
     });
-    CHECK(metric->num_rows() == BATCH_SIZE * node->rank);
-    auto partitioner = [](size_t key, int rank, int world) { return key % world; };
-    auto signal = processors::java(metric, "CleanupWrapper", node);
-    auto app_signals = processors::shuffle_x({ signal }, "appid", partitioner, true, node);
-    auto app_state = processors::java(app_signals, "AggregateWrapper", node);
-    auto job_signals = processors::shuffle_x({ app_state }, "jobid", partitioner, true, node);
-    auto job_info = processors::java(job_signals, "JobInfoWrapper", node);
-    /**
-     * @brief todo write formatted seralizedjobinfo to kafka
-     *
-     */
+  auto partitioner = [](size_t key, int rank, int world) { return key % world; };
+  auto t1 = std::async(std::launch::async, [&con, &terminal_signal] {
+    con.run(terminal_signal);
+  });
 
-    size_t g_total_bytes = 0;
-    MPI_Allreduce(&total_bytes, &g_total_bytes, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
-    if (node->rank == 0) std::cout << "iteration " << (g_total_bytes) / ((MPI_Wtime() - start) * 1024 * 1024) << " MB per seconds" << std::endl;
+  std::signal(SIGTERM | SIGINT, signal_handler);
+  int itr = 0;
+  while (terminal_signal == 0) {
+    auto records = con.poll_once();
+    auto signals = processors::java_x(records, "CleanupWrapper", node);
+    auto app_signals = processors::shuffle_x(signals, "appid", partitioner, false, node);
+    auto app_state = processors::java(app_signals, "AggregateWrapper", node);
+    auto job_signals = processors::shuffle_x({ app_state }, "jobid", partitioner, false, node);
+    auto job_info = processors::java(job_signals, "JobInfoWrapper", node);
   }
+  t1.wait();
   return terminal_signal;
 }

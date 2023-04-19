@@ -63,6 +63,8 @@ public:
    */
   const static std::shared_ptr<arrow::RecordBatch> shuffle_x(std::vector<std::shared_ptr<arrow::RecordBatch>>, std::string, std::function<size_t(size_t, int, int)>, bool, std::shared_ptr<node>);
 
+  const static std::vector<std::shared_ptr<arrow::RecordBatch>> java_x(std::vector<std::shared_ptr<arrow::RecordBatch>>, std::string class_name, std::shared_ptr<node> node);
+
   const static std::shared_ptr<arrow::RecordBatch> java(std::shared_ptr<arrow::RecordBatch>, std::string class_name, std::shared_ptr<node> node);
 
   /**
