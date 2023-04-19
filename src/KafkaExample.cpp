@@ -78,45 +78,38 @@ int main(int argc, char** argv) {
 
   std::signal(SIGTERM | SIGINT, signal_handler);
 
-  auto metric_deser = [](const char* payload, const mschema& out) {
-    auto r = std::make_shared<mrow>(std::make_shared<mschema>(out));
-    Value v[2];
-    v[0].p_val.string_val = "metric";
-    v[1].p_val.string_val = std::string(payload);
-    for (int i = 0; i < 2; i++) {
-      r->write(out.fields.at(i), v[i]);
-    }
-    return r;
-  };
   auto metrics_prod = KafkaConnector(
     node, "kafka-source", batch, interval, schema_ptr,
     { "xenon_metrics_prod" }, "/var/serverset/discovery.datakafka08.prod", group_id, false);
-  metrics_prod.setDeser(metric_deser);
-
-  auto metrics_staging = KafkaConnector(
-    node, "kafka-source", batch, interval, schema_ptr,
-    { "xenon_metrics_staging" }, "/var/serverset/discovery.datakafka08.prod", group_id, false);
-  metrics_staging.setDeser(metric_deser);
-
-  auto metric_log_deser = [](const char* payload, const mschema& out) {
-    auto r = std::make_shared<mrow>(std::make_shared<mschema>(out));
-    Value v[2];
-    v[0].p_val.string_val = "log";
-    v[1].p_val.string_val = std::string(payload);
-    for (int i = 0; i < 2; i++) {
-      r->write(out.fields.at(i), v[i]);
-    }
-    return r;
-  };
-  auto metrics_log_staging = KafkaConnector(
-    node, "kafka-source", batch / 10, interval, schema_ptr,
-    { "xenon-logs-staging" }, "/var/serverset/discovery.metricskafka07.prod", group_id, false);
-  metrics_log_staging.setDeser(metric_log_deser);
+  metrics_prod.setDeser([&schema_ptr](const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders) {
+    PValue v1, v2;
+    Value placeholder;
+    v1.string_val = "metric";
+    v2.string_val = std::string(payload);
+    utils::append(builders.at(0).get(), schema_ptr->fields.at(0), v1, placeholder);
+    utils::append(builders.at(1).get(), schema_ptr->fields.at(1), v2, placeholder);
+  });
 
   auto metrics_log_prod = KafkaConnector(
     node, "kafka-source", batch / 10, interval, schema_ptr,
     { "xenon-logs-prod" }, "/var/serverset/discovery.metricskafka07.prod", group_id, false);
-  metrics_log_prod.setDeser(metric_log_deser);
+  metrics_log_prod.setDeser([&schema_ptr](const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders) {
+    PValue v1, v2;
+    Value placeholder;
+    v1.string_val = "log";
+    v2.string_val = std::string(payload);
+    utils::append(builders.at(0).get(), schema_ptr->fields.at(0), v1, placeholder);
+    utils::append(builders.at(1).get(), schema_ptr->fields.at(1), v2, placeholder);
+  });
+
+  auto t1 = std::async(std::launch::async, [&metrics_prod, &terminal_signal] {
+    metrics_prod.run(terminal_signal);
+  });
+  auto t2 = std::async(std::launch::async, [&metrics_log_prod, &terminal_signal] {
+    metrics_log_prod.run(terminal_signal);
+  });
+
+  auto partitioner = [](size_t key, int rank, int world) { return key % world; };
 
   while (terminal_signal == 0) {
     // simulate a delay to decode and handle kafka batch
@@ -124,47 +117,26 @@ int main(int argc, char** argv) {
     long local_row_count = 0;
     // kafka consumer
 
-    auto t1 = std::async(std::launch::async, [&metrics_prod] {
-      RowSchema r;
-      SchemaUtils::initField(r, "topic", RowType::STRING, 64);
-      SchemaUtils::initField(r, "payload", RowType::STRING, MAX_STR_LEN);
-      const std::shared_ptr<mschema> schema_ptr = std::make_shared<mschema>(r);
-      return metrics_prod.consume_batch([&schema_ptr](const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders) {
-        PValue v1, v2;
-        Value placeholder;
-        v1.string_val = "metric";
-        v2.string_val = std::string(payload);
-        utils::append(builders.at(0).get(), schema_ptr->fields.at(0), v1, placeholder);
-        utils::append(builders.at(1).get(), schema_ptr->fields.at(1), v2, placeholder);
-      });
-    });
+    auto metric_table = metrics_prod.poll_once();
+    for(auto&t : metric_table ){
+      local_row_count += t->num_rows();
+    }
+    // local_row_count += metric_table->num_rows();
+    auto log_table = metrics_log_prod.poll_once();
+    // local_row_count += log_table->num_rows();
+     for(auto&t : log_table ){
+      local_row_count += t->num_rows();
+    }
+    
+    auto signal_metric = processors::java_x(metric_table, "CleanupWrapper", node);
+    auto signal_log = processors::java_x(log_table, "CleanupWrapper", node);
+    
+    signal_metric.insert(signal_metric.end(), signal_log.begin(), signal_log.end());
 
-    auto t2 = std::async(std::launch::async, [&metrics_log_prod] {
-      RowSchema r;
-      SchemaUtils::initField(r, "topic", RowType::STRING, 64);
-      SchemaUtils::initField(r, "payload", RowType::STRING, MAX_STR_LEN);
-      const std::shared_ptr<mschema> schema_ptr = std::make_shared<mschema>(r);
-      return metrics_log_prod.consume_batch([&schema_ptr](const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders) {
-        PValue v1, v2;
-        Value placeholder;
-        v1.string_val = "log";
-        v2.string_val = std::string(payload);
-        utils::append(builders.at(0).get(), schema_ptr->fields.at(0), v1, placeholder);
-        utils::append(builders.at(1).get(), schema_ptr->fields.at(1), v2, placeholder);
-      });
-    });
-    auto metric_table = t1.get();
-    local_row_count += metric_table->num_rows();
-    auto log_table = t2.get();
-    local_row_count += log_table->num_rows();
-    MPI_Barrier(MPI_COMM_WORLD);
-    auto partitioner = [](size_t key, int rank, int world) { return key % world; };
-    auto signal_metric = processors::java(metric_table, "CleanupWrapper", node);
-    auto signal_log = processors::java(log_table, "CleanupWrapper", node);
-    auto app_signals = processors::shuffle_x({signal_metric, signal_log}, "appid", partitioner, false, node);
-    //auto app_state = processors::java(app_signals, "AggregateWrapper", node);
-    //auto job_signals = processors::shuffle_x({ app_state }, "jobid", partitioner, true, node);
-    //auto job_info = processors::java(job_signals, "JobInfoWrapper", node);
+    auto app_signals = processors::shuffle_x(signal_metric, "appid", partitioner, false, node);
+    auto app_state = processors::java(app_signals, "AggregateWrapper", node);
+    auto job_signals = processors::shuffle_x({ app_state }, "jobid", partitioner, true, node);
+    auto job_info = processors::java(job_signals, "JobInfoWrapper", node);
 
     size_t global_row_count = 0;
     MPI_Allreduce(&local_row_count, &global_row_count, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
@@ -175,5 +147,7 @@ int main(int argc, char** argv) {
       std::cout << "iteration pull " << throughput << " @ qps" << std::endl;
     }
   }
+  t1.wait();
+  t2.wait();
   return terminal_signal;
 }
