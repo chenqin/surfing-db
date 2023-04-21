@@ -66,7 +66,7 @@ int main(int argc, char** argv) {
   /**
    * pull every 2 seconds
    */
-  int batch = 1000000;
+  int batch = 100000;
   int interval = 100;
   int world = node->world;
 
@@ -90,10 +90,33 @@ int main(int argc, char** argv) {
     utils::append(builders.at(1).get(), schema_ptr->fields.at(1), v2, placeholder);
   });
 
-  auto metrics_log_prod = KafkaConnector(
+  auto metrics_staging = KafkaConnector(
+    node, "kafka-source", batch, interval, schema_ptr,
+    { "xenon_metrics_staging" }, "/var/serverset/discovery.datakafka08.prod", group_id, false);
+  metrics_staging.setDeser([&schema_ptr](const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders) {
+    PValue v1, v2;
+    Value placeholder;
+    v1.string_val = "metric";
+    v2.string_val = std::string(payload);
+    utils::append(builders.at(0).get(), schema_ptr->fields.at(0), v1, placeholder);
+    utils::append(builders.at(1).get(), schema_ptr->fields.at(1), v2, placeholder);
+  });
+
+  auto log_prod = KafkaConnector(
     node, "kafka-source", batch / 10, interval, schema_ptr,
     { "xenon-logs-prod" }, "/var/serverset/discovery.metricskafka07.prod", group_id, false);
-  metrics_log_prod.setDeser([&schema_ptr](const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders) {
+  log_prod.setDeser([&schema_ptr](const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders) {
+    PValue v1, v2;
+    Value placeholder;
+    v1.string_val = "log";
+    v2.string_val = std::string(payload);
+    utils::append(builders.at(0).get(), schema_ptr->fields.at(0), v1, placeholder);
+    utils::append(builders.at(1).get(), schema_ptr->fields.at(1), v2, placeholder);
+  });
+  auto log_staging = KafkaConnector(
+    node, "kafka-source", batch / 10, interval, schema_ptr,
+    { "xenon-logs-staging" }, "/var/serverset/discovery.metricskafka07.prod", group_id, false);
+  log_staging.setDeser([&schema_ptr](const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders) {
     PValue v1, v2;
     Value placeholder;
     v1.string_val = "log";
@@ -105,10 +128,16 @@ int main(int argc, char** argv) {
   auto t1 = std::async(std::launch::async, [&metrics_prod, &terminal_signal] {
     metrics_prod.run(terminal_signal);
   });
-  auto t2 = std::async(std::launch::async, [&metrics_log_prod, &terminal_signal] {
-    metrics_log_prod.run(terminal_signal);
+  auto t3 = std::async(std::launch::async, [&metrics_staging, &terminal_signal] {
+    metrics_staging.run(terminal_signal);
   });
 
+  auto t2 = std::async(std::launch::async, [&log_prod, &terminal_signal] {
+    log_prod.run(terminal_signal);
+  });
+  auto t4 = std::async(std::launch::async, [&log_staging, &terminal_signal] {
+    log_staging.run(terminal_signal);
+  });
   auto partitioner = [](size_t key, int rank, int world) { return key % world; };
 
   while (terminal_signal == 0) {
@@ -117,19 +146,29 @@ int main(int argc, char** argv) {
     long local_row_count = 0;
     // kafka consumer
 
-    auto metric_table = metrics_prod.poll_once();
-    for(auto&t : metric_table ){
+    auto m1 = metrics_prod.poll_once();
+    for(auto&t : m1 ){
       local_row_count += t->num_rows();
     }
-    // local_row_count += metric_table->num_rows();
-    auto log_table = metrics_log_prod.poll_once();
-    // local_row_count += log_table->num_rows();
-     for(auto&t : log_table ){
+
+    auto m2 = metrics_staging.poll_once();
+    for(auto&t : m2 ){
       local_row_count += t->num_rows();
     }
-    
-    auto signal_metric = processors::java_x(metric_table, "CleanupWrapper", node);
-    auto signal_log = processors::java_x(log_table, "CleanupWrapper", node);
+
+    auto m3 = log_prod.poll_once();
+     for(auto&t : m3 ){
+      local_row_count += t->num_rows();
+    }
+    auto m4 = log_staging.poll_once();
+     for(auto&t : m4 ){
+      local_row_count += t->num_rows();
+    }
+    m1.insert(m1.end(), m2.begin(), m2.end());
+    m3.insert(m3.end(), m4.begin(), m4.end());
+
+    auto signal_metric = processors::java_x(m1, "CleanupWrapper", node);
+    auto signal_log = processors::java_x(m3, "CleanupWrapper", node);
     
     signal_metric.insert(signal_metric.end(), signal_log.begin(), signal_log.end());
 
@@ -146,7 +185,7 @@ int main(int argc, char** argv) {
     if (node->rank == 0) {
       std::cout << "iteration pull " << throughput << " @ qps" << std::endl;
     }
-    std::this_thread::sleep_for(60s);
+    std::this_thread::sleep_for(3s);
   }
   t1.wait();
   t2.wait();
