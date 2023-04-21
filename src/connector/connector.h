@@ -86,6 +86,7 @@ public:
   void run(volatile std::sig_atomic_t& terminal_signal) {
     while (terminal_signal == 0) {
       if(arrow_deser != nullptr){ 
+        auto t = consume_batch(arrow_deser);
         std::unique_lock<std::mutex> lock(record_mutex);
         // wait until record batch contains less than max_batch_size rows
         record_batch_not_full.wait(lock, [this] { 
@@ -95,7 +96,6 @@ public:
           }
           return total < max_batch_size;
         });
-        auto t = consume_batch(arrow_deser);
         record_batch.push_back(t);
         lock.unlock();
         record_batch_not_empty.notify_one();

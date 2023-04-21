@@ -317,7 +317,7 @@ const std::shared_ptr<arrow::RecordBatch> processors::shuffle_x(std::vector<std:
 const std::vector<std::shared_ptr<arrow::RecordBatch>> processors::java_x(std::vector<std::shared_ptr<arrow::RecordBatch>> batch, std::string class_name, std::shared_ptr<node> node) {
   std::vector<std::shared_ptr<arrow::RecordBatch>> out;
   for(auto& b: batch) {
-    CHECK_GE(b->num_rows(), 1);
+    //CHECK_GE(b->num_rows(), 1);
     auto result = java(b, class_name, node);
     out.push_back(std::move(result));
   }

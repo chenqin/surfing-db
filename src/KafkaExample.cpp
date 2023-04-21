@@ -66,7 +66,7 @@ int main(int argc, char** argv) {
   /**
    * pull every 2 seconds
    */
-  int batch = 10000;
+  int batch = 1000000;
   int interval = 100;
   int world = node->world;
 
@@ -135,7 +135,7 @@ int main(int argc, char** argv) {
 
     auto app_signals = processors::shuffle_x(signal_metric, "appid", partitioner, false, node);
     auto app_state = processors::java(app_signals, "AggregateWrapper", node);
-    auto job_signals = processors::shuffle_x({ app_state }, "jobid", partitioner, true, node);
+    auto job_signals = processors::shuffle_x({ app_state }, "jobid", partitioner, false, node);
     auto job_info = processors::java(job_signals, "JobInfoWrapper", node);
 
     size_t global_row_count = 0;
@@ -146,6 +146,7 @@ int main(int argc, char** argv) {
     if (node->rank == 0) {
       std::cout << "iteration pull " << throughput << " @ qps" << std::endl;
     }
+    std::this_thread::sleep_for(60s);
   }
   t1.wait();
   t2.wait();

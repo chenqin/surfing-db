@@ -336,7 +336,7 @@ std::shared_ptr<arrow::RecordBatch> KafkaConnector::consume_batch(std::function<
   }
 
   while ((MPI_Wtime() - start) * 1000 < timeout && total < max_batch_size) {
-    rd_kafka_message_t* rkm = rd_kafka_consumer_poll(rk, 100);
+    rd_kafka_message_t* rkm = rd_kafka_consumer_poll(rk, 2);
     if (!rkm)
       continue; /* Timeout: no message within 100ms,
                  *  try again. This short timeout allows
