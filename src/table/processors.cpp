@@ -226,10 +226,6 @@ std::shared_ptr<mtable> processors::shuffle_two_side(std::shared_ptr<mtable> inp
   int world = node_ptr->world;
   size_t rowsize = schema_ptr->rowSize();
 
-  MPI_Datatype row_type;
-  MPI_Type_contiguous(rowsize, MPI_CHAR, &row_type);
-  MPI_Type_commit(&row_type);
-
   MPI_Request sends[node_ptr->world];
   MPI_Request recvs[node_ptr->world];
   MPI_Status statuses[node_ptr->world];
@@ -239,14 +235,16 @@ std::shared_ptr<mtable> processors::shuffle_two_side(std::shared_ptr<mtable> inp
 
   for (int j = 0; j < world; j++) {
     size_t send_to_i = input->range_row_size(j);
-    send_to_vec[j] = send_to_i;
     auto send_table = std::make_shared<mtable>(node_ptr, schema_ptr, send_to_i * rowsize);
     for(int i = 0 ; i < send_to_i; i++){
       memcpy(send_table->payload_ptr() + i * rowsize, input->range_ptr(j) + i * rowsize, rowsize);
+      send_table->row_count++;
     }
     auto buffer = utils::serialize( utils::toArrow(send_table));
     send_buffers[j] = buffer;
-    std::cout << buffer->size() << std::endl;
+    auto arr = utils::deserialize(buffer, utils::toArrow(send_table->getSchema()));
+    CHECK_EQ(arr->num_rows(), send_to_i);
+    send_to_vec[j] = buffer->size();
   }
 
 
@@ -265,10 +263,13 @@ std::shared_ptr<mtable> processors::shuffle_two_side(std::shared_ptr<mtable> inp
     recv_row_count += recv_from_vec[i];
     transfered_row_index_rank[i] = (i == 0) ? 0 : recv_from_vec[i - 1] + transfered_row_index_rank[i - 1];
   }
-  auto table = std::make_shared<mtable>(node_ptr, schema_ptr, recv_row_count * rowsize);
-
-  CHECK_LT((recv_row_count * rowsize), MEM_PAGE_SIZE); // no more than given table size
-
+  /**
+   * @brief recv_buffer is used to store newly transfered rows
+   * 
+   */
+  auto maybe_buffer = arrow::AllocateBuffer(recv_row_count);
+  CHECK(maybe_buffer.ok());
+  std::shared_ptr<arrow::Buffer> recv_buffer = std::move(maybe_buffer.ValueOrDie());
   int send_count = 0, recv_count = 0;
 
   for (int i = 0; i < world; i++) {
@@ -284,7 +285,7 @@ std::shared_ptr<mtable> processors::shuffle_two_side(std::shared_ptr<mtable> inp
        *
        */
       int tag = rank * world + send_rank_offset;
-      MPI_Isend(input->range_ptr(send_rank_offset), send_to_vec[send_rank_offset], row_type, send_rank_offset, tag, MPI_COMM_WORLD, &sends[send_count++]);
+      MPI_Isend(send_buffers[send_rank_offset]->data(), send_to_vec[send_rank_offset], MPI_CHAR, send_rank_offset, tag, MPI_COMM_WORLD, &sends[send_count++]);
     }
     int recv_rank_offset = i;
     /**
@@ -299,15 +300,29 @@ std::shared_ptr<mtable> processors::shuffle_two_side(std::shared_ptr<mtable> inp
        * matching sender side
        */
       int tag = recv_rank_offset * world + rank;
-      MPI_Irecv(table->payload_ptr() + transfered_row_index_rank[recv_rank_offset] * rowsize, recv_from_vec[recv_rank_offset], row_type, recv_rank_offset, tag, MPI_COMM_WORLD, &recvs[recv_count++]);
+      MPI_Irecv(recv_buffer->mutable_data() + transfered_row_index_rank[recv_rank_offset], recv_from_vec[recv_rank_offset], MPI_CHAR, recv_rank_offset, tag, MPI_COMM_WORLD, &recvs[recv_count++]);
     }
   }
   MPI_Waitall(send_count, sends, statuses);
   MPI_Waitall(recv_count, recvs, statuses);
-  table->offset = recv_row_count * rowsize;
-  table->row_count = recv_row_count;
 
-  MPI_Type_free(&row_type);
+  /**
+   * @brief deserialize recv_buffer to mtable
+   * 
+   */
+  auto table = std::make_shared<mtable>(node_ptr, schema_ptr, recv_row_count * rowsize);
+  for(int i = 0 ; i < world; i++) {
+    if(recv_from_vec[i] > 0) {
+      arrow::BufferBuilder builder;
+      builder.Append(recv_buffer->data() + transfered_row_index_rank[i], recv_from_vec[i]);
+      std::shared_ptr<arrow::Buffer> _buffer = builder.Finish().ValueOrDie();
+      std::cout << _buffer->size() << std::endl;
+      auto arrow_table = utils::deserialize(_buffer, utils::toArrow(schema_ptr));
+      std::map<std::string, uint64_t> units;
+      auto recv_table = utils::fromArrow({arrow_table}, units, node_ptr);
+    }
+  }
+
   return table;
 }
 
