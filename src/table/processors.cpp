@@ -235,11 +235,22 @@ std::shared_ptr<mtable> processors::shuffle_two_side(std::shared_ptr<mtable> inp
   MPI_Status statuses[node_ptr->world];
 
   size_t send_to_vec[world], recv_from_vec[world];
+  std::vector<std::shared_ptr<arrow::Buffer>> send_buffers(world);
 
   for (int j = 0; j < world; j++) {
     size_t send_to_i = input->range_row_size(j);
     send_to_vec[j] = send_to_i;
+    auto send_table = std::make_shared<mtable>(node_ptr, schema_ptr, send_to_i * rowsize);
+    for(int i = 0 ; i < send_to_i; i++){
+      memcpy(send_table->payload_ptr() + i * rowsize, input->range_ptr(j) + i * rowsize, rowsize);
+    }
+    auto buffer = utils::serialize( utils::toArrow(send_table));
+    send_buffers[j] = buffer;
+    std::cout << buffer->size() << std::endl;
   }
+
+
+
 
   MPI_Alltoall(&send_to_vec, 1, MPI_UNSIGNED_LONG, recv_from_vec, 1, MPI_UNSIGNED_LONG, MPI_COMM_WORLD);
 

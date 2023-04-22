@@ -20,6 +20,7 @@
 
 #include <arrow/api.h>
 #include <arrow/json/api.h>
+#include <arrow/compute/api.h>
 #include <cstdarg>
 #include <fcntl.h>
 #include <future>
@@ -33,8 +34,6 @@
 #include "arrow/io/test_common.h"
 #include "arrow/ipc/api.h"
 #include "arrow/record_batch.h"
-#include "arrow/testing/gtest_util.h"
-#include "arrow/testing/random.h"
 #include "arrow/type.h"
 #include "arrow/util/io_util.h"
 
