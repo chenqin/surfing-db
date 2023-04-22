@@ -443,6 +443,11 @@ TEST(TableTest, TestUtils) {
     EXPECT_EQ(t.first.string_val, "hello");
     EXPECT_EQ(t.second.long_val, 1l);
   }
+
+  auto buffer = utils::serialize(arrow_table_ptr);
+  auto arrow_table_ptr_desr = utils::deserialize(buffer, arrow_table_ptr->schema());
+  EXPECT_GT(buffer->size(), 0);
+  EXPECT_EQ(arrow_table_ptr_desr->num_rows(), arrow_table_ptr->num_rows());
 }
 
 TEST(TableTest, TestXGBOperator) {

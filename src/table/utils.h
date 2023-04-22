@@ -27,6 +27,16 @@
 #include <mpi.h>
 #include <stdio.h>
 #include <string.h>
+#include "arrow/buffer.h"
+#include "arrow/io/file.h"
+#include "arrow/io/memory.h"
+#include "arrow/io/test_common.h"
+#include "arrow/ipc/api.h"
+#include "arrow/record_batch.h"
+#include "arrow/testing/gtest_util.h"
+#include "arrow/testing/random.h"
+#include "arrow/type.h"
+#include "arrow/util/io_util.h"
 
 #include "KMeanOperator.h"
 #include "frequent_items_sketch.hpp"
@@ -299,13 +309,12 @@ public:
     return units;
   }
 
-
   static std::shared_ptr<mtable> fromArrow(std::vector<std::shared_ptr<arrow::RecordBatch>> records, std::map<std::string, uint64_t>& units, std::shared_ptr<node> node_ptr) {
     CHECK(records.size() > 0);
     auto schema = fromArrow(records.at(0)->schema(), units);
 
     size_t row_count = 0;
-  
+
     for (auto& record : records) {
       row_count += record->num_rows();
     }
@@ -462,6 +471,21 @@ public:
       arrays.push_back(_array);
     }
     return arrow::RecordBatch::Make(schema, 1, arrays);
+  }
+
+  static std::shared_ptr<arrow::Buffer> serialize(std::shared_ptr<arrow::RecordBatch> batch) {
+    auto options = arrow::ipc::IpcWriteOptions::Defaults();
+    return arrow::ipc::SerializeRecordBatch(*batch.get(), options).ValueOrDie();
+  }
+
+  static std::shared_ptr<arrow::RecordBatch> deserialize(std::shared_ptr<arrow::Buffer> buffer, std::shared_ptr<arrow::Schema> schema) {
+    auto options = arrow::ipc::IpcReadOptions::Defaults();
+    std::shared_ptr<arrow::RecordBatch> batch;
+    arrow::io::BufferReader reader(buffer);
+    arrow::ipc::DictionaryMemo empty_memo;
+    return arrow::ipc::ReadRecordBatch(schema, &empty_memo,
+                                       arrow::ipc::IpcReadOptions::Defaults(), &reader)
+      .ValueOrDie();
   }
 
   static std::shared_ptr<arrow::RecordBatch> toArrow(const std::shared_ptr<surfingdb::table::mtable> table) {
