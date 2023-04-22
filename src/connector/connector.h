@@ -114,6 +114,7 @@ public:
     record_batch_not_empty.wait(lock, [this] { return !this->record_batch.empty(); });
     std::vector<std::shared_ptr<arrow::RecordBatch>> ret = std::move(record_batch);
     record_batch.clear();
+    CHECK_EQ(record_batch.size(), 0);
     lock.unlock();
     record_batch_not_full.notify_one();
     return ret;

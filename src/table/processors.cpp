@@ -135,14 +135,14 @@ std::shared_ptr<mtable> processors::shuffle_one_side(std::shared_ptr<mtable> inp
    */
   MPI_Alltoall(&send_to_vec, 1, MPI_UNSIGNED_LONG, recv_from_vec, 1, MPI_UNSIGNED_LONG, MPI_COMM_WORLD);
 
-  size_t recv_row_count = 0;
+  size_t recv_bytes = 0;
   size_t send_row_index_rank[world], get_row_index_rank[world];
   size_t recv_row_offset[world];
 
   // save start offset index send to each rank i
   for (int i = 0; i < world; i++) {
     // std::cout << rank << " <->" << i << " <" << send_to_vec[i] << ", " << recv_from_vec[i] << ">"<< std::endl;
-    recv_row_count += recv_from_vec[i];
+    recv_bytes += recv_from_vec[i];
     send_row_index_rank[i] = (i == 0) ? 0 : send_to_vec[i - 1] + send_row_index_rank[i - 1];
     recv_row_offset[i] = (i == 0) ? 0 : recv_from_vec[i - 1] + recv_row_offset[i - 1];
   }
@@ -152,7 +152,7 @@ std::shared_ptr<mtable> processors::shuffle_one_side(std::shared_ptr<mtable> inp
    *
    */
   MPI_Alltoall(&send_row_index_rank, 1, MPI_UNSIGNED_LONG, get_row_index_rank, 1, MPI_UNSIGNED_LONG, MPI_COMM_WORLD);
-  auto table = std::make_shared<mtable>(node_ptr, schema_ptr, recv_row_count * rowsize);
+  auto table = std::make_shared<mtable>(node_ptr, schema_ptr, recv_bytes * rowsize);
   // copy local rows from input to new table
   if (get_row_index_rank[rank] > 0) {
     void* dest_ptr = table->payload_ptr() + rowsize * get_row_index_rank[rank];
@@ -178,8 +178,8 @@ std::shared_ptr<mtable> processors::shuffle_one_side(std::shared_ptr<mtable> inp
   input->release_window();
   MPI_Type_free(&row_type);
 
-  table->offset = recv_row_count * rowsize;
-  table->row_count = recv_row_count;
+  table->offset = recv_bytes * rowsize;
+  table->row_count = recv_bytes;
   return table;
 }
 
@@ -235,95 +235,85 @@ std::shared_ptr<mtable> processors::shuffle_two_side(std::shared_ptr<mtable> inp
 
   for (int j = 0; j < world; j++) {
     size_t send_to_i = input->range_row_size(j);
-    auto send_table = std::make_shared<mtable>(node_ptr, schema_ptr, send_to_i * rowsize);
-    for(int i = 0 ; i < send_to_i; i++){
-      memcpy(send_table->payload_ptr() + i * rowsize, input->range_ptr(j) + i * rowsize, rowsize);
-      send_table->row_count++;
-    }
-    auto buffer = utils::serialize( utils::toArrow(send_table));
+    auto send_table = std::make_unique<mtable>(node_ptr, schema_ptr, send_to_i * rowsize);
+    memcpy(send_table->payload_ptr(), input->range_ptr(j), send_to_i * rowsize);
+    send_table->row_count = send_to_i;
+    // std::cout << "rank " << rank << " send to " << j << " " << send_to_i << std::endl;
+    auto buffer = utils::serialize(utils::toArrow(std::move(send_table)));
     send_buffers[j] = buffer;
-    auto arr = utils::deserialize(buffer, utils::toArrow(send_table->getSchema()));
-    CHECK_EQ(arr->num_rows(), send_to_i);
+    // auto arr = utils::deserialize(buffer, utils::toArrow(send_table->getSchema()));
+    // CHECK_EQ(arr->num_rows(), send_to_i);
     send_to_vec[j] = buffer->size();
   }
 
-
-
-
   MPI_Alltoall(&send_to_vec, 1, MPI_UNSIGNED_LONG, recv_from_vec, 1, MPI_UNSIGNED_LONG, MPI_COMM_WORLD);
 
-  size_t recv_row_count = 0;
-  size_t transfered_row_index_rank[world];
+  size_t recv_bytes = 0;
+  size_t tranfer_bytes_rank_index[world];
   /**
-   * @brief transfered_row_index_rank determins placement of newly transfered row
+   * @brief tranfer_bytes_rank_index determins placement of newly transfered row
    * we don't differentiate local move v.s remote as MPI
    *
    */
   for (int i = 0; i < world; i++) {
-    recv_row_count += recv_from_vec[i];
-    transfered_row_index_rank[i] = (i == 0) ? 0 : recv_from_vec[i - 1] + transfered_row_index_rank[i - 1];
+    recv_bytes += recv_from_vec[i];
+    tranfer_bytes_rank_index[i] = (i == 0) ? 0 : recv_from_vec[i - 1] + tranfer_bytes_rank_index[i - 1];
   }
   /**
    * @brief recv_buffer is used to store newly transfered rows
-   * 
+   *
    */
-  auto maybe_buffer = arrow::AllocateBuffer(recv_row_count);
+  auto maybe_buffer = arrow::AllocateBuffer(recv_bytes);
   CHECK(maybe_buffer.ok());
   std::shared_ptr<arrow::Buffer> recv_buffer = std::move(maybe_buffer.ValueOrDie());
   int send_count = 0, recv_count = 0;
 
   for (int i = 0; i < world; i++) {
-    int send_rank_offset = i;
+    int send_to_rank = i;
     /**
-     * @brief current rank has data sending to send_rank_offset
+     * @brief current rank has data sending to send_to_rank
      *
      */
-    if (send_to_vec[send_rank_offset] > 0) {
+    if (send_to_vec[send_to_rank] > 0) {
       // LOG(INFO) << node_ptr->rank << "-> " << i << " size " << input->range_row_size(i);
       /**
        * @brief tag is unqiue value from sender to reciever with two dim array
        *
        */
-      int tag = rank * world + send_rank_offset;
-      MPI_Isend(send_buffers[send_rank_offset]->data(), send_to_vec[send_rank_offset], MPI_CHAR, send_rank_offset, tag, MPI_COMM_WORLD, &sends[send_count++]);
+      int tag = rank * world + send_to_rank;
+      MPI_Isend(send_buffers[send_to_rank]->data(), send_to_vec[send_to_rank], MPI_CHAR, send_to_rank, tag, MPI_COMM_WORLD, &sends[send_count++]);
     }
-    int recv_rank_offset = i;
+    int recv_from_rank = i;
     /**
-     * @brief current rank has data recieveing form recv_rank_offset
+     * @brief current rank has data recieveing form recv_from_rank
      *
      */
-    if (recv_from_vec[recv_rank_offset] > 0) {
-      CHECK_LE(transfered_row_index_rank[recv_rank_offset], recv_row_count);
+    if (recv_from_vec[recv_from_rank] > 0) {
+      CHECK_LE(tranfer_bytes_rank_index[recv_from_rank], recv_bytes);
       // LOG(INFO) << node_ptr->rank << " <- " << i << " size " << recv_lens[i];
       /**
        * @brief tag is unqiue value from sender to reciever with two dim array
        * matching sender side
        */
-      int tag = recv_rank_offset * world + rank;
-      MPI_Irecv(recv_buffer->mutable_data() + transfered_row_index_rank[recv_rank_offset], recv_from_vec[recv_rank_offset], MPI_CHAR, recv_rank_offset, tag, MPI_COMM_WORLD, &recvs[recv_count++]);
+      int tag = recv_from_rank * world + rank;
+      MPI_Irecv(recv_buffer->mutable_data() + tranfer_bytes_rank_index[recv_from_rank], recv_from_vec[recv_from_rank], MPI_CHAR, recv_from_rank, tag, MPI_COMM_WORLD, &recvs[recv_count++]);
     }
   }
   MPI_Waitall(send_count, sends, statuses);
   MPI_Waitall(recv_count, recvs, statuses);
 
-  /**
-   * @brief deserialize recv_buffer to mtable
-   * 
-   */
-  auto table = std::make_shared<mtable>(node_ptr, schema_ptr, recv_row_count * rowsize);
-  for(int i = 0 ; i < world; i++) {
-    if(recv_from_vec[i] > 0) {
-      arrow::BufferBuilder builder;
-      builder.Append(recv_buffer->data() + transfered_row_index_rank[i], recv_from_vec[i]);
-      std::shared_ptr<arrow::Buffer> _buffer = builder.Finish().ValueOrDie();
-      std::cout << _buffer->size() << std::endl;
+  std::vector<std::shared_ptr<arrow::RecordBatch>> arrow_tables;
+  for (int i = 0; i < world; i++) {
+    if (recv_from_vec[i] > 0) {
+      auto _buffer = arrow::SliceBuffer(recv_buffer, tranfer_bytes_rank_index[i], recv_from_vec[i]);
       auto arrow_table = utils::deserialize(_buffer, utils::toArrow(schema_ptr));
-      std::map<std::string, uint64_t> units;
-      auto recv_table = utils::fromArrow({arrow_table}, units, node_ptr);
+      arrow_tables.push_back(arrow_table);
     }
   }
-
-  return table;
+  std::map<std::string, uint64_t> units;
+  auto table2 = utils::fromArrow(arrow_tables, units, node_ptr);
+  // std::cout << "rank " << node_ptr->rank << " recv " << table2->row_count << std::endl;
+  return table2;
 }
 
 const std::shared_ptr<arrow::RecordBatch> processors::shuffle_x(std::vector<std::shared_ptr<arrow::RecordBatch>> batch, std::string field_name, std::function<size_t(size_t, int, int)> partitioner, bool singleside, std::shared_ptr<node> node) {
@@ -335,15 +325,15 @@ const std::shared_ptr<arrow::RecordBatch> processors::shuffle_x(std::vector<std:
   auto start = MPI_Wtime();
   auto out = singleside ? processors::shuffle_one_side(sorted, f, partitioner) : processors::shuffle_two_side(sorted, f, partitioner);
   LOG(INFO) << "shuffle takes " << MPI_Wtime() - start << " seconds";
-  // TODO: we observed a bug in tcp MPI_GET that lead to one row of garbage 
-  if(!singleside) out->verifyShuffle(out->getSchema()->getFieldByName(field_name), partitioner);
+  // TODO: we observed a bug in tcp MPI_GET that lead to one row of garbage
+  if (!singleside) out->verifyShuffle(out->getSchema()->getFieldByName(field_name), partitioner);
   return utils::toArrow(out);
 }
 
 const std::vector<std::shared_ptr<arrow::RecordBatch>> processors::java_x(std::vector<std::shared_ptr<arrow::RecordBatch>> batch, std::string class_name, std::shared_ptr<node> node) {
   std::vector<std::shared_ptr<arrow::RecordBatch>> out;
-  for(auto& b: batch) {
-    //CHECK_GE(b->num_rows(), 1);
+  for (auto& b : batch) {
+    // CHECK_GE(b->num_rows(), 1);
     auto result = java(b, class_name, node);
     out.push_back(std::move(result));
   }

@@ -230,7 +230,7 @@ public:
        *
        * @param i
        */
-      CHECK(record_ptr->num_rows() > 0);
+      //CHECK(record_ptr->num_rows() > 0);
       for (int64_t i = 0; i < record_ptr->num_rows(); i++) {
         for (auto j = 0; j < vc.size(); j++) {
           auto field = record_ptr->schema()->field(j);
