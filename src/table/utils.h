@@ -19,8 +19,8 @@
 #pragma once
 
 #include <arrow/api.h>
-#include <arrow/json/api.h>
 #include <arrow/compute/api.h>
+#include <arrow/json/api.h>
 #include <cstdarg>
 #include <fcntl.h>
 #include <future>
@@ -230,7 +230,7 @@ public:
        *
        * @param i
        */
-      //CHECK(record_ptr->num_rows() > 0);
+      // CHECK(record_ptr->num_rows() > 0);
       for (int64_t i = 0; i < record_ptr->num_rows(); i++) {
         for (auto j = 0; j < vc.size(); j++) {
           auto field = record_ptr->schema()->field(j);
@@ -306,6 +306,27 @@ public:
       u.second = global_unit_max[i++] + 1;
     }
     return units;
+  }
+
+  static std::vector<std::shared_ptr<arrow::RecordBatch>> hash(std::vector<std::shared_ptr<arrow::RecordBatch>>& batch, std::string field_name, std::function<size_t(size_t, int, int)>& partitioner, int rank, int world) {
+    std::vector<std::shared_ptr<arrow::RecordBatch>> arrow_tables;
+    for (auto& b : batch) {
+      arrow::Int8Builder hash_builder;
+      for (int i = 0; i < b->num_rows(); i++) {
+        CHECK(b->GetColumnByName(field_name)->GetScalar(i).ok());
+        auto v = b->GetColumnByName(field_name)->GetScalar(i).ValueOrDie();
+        auto dest_rank = partitioner(v->hash(), rank, world);
+        hash_builder.Append(dest_rank);
+      }
+      if (b->num_rows() > 0) {
+        std::shared_ptr<arrow::Array> _array;
+        hash_builder.Finish(&_array);
+        auto result = b->AddColumn(b->num_columns(), "_hash", _array);
+        CHECK(result.ok());
+        arrow_tables.push_back(result.ValueOrDie());
+      }
+    }
+    return arrow_tables;
   }
 
   static std::shared_ptr<mtable> fromArrow(std::vector<std::shared_ptr<arrow::RecordBatch>> records, std::map<std::string, uint64_t>& units, std::shared_ptr<node> node_ptr) {
