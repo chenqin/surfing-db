@@ -53,7 +53,8 @@ public:
      *
      * @return std::shared_ptr<mtable>
      */
-    static std::shared_ptr<mtable> shuffle_two_side(std::shared_ptr<mtable>, Field&, std::function<size_t(size_t, int, int)>);
+
+  static std::vector<std::shared_ptr<arrow::RecordBatch>> shuffle_two_side(std::vector<std::shared_ptr<arrow::RecordBatch>>, std::string, int, int);
   // arrow format apis
   /**
    * @brief merge recordbatches and do one shuffle
@@ -61,7 +62,7 @@ public:
    * @param node 
    * @return std::shared_ptr<arrow::RecordBatch> 
    */
-  const static std::shared_ptr<arrow::RecordBatch> shuffle_x(std::vector<std::shared_ptr<arrow::RecordBatch>>, std::string, std::function<size_t(size_t, int, int)>, bool, std::shared_ptr<node>);
+  const static std::vector<std::shared_ptr<arrow::RecordBatch>> shuffle_x(std::vector<std::shared_ptr<arrow::RecordBatch>>, std::string, std::function<size_t(size_t, int, int)>, bool, std::shared_ptr<node>);
 
   const static std::vector<std::shared_ptr<arrow::RecordBatch>> java_x(std::vector<std::shared_ptr<arrow::RecordBatch>>, std::string class_name, std::shared_ptr<node> node);
 

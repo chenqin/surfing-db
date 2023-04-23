@@ -585,6 +585,16 @@ public:
     return arrow::RecordBatch::Make(schema, 1, arrays);
   }
 
+  static std::shared_ptr<arrow::Buffer> serializeSchema(std::shared_ptr<arrow::Schema> schema) {
+    return arrow::ipc::SerializeSchema(*schema.get()).ValueOrDie();
+  }
+  
+  static std::shared_ptr<arrow::Schema> deserializeSchema(std::shared_ptr<arrow::Buffer> buffer) {
+    arrow::io::BufferReader reader(buffer);
+    arrow::ipc::DictionaryMemo empty_memo;
+    return arrow::ipc::ReadSchema(&reader, &empty_memo).ValueOrDie();
+  }
+
   static std::shared_ptr<arrow::Buffer> serialize(std::shared_ptr<arrow::RecordBatch> batch) {
     auto options = arrow::ipc::IpcWriteOptions::Defaults();
     return arrow::ipc::SerializeRecordBatch(*batch.get(), options).ValueOrDie();

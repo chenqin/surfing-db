@@ -217,32 +217,34 @@ static void release_malloced_array(struct ArrowArray* array) {
   array->release = NULL;
 }
 
-std::shared_ptr<mtable> processors::shuffle_two_side(std::shared_ptr<mtable> input, Field& f, std::function<size_t(size_t key, int rank, int world)> partitioner) {
-  CHECK(input->sorted);
+std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_two_side(std::vector<std::shared_ptr<arrow::RecordBatch>> batches, std::string filedname, int rank, int world) {
 
-  auto schema_ptr = input->getSchema();
-  auto node_ptr = input->getNodePtr();
-  int rank = node_ptr->rank;
-  int world = node_ptr->world;
-  size_t rowsize = schema_ptr->rowSize();
-
-  MPI_Request sends[node_ptr->world];
-  MPI_Request recvs[node_ptr->world];
-  MPI_Status statuses[node_ptr->world];
+  MPI_Request sends[world];
+  MPI_Request recvs[world];
+  MPI_Status statuses[world];
 
   size_t send_to_vec[world], recv_from_vec[world];
   std::vector<std::shared_ptr<arrow::Buffer>> send_buffers(world);
+  int total_batches = 0;
+  int local_batches = batches.size();
+  MPI_Allreduce(&local_batches, &total_batches, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+
+  // nothing to shuffle
+  if (total_batches == 0) {
+    return batches;
+  }
+
+  CHECK_GT(local_batches, 0);
+
+  auto schema = batches[0]->schema();
 
   for (int j = 0; j < world; j++) {
-    size_t send_to_i = input->range_row_size(j);
-    auto send_table = std::make_unique<mtable>(node_ptr, schema_ptr, send_to_i * rowsize);
-    memcpy(send_table->payload_ptr(), input->range_ptr(j), send_to_i * rowsize);
-    send_table->row_count = send_to_i;
+    auto send_to_dest_table = utils::group(batches, filedname, j, world);
     // std::cout << "rank " << rank << " send to " << j << " " << send_to_i << std::endl;
-    auto buffer = utils::serialize(utils::toArrow(std::move(send_table)));
+    auto buffer = utils::serialize(send_to_dest_table);
     send_buffers[j] = buffer;
-    // auto arr = utils::deserialize(buffer, utils::toArrow(send_table->getSchema()));
-    // CHECK_EQ(arr->num_rows(), send_to_i);
+    auto arr = utils::deserialize(buffer, schema);
+    CHECK_EQ(arr->num_rows(), send_to_dest_table->num_rows());
     send_to_vec[j] = buffer->size();
   }
 
@@ -306,38 +308,26 @@ std::shared_ptr<mtable> processors::shuffle_two_side(std::shared_ptr<mtable> inp
   for (int i = 0; i < world; i++) {
     if (recv_from_vec[i] > 0) {
       auto _buffer = arrow::SliceBuffer(recv_buffer, tranfer_bytes_rank_index[i], recv_from_vec[i]);
-      auto arrow_table = utils::deserialize(_buffer, utils::toArrow(schema_ptr));
+      auto arrow_table = utils::deserialize(_buffer, schema);
       arrow_tables.push_back(arrow_table);
     }
   }
-  std::map<std::string, uint64_t> units;
-  auto table2 = utils::fromArrow(arrow_tables, units, node_ptr);
   // std::cout << "rank " << node_ptr->rank << " recv " << table2->row_count << std::endl;
-  return table2;
+  return arrow_tables;
 }
 
-const std::shared_ptr<arrow::RecordBatch> processors::shuffle_x(std::vector<std::shared_ptr<arrow::RecordBatch>> batch, std::string field_name, std::function<size_t(size_t, int, int)> partitioner, bool singleside, std::shared_ptr<node> node) {
+const std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_x(std::vector<std::shared_ptr<arrow::RecordBatch>> batch, std::string field_name, std::function<size_t(size_t, int, int)> partitioner, bool singleside, std::shared_ptr<node> node) {
   std::vector<std::shared_ptr<arrow::RecordBatch>> arrow_tables = utils::hash(batch, field_name, partitioner, node->rank, node->world);
-  auto self = utils::group(arrow_tables, "_hash", node->rank, node->world);
-  
-  auto units = utils::toUnits(arrow_tables);
-  auto mtable = utils::fromArrow(arrow_tables, units, node);
-  auto f = mtable->getSchema()->getFieldByName(field_name);
-  auto sorted = mtable->placement_sort(f, partitioner);
-  sorted->sorted = true;
-
   auto start = MPI_Wtime();
-  auto out = singleside ? processors::shuffle_one_side(sorted, f, partitioner) : processors::shuffle_two_side(sorted, f, partitioner);
+  auto out = processors::shuffle_two_side(arrow_tables, "_hash", node->rank, node->world);
   LOG(INFO) << "shuffle takes " << MPI_Wtime() - start << " seconds";
   // TODO: we observed a bug in tcp MPI_GET that lead to one row of garbage
-  if (!singleside) out->verifyShuffle(out->getSchema()->getFieldByName(field_name), partitioner);
-  return utils::toArrow(out);
+  return out;
 }
 
 const std::vector<std::shared_ptr<arrow::RecordBatch>> processors::java_x(std::vector<std::shared_ptr<arrow::RecordBatch>> batch, std::string class_name, std::shared_ptr<node> node) {
   std::vector<std::shared_ptr<arrow::RecordBatch>> out;
   for (auto& b : batch) {
-    // CHECK_GE(b->num_rows(), 1);
     auto result = java(b, class_name, node);
     out.push_back(std::move(result));
   }

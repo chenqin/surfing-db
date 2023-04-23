@@ -99,40 +99,8 @@ public:
   }
 
   static Declaration shuffle(Declaration& node_in, std::string field_name, std::function<size_t(size_t, int, int)> partationer, bool oneside, std::shared_ptr<node> node) {
-    auto tables = DeclarationToBatches(std::move(node_in)).ValueOrDie();
-    CHECK(tables.size() > 0);
-
-    auto start = MPI_Wtime();
-    auto units = utils::toUnits(tables);
-    auto mtable = utils::fromArrow(tables, units, node);
-    auto schema = utils::fromArrow(tables.at(0)->schema(), units);
-    auto f = schema->getFieldByName(field_name);
-    //std::cout << mtable->row_count << std::endl;
-    
-    auto t5 = oneside ? processors::shuffle_one_side(mtable, f, partationer) : processors::shuffle_two_side(mtable, f, partationer);
-
-    //std::cout << t5->row_count << std::endl;
-    t5->verifyShuffle(schema->fields.at(0), [](size_t key, int rank, int world) {return key % world;});
-    auto t = utils::toArrow(t5);
-
-    LOG(INFO) << "shuffle qps" << t5->row_count / (MPI_Wtime() - start);
-    return source({t}, units);
-  }
-
-  static Declaration java(Declaration& node_in, std::string classname, std::shared_ptr<node> node) {
-    auto tables = DeclarationToBatches(std::move(node_in)).ValueOrDie();
-    std::vector<std::shared_ptr<arrow::RecordBatch>> atables;
-    auto units = utils::toUnits(tables);
-    auto start = MPI_Wtime();
-    double total_count = 0;
-    for (const auto& t : tables) {
-      auto t3 = processors::java(t, classname, node);
-      total_count += t3->num_rows();
-      atables.push_back(t3);
-    }
-    LOG(INFO) << "java qps" << total_count / (MPI_Wtime() - start);
-    units = utils::toUnits(atables);
-    return source(atables, units);
+    CHECK(false);
+    return node_in;
   }
 
   static Declaration filter(Declaration& node_in, Expression& expression) {
