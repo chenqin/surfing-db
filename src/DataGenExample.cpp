@@ -26,7 +26,7 @@
 #include "table/utils.h"
 
 #define FLUSH_DIR "/tmp/"
-#define BATCH_SIZE 10000
+#define BATCH_SIZE 1
 
 using namespace surfingdb::meta;
 using namespace surfingdb::table::schema;
@@ -82,9 +82,9 @@ int main(int argc, char** argv) {
     auto records = con.poll_once();
     auto signals = processors::java_x(records, "CleanupWrapper", node);
     auto app_signals = processors::shuffle_x(signals, "appid", partitioner, false, node);
-    //auto app_state = processors::java_x(app_signals, "AggregateWrapper", node);
-    //auto job_signals = processors::shuffle_x(app_state, "jobid", partitioner, false, node);
-    //auto job_info = processors::java_x(job_signals, "JobInfoWrapper", node);
+    auto app_state = processors::java_x(app_signals, "AggregateWrapper", node);
+    auto job_signals = processors::shuffle_x(app_state, "jobid", partitioner, false, node);
+    auto job_info = processors::java_x(job_signals, "JobInfoWrapper", node);
   }
   t1.wait();
   return terminal_signal;

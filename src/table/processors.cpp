@@ -243,8 +243,8 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_two_side(st
     // std::cout << "rank " << rank << " send to " << j << " " << send_to_i << std::endl;
     auto buffer = utils::serialize(send_to_dest_table);
     send_buffers[j] = buffer;
-    auto arr = utils::deserialize(buffer, schema);
-    CHECK_EQ(arr->num_rows(), send_to_dest_table->num_rows());
+    //auto arr = utils::deserialize(buffer, schema);
+    //CHECK_EQ(arr->num_rows(), send_to_dest_table->num_rows());
     send_to_vec[j] = buffer->size();
   }
 
@@ -317,10 +317,15 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_two_side(st
 }
 
 const std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_x(std::vector<std::shared_ptr<arrow::RecordBatch>> batch, std::string field_name, std::function<size_t(size_t, int, int)> partitioner, bool singleside, std::shared_ptr<node> node) {
-  std::vector<std::shared_ptr<arrow::RecordBatch>> arrow_tables = utils::hash(batch, field_name, partitioner, node->rank, node->world);
+  std::vector<std::shared_ptr<arrow::RecordBatch>> hash_records = utils::hash(batch, field_name, partitioner, node->rank, node->world);
   auto start = MPI_Wtime();
-  auto out = processors::shuffle_two_side(arrow_tables, "_hash", node->rank, node->world);
+  auto out = processors::shuffle_two_side(hash_records, "_hash", node->rank, node->world);
   LOG(INFO) << "shuffle takes " << MPI_Wtime() - start << " seconds";
+  for(auto& b: out) {
+    auto hashindex = b->schema()->GetAllFieldIndices({"_hash"});
+    b = b->RemoveColumn(hashindex.at(0)).ValueOrDie();
+    CHECK(b->Validate().ok());
+  }
   // TODO: we observed a bug in tcp MPI_GET that lead to one row of garbage
   return out;
 }
