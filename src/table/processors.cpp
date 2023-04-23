@@ -318,7 +318,8 @@ std::shared_ptr<mtable> processors::shuffle_two_side(std::shared_ptr<mtable> inp
 
 const std::shared_ptr<arrow::RecordBatch> processors::shuffle_x(std::vector<std::shared_ptr<arrow::RecordBatch>> batch, std::string field_name, std::function<size_t(size_t, int, int)> partitioner, bool singleside, std::shared_ptr<node> node) {
   std::vector<std::shared_ptr<arrow::RecordBatch>> arrow_tables = utils::hash(batch, field_name, partitioner, node->rank, node->world);
-
+  auto self = utils::group(arrow_tables, "_hash", node->rank, node->world);
+  
   auto units = utils::toUnits(arrow_tables);
   auto mtable = utils::fromArrow(arrow_tables, units, node);
   auto f = mtable->getSchema()->getFieldByName(field_name);

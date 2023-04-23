@@ -329,6 +329,98 @@ public:
     return arrow_tables;
   }
 
+  static std::shared_ptr<arrow::RecordBatch> group(std::vector<std::shared_ptr<arrow::RecordBatch>>& batch, std::string field_name, int dest, int world) {
+    CHECK_GT(batch.size(), 0);
+    auto schema = batch[0]->schema();
+
+    std::vector<std::shared_ptr<arrow::ArrayBuilder>> array_builders;
+    std::vector<std::shared_ptr<arrow::Array>> arrays;
+    size_t count = 0;
+
+    for (auto i = 0; i < schema->fields().size(); i++) {
+      auto field = schema->field(i);
+      switch (field->type()->id()) {
+
+      case arrow::Type::BOOL: {
+        std::shared_ptr<arrow::BooleanBuilder> builder = std::make_shared<arrow::BooleanBuilder>();
+        array_builders.push_back(builder);
+        break;
+      }
+
+      case arrow::Type::INT8: {
+        std::shared_ptr<arrow::Int8Builder> builder = std::make_shared<arrow::Int8Builder>();
+        array_builders.push_back(builder);
+        break;
+      }
+
+      case arrow::Type::INT32: {
+        std::shared_ptr<arrow::Int32Builder> builder = std::make_shared<arrow::Int32Builder>();
+        array_builders.push_back(builder);
+        break;
+      }
+
+      case arrow::Type::INT64: {
+        std::shared_ptr<arrow::Int64Builder> builder = std::make_shared<arrow::Int64Builder>();
+        array_builders.push_back(builder);
+        break;
+      }
+
+      case arrow::Type::FLOAT: {
+        std::shared_ptr<arrow::FloatBuilder> builder = std::make_shared<arrow::FloatBuilder>();
+        array_builders.push_back(builder);
+        break;
+      }
+
+      case arrow::Type::DOUBLE: {
+        std::shared_ptr<arrow::DoubleBuilder> builder = std::make_shared<arrow::DoubleBuilder>();
+        array_builders.push_back(builder);
+        break;
+      }
+
+      case arrow::Type::BINARY: {
+        std::shared_ptr<arrow::BinaryBuilder> builder = std::make_shared<arrow::BinaryBuilder>();
+        array_builders.push_back(builder);
+        break;
+      }
+
+      case arrow::Type::STRING: {
+        std::shared_ptr<arrow::StringBuilder> builder = std::make_shared<arrow::StringBuilder>();
+        array_builders.push_back(builder);
+        break;
+      }
+      // Add cases for other data types as needed.
+      default: {
+        throw std::runtime_error("Unsupported data type");
+      }
+      }
+    }
+
+    for (auto& b : batch) {
+      for (int i = 0; i < b->num_rows(); i++) {
+        CHECK(b->GetColumnByName(field_name)->GetScalar(i).ok());
+        auto v = b->GetColumnByName(field_name)->GetScalar(i).ValueOrDie();
+        CHECK(v->type->id() == arrow::Type::INT8);
+        auto dest_rank = ((arrow::Int8Scalar*)v.get())->value;
+        if (dest_rank == dest) {
+          count++;
+          for (int j = 0; j < b->num_columns(); j++) {
+            CHECK(b->column(j)->GetScalar(i).ok());
+            auto v = b->column(j)->GetScalar(i).ValueOrDie();
+            auto builder = array_builders.at(j);
+            builder->AppendScalar(*v.get());
+          }
+        }
+      }
+    }
+
+    for (auto& builder : array_builders) {
+      std::shared_ptr<arrow::Array> array;
+      CHECK(builder->Finish(&array).ok());
+      arrays.push_back(array);
+    }
+    return arrow::RecordBatch::Make(schema, count, arrays);
+  }
+
   static std::shared_ptr<mtable> fromArrow(std::vector<std::shared_ptr<arrow::RecordBatch>> records, std::map<std::string, uint64_t>& units, std::shared_ptr<node> node_ptr) {
     CHECK(records.size() > 0);
     auto schema = fromArrow(records.at(0)->schema(), units);
