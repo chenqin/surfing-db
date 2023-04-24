@@ -280,6 +280,13 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_two_side(co
   }
   MPI_Waitall(send_count, sends, statuses);
   MPI_Waitall(recv_count, recvs, statuses);
+  
+  for (int i = 0; i < world; i++) {
+    if (sends[i] != MPI_REQUEST_NULL)
+      MPI_Request_free(&sends[i]);
+    if (recvs[i] != MPI_REQUEST_NULL)
+      MPI_Request_free(&recvs[i]);
+  }
 
   std::vector<std::shared_ptr<arrow::RecordBatch>> arrow_tables;
   for (int i = 0; i < world; i++) {
@@ -298,7 +305,7 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_two_side(co
   MPI_Allreduce(&total_rows, &shuffle_row_sum, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
   // check before and after shuffle total row count equal
   CHECK_EQ(shuffle_row_sum, orgin_row_sum);
-  
+
   return arrow_tables;
 }
 
@@ -307,64 +314,64 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_x(const std
   auto out = processors::shuffle_two_side(batch, field_name, partitioner, rank, world);
   LOG(INFO) << "shuffle takes " << MPI_Wtime() - start << " seconds";
   // TODO: we observed a bug in tcp MPI_GET that lead to one row of garbage
-  return out;
+  return std::move(out);
 }
 
-std::vector<std::shared_ptr<arrow::RecordBatch>> processors::java_x(const std::vector<std::shared_ptr<arrow::RecordBatch>>& batch, std::string class_name, const std::shared_ptr<node>& node) {
+std::vector<std::shared_ptr<arrow::RecordBatch>> processors::java_x(const std::vector<std::shared_ptr<arrow::RecordBatch>>& batch, std::string class_name, JNIEnv* env) {
   std::vector<std::shared_ptr<arrow::RecordBatch>> out;
   for (auto& b : batch) {
-    auto result = java(b, class_name, node);
+    auto result = java(b, class_name, env);
     out.push_back(std::move(result));
   }
   return std::move(out);
 }
 
-std::shared_ptr<arrow::RecordBatch> processors::java(const std::shared_ptr<arrow::RecordBatch>& batch, std::string class_name, const std::shared_ptr<node>& node) {
-  const jclass bridge = node->env->FindClass(class_name.c_str());
+std::shared_ptr<arrow::RecordBatch> processors::java(const std::shared_ptr<arrow::RecordBatch>& batch, std::string class_name, JNIEnv* env) {
+  const jclass bridge = env->FindClass(class_name.c_str());
   CHECK_NOTNULL(bridge);
   struct ArrowSchema arrowSchemaIn, arrowSchemaOut;
   struct ArrowArray arrowArrayIn, arrowArrayOut;
-  const jmethodID invoke_method = node->env->GetStaticMethodID(bridge, std::string(BRIDGE_METHOD_NAME).c_str(), "(JJJJ)V");
+  const jmethodID invoke_method = env->GetStaticMethodID(bridge, std::string(BRIDGE_METHOD_NAME).c_str(), "(JJJJ)V");
   CHECK_NOTNULL(invoke_method);
 
   /**
    * @brief export schema and data
    *
    */
-  auto schema_ptr = batch->schema();
-  arrow::ExportSchema(*schema_ptr.get(), &arrowSchemaIn);
+  auto schema = batch->schema();
+  arrow::ExportSchema(*schema.get(), &arrowSchemaIn);
   arrow::ExportRecordBatch(*batch.get(), &arrowArrayIn, &arrowSchemaIn);
   /**
    * @brief invoke java method, passing pointers
    *
    */
-  node->env->CallStaticVoidMethod(bridge, invoke_method,
-                                  static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchemaIn)),
-                                  static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArrayIn)),
-                                  static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchemaOut)),
-                                  static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArrayOut)));
+  env->CallStaticVoidMethod(bridge, invoke_method,
+                            static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchemaIn)),
+                            static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArrayIn)),
+                            static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchemaOut)),
+                            static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArrayOut)));
 
-  if (node->env->ExceptionCheck()) {
+  if (env->ExceptionCheck()) {
     LOG(ERROR) << "fail to call jni";
-    node->env->DeleteLocalRef(bridge);
+    env->DeleteLocalRef(bridge);
     release_malloced_array(&arrowArrayIn);
     release_malloced_array(&arrowArrayOut);
     release_malloced_type(&arrowSchemaIn);
     release_malloced_type(&arrowSchemaOut);
-    return java(batch, class_name, node);
+    return java(batch, class_name, env);
   }
-  node->env->DeleteLocalRef(bridge);
+  env->DeleteLocalRef(bridge);
   /**
    * @brief import schema and data from java
    *
    */
   const auto resultImportVectorSchemaRoot = arrow::ImportRecordBatch(&arrowArrayOut, &arrowSchemaOut);
-  std::shared_ptr<arrow::RecordBatch> recordBatch = resultImportVectorSchemaRoot.ValueOrDie();
+  std::shared_ptr<arrow::RecordBatch> out = resultImportVectorSchemaRoot.ValueOrDie();
   release_malloced_array(&arrowArrayIn);
   release_malloced_array(&arrowArrayOut);
   release_malloced_type(&arrowSchemaIn);
   release_malloced_type(&arrowSchemaOut);
-  return recordBatch;
+  return std::move(out);
 }
 
 } // namespace table
