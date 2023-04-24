@@ -329,7 +329,7 @@ public:
     return arrow_tables;
   }
 
-  static std::shared_ptr<arrow::RecordBatch> group(std::vector<std::shared_ptr<arrow::RecordBatch>>& batch, std::string field_name, int dest, int world) {
+  static std::shared_ptr<arrow::RecordBatch> group(const std::vector<std::shared_ptr<arrow::RecordBatch>>& batch, std::string field_name, std::function<size_t(size_t, int, int)>& partitioner, int dest, int rank, int world) {
     CHECK_GT(batch.size(), 0);
     auto schema = batch[0]->schema();
 
@@ -399,8 +399,7 @@ public:
       for (int i = 0; i < b->num_rows(); i++) {
         CHECK(b->GetColumnByName(field_name)->GetScalar(i).ok());
         auto v = b->GetColumnByName(field_name)->GetScalar(i).ValueOrDie();
-        CHECK(v->type->id() == arrow::Type::INT8);
-        auto dest_rank = ((arrow::Int8Scalar*)v.get())->value;
+        auto dest_rank = partitioner(v->hash(), rank, world);
         if (dest_rank == dest) {
           count++;
           for (int j = 0; j < b->num_columns(); j++) {

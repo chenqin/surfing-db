@@ -36,43 +36,23 @@ namespace table {
 class processors {
 public:
   /**
-   * map convert mtable to new table with schema ptr, if map function return true, otherwise current row
+   * @brief v1 apis
+   * 
+   * @return std::shared_ptr<mtable> 
    */
   static std::shared_ptr<mtable> map(std::shared_ptr<mtable>, std::shared_ptr<mschema>, std::function<bool(mrow&, mrow&, const mschema&)>);
-
   static void reduce(std::shared_ptr<mtable>, Field&, std::shared_ptr<std::unordered_map<Value, std::shared_ptr<mrow>, ValueHasher>> result_ptr, std::shared_ptr<mschema> result_schema_ptr, std::function<void(Value&, std::vector<std::unique_ptr<mrow>>&, std::shared_ptr<mrow>&)>);
-
+  static void xgb(std::shared_ptr<mtable>, std::vector<Field>, Field&, const XGBParameters&);
   /**
    * @brief shuffle sorted data with one side RMA MPI_Get network call
    *
    * @return std::shared_ptr<mtable>
    */
   static std::shared_ptr<mtable> shuffle_one_side(std::shared_ptr<mtable>, Field&, std::function<size_t(size_t, int, int)>);
-  /**
-     * @brief shuffle sorted data with two sice isend, irecv network call
-     *
-     * @return std::shared_ptr<mtable>
-     */
-
-  static std::vector<std::shared_ptr<arrow::RecordBatch>> shuffle_two_side(std::vector<std::shared_ptr<arrow::RecordBatch>>, std::string, int, int);
-  // arrow format apis
-  /**
-   * @brief merge recordbatches and do one shuffle
-   * 
-   * @param node 
-   * @return std::shared_ptr<arrow::RecordBatch> 
-   */
-  const static std::vector<std::shared_ptr<arrow::RecordBatch>> shuffle_x(std::vector<std::shared_ptr<arrow::RecordBatch>>, std::string, std::function<size_t(size_t, int, int)>, bool, std::shared_ptr<node>);
-
-  const static std::vector<std::shared_ptr<arrow::RecordBatch>> java_x(std::vector<std::shared_ptr<arrow::RecordBatch>>, std::string class_name, std::shared_ptr<node> node);
-
-  const static std::shared_ptr<arrow::RecordBatch> java(std::shared_ptr<arrow::RecordBatch>, std::string class_name, std::shared_ptr<node> node);
-
-  /**
-   * @brief train a xgboost model
-   *
-   */
-  static void xgb(std::shared_ptr<mtable>, std::vector<Field>, Field&, const XGBParameters&);
+  static std::vector<std::shared_ptr<arrow::RecordBatch>> shuffle_two_side(const std::vector<std::shared_ptr<arrow::RecordBatch>>&, std::string, std::function<size_t(size_t, int, int)>, int, int);
+  static std::vector<std::shared_ptr<arrow::RecordBatch>> shuffle_x(const std::vector<std::shared_ptr<arrow::RecordBatch>>&, std::string, std::function<size_t(size_t, int, int)>, bool, int, int);
+  static std::shared_ptr<arrow::RecordBatch> java(const std::shared_ptr<arrow::RecordBatch>&, std::string class_name, const std::shared_ptr<node>& node);
+  static std::vector<std::shared_ptr<arrow::RecordBatch>> java_x(const std::vector<std::shared_ptr<arrow::RecordBatch>>&, std::string class_name, const std::shared_ptr<node>& node);
 };
 } // namespace table
 } // namespace surfingdb

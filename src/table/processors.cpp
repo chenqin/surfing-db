@@ -217,14 +217,14 @@ static void release_malloced_array(struct ArrowArray* array) {
   array->release = NULL;
 }
 
-std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_two_side(std::vector<std::shared_ptr<arrow::RecordBatch>> batches, std::string filedname, int rank, int world) {
-
+std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_two_side(const std::vector<std::shared_ptr<arrow::RecordBatch>>& batches, std::string filedname, std::function<size_t(size_t, int, int)> partitioner, int rank, int world) {
   MPI_Request sends[world];
   MPI_Request recvs[world];
   MPI_Status statuses[world];
 
   size_t send_to_vec[world], recv_from_vec[world];
   std::vector<std::shared_ptr<arrow::Buffer>> send_buffers(world);
+
   int total_batches = 0;
   int local_batches = batches.size();
   MPI_Allreduce(&local_batches, &total_batches, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
@@ -234,17 +234,21 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_two_side(st
     return batches;
   }
 
+  size_t total_rows = 0;
+  for (auto& batch : batches) {
+    total_rows += batch->num_rows();
+  }
+  size_t orgin_row_sum = 0;
+  MPI_Allreduce(&total_rows, &orgin_row_sum, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
+
   CHECK_GT(local_batches, 0);
 
   auto schema = batches[0]->schema();
 
   for (int j = 0; j < world; j++) {
-    auto send_to_dest_table = utils::group(batches, filedname, j, world);
-    // std::cout << "rank " << rank << " send to " << j << " " << send_to_i << std::endl;
+    auto send_to_dest_table = utils::group(batches, filedname, partitioner, j, rank, world);
     auto buffer = utils::serialize(send_to_dest_table);
     send_buffers[j] = buffer;
-    //auto arr = utils::deserialize(buffer, schema);
-    //CHECK_EQ(arr->num_rows(), send_to_dest_table->num_rows());
     send_to_vec[j] = buffer->size();
   }
 
@@ -252,19 +256,10 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_two_side(st
 
   size_t recv_bytes = 0;
   size_t tranfer_bytes_rank_index[world];
-  /**
-   * @brief tranfer_bytes_rank_index determins placement of newly transfered row
-   * we don't differentiate local move v.s remote as MPI
-   *
-   */
   for (int i = 0; i < world; i++) {
     recv_bytes += recv_from_vec[i];
     tranfer_bytes_rank_index[i] = (i == 0) ? 0 : recv_from_vec[i - 1] + tranfer_bytes_rank_index[i - 1];
   }
-  /**
-   * @brief recv_buffer is used to store newly transfered rows
-   *
-   */
   auto maybe_buffer = arrow::AllocateBuffer(recv_bytes);
   CHECK(maybe_buffer.ok());
   std::shared_ptr<arrow::Buffer> recv_buffer = std::move(maybe_buffer.ValueOrDie());
@@ -272,31 +267,13 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_two_side(st
 
   for (int i = 0; i < world; i++) {
     int send_to_rank = i;
-    /**
-     * @brief current rank has data sending to send_to_rank
-     *
-     */
     if (send_to_vec[send_to_rank] > 0) {
-      // LOG(INFO) << node_ptr->rank << "-> " << i << " size " << input->range_row_size(i);
-      /**
-       * @brief tag is unqiue value from sender to reciever with two dim array
-       *
-       */
       int tag = rank * world + send_to_rank;
       MPI_Isend(send_buffers[send_to_rank]->data(), send_to_vec[send_to_rank], MPI_CHAR, send_to_rank, tag, MPI_COMM_WORLD, &sends[send_count++]);
     }
     int recv_from_rank = i;
-    /**
-     * @brief current rank has data recieveing form recv_from_rank
-     *
-     */
     if (recv_from_vec[recv_from_rank] > 0) {
       CHECK_LE(tranfer_bytes_rank_index[recv_from_rank], recv_bytes);
-      // LOG(INFO) << node_ptr->rank << " <- " << i << " size " << recv_lens[i];
-      /**
-       * @brief tag is unqiue value from sender to reciever with two dim array
-       * matching sender side
-       */
       int tag = recv_from_rank * world + rank;
       MPI_Irecv(recv_buffer->mutable_data() + tranfer_bytes_rank_index[recv_from_rank], recv_from_vec[recv_from_rank], MPI_CHAR, recv_from_rank, tag, MPI_COMM_WORLD, &recvs[recv_count++]);
     }
@@ -312,25 +289,28 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_two_side(st
       arrow_tables.push_back(arrow_table);
     }
   }
-  // std::cout << "rank " << node_ptr->rank << " recv " << table2->row_count << std::endl;
+  total_rows = 0;
+  for (auto& batch : arrow_tables) {
+    total_rows += batch->num_rows();
+  }
+
+  size_t shuffle_row_sum = 0;
+  MPI_Allreduce(&total_rows, &shuffle_row_sum, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
+  // check before and after shuffle total row count equal
+  CHECK_EQ(shuffle_row_sum, orgin_row_sum);
+  
   return arrow_tables;
 }
 
-const std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_x(std::vector<std::shared_ptr<arrow::RecordBatch>> batch, std::string field_name, std::function<size_t(size_t, int, int)> partitioner, bool singleside, std::shared_ptr<node> node) {
-  std::vector<std::shared_ptr<arrow::RecordBatch>> hash_records = utils::hash(batch, field_name, partitioner, node->rank, node->world);
+std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_x(const std::vector<std::shared_ptr<arrow::RecordBatch>>& batch, std::string field_name, std::function<size_t(size_t, int, int)> partitioner, bool singleside, int rank, int world) {
   auto start = MPI_Wtime();
-  auto out = processors::shuffle_two_side(hash_records, "_hash", node->rank, node->world);
+  auto out = processors::shuffle_two_side(batch, field_name, partitioner, rank, world);
   LOG(INFO) << "shuffle takes " << MPI_Wtime() - start << " seconds";
-  for(auto& b: out) {
-    auto hashindex = b->schema()->GetAllFieldIndices({"_hash"});
-    b = b->RemoveColumn(hashindex.at(0)).ValueOrDie();
-    CHECK(b->Validate().ok());
-  }
   // TODO: we observed a bug in tcp MPI_GET that lead to one row of garbage
   return out;
 }
 
-const std::vector<std::shared_ptr<arrow::RecordBatch>> processors::java_x(std::vector<std::shared_ptr<arrow::RecordBatch>> batch, std::string class_name, std::shared_ptr<node> node) {
+std::vector<std::shared_ptr<arrow::RecordBatch>> processors::java_x(const std::vector<std::shared_ptr<arrow::RecordBatch>>& batch, std::string class_name, const std::shared_ptr<node>& node) {
   std::vector<std::shared_ptr<arrow::RecordBatch>> out;
   for (auto& b : batch) {
     auto result = java(b, class_name, node);
@@ -339,7 +319,7 @@ const std::vector<std::shared_ptr<arrow::RecordBatch>> processors::java_x(std::v
   return std::move(out);
 }
 
-const std::shared_ptr<arrow::RecordBatch> processors::java(std::shared_ptr<arrow::RecordBatch> batch, std::string class_name, std::shared_ptr<node> node) {
+std::shared_ptr<arrow::RecordBatch> processors::java(const std::shared_ptr<arrow::RecordBatch>& batch, std::string class_name, const std::shared_ptr<node>& node) {
   const jclass bridge = node->env->FindClass(class_name.c_str());
   CHECK_NOTNULL(bridge);
   struct ArrowSchema arrowSchemaIn, arrowSchemaOut;
