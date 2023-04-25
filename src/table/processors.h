@@ -48,7 +48,7 @@ public:
    *
    * @return std::shared_ptr<mtable>
    */
-  static std::shared_ptr<mtable> shuffle_one_side(std::shared_ptr<mtable>, Field&, std::function<size_t(size_t, int, int)>);
+  static std::vector<std::shared_ptr<arrow::RecordBatch>> shuffle_one_side(const std::vector<std::shared_ptr<arrow::RecordBatch>>&, std::string, std::function<size_t(size_t, int, int)>, int, int);
   static std::vector<std::shared_ptr<arrow::RecordBatch>> shuffle_two_side(const std::vector<std::shared_ptr<arrow::RecordBatch>>&, std::string, std::function<size_t(size_t, int, int)>, int, int);
   static std::vector<std::shared_ptr<arrow::RecordBatch>> shuffle_x(const std::vector<std::shared_ptr<arrow::RecordBatch>>&, std::string, std::function<size_t(size_t, int, int)>, bool, int, int);
   static std::shared_ptr<arrow::RecordBatch> java(const std::shared_ptr<arrow::RecordBatch>&, std::string class_name, JNIEnv* env);

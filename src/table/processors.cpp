@@ -107,114 +107,82 @@ void processors::xgb(std::shared_ptr<mtable> input, std::vector<Field> features,
   }
 }
 
-std::shared_ptr<mtable> processors::shuffle_one_side(std::shared_ptr<mtable> input, Field& f, std::function<size_t(size_t key, int rank, int world)> partitioner) {
+std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_one_side(const std::vector<std::shared_ptr<arrow::RecordBatch>>& batches, std::string filedname, std::function<size_t(size_t, int, int)> partitioner, int rank, int world) {
+  MPI_Request gets[world];
+  MPI_Status statuses[world];
 
-  CHECK(input->sorted);
+  size_t send_to_vec[world];
+  size_t recv_from_vec[world];
+  MPI_Win windows[world];
+  std::vector<std::shared_ptr<arrow::Buffer>> send_buffers(world);
+  std::vector<std::shared_ptr<arrow::Buffer>> recv_buffers(world);
 
-  auto schema_ptr = input->getSchema();
-  auto node_ptr = input->getNodePtr();
-  int rank = node_ptr->rank;
-  int world = node_ptr->world;
-  size_t rowsize = schema_ptr->rowSize();
-  /**
-   * register and commit schema row size unit to all workers
-   */
-  MPI_Datatype row_type;
-  MPI_Type_contiguous(rowsize, MPI_CHAR, &row_type);
-  MPI_Type_commit(&row_type);
+  int total_batches = 0;
+  int local_batches = batches.size();
+  MPI_Allreduce(&local_batches, &total_batches, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
-  size_t send_to_vec[world], recv_from_vec[world];
-
-  for (int i = 0; i < world; i++) {
-    send_to_vec[i] = input->range_row_size(i);
+  // nothing to shuffle
+  if (total_batches == 0) {
+    return batches;
   }
-  /**
-   * @brief recv_from_vec stores number of rows current rank expect to get from peers
-   * send_to_vec stores number of rows current rank expect to send to other peers
-   *
-   */
+
+  auto schema = batches[0]->schema();
+
+  for (int j = 0; j < world; j++) {
+    auto send_to_dest_table = utils::group(batches, filedname, partitioner, j, rank, world);
+    auto buffer = utils::serialize(send_to_dest_table);
+    // store data get pulled from rank j to send_buffers[j]
+    send_buffers[j] = buffer;
+    send_to_vec[j] = buffer->size();
+  }
   MPI_Alltoall(&send_to_vec, 1, MPI_UNSIGNED_LONG, recv_from_vec, 1, MPI_UNSIGNED_LONG, MPI_COMM_WORLD);
 
-  size_t recv_bytes = 0;
-  size_t send_row_index_rank[world], get_row_index_rank[world];
-  size_t recv_row_offset[world];
-
-  // save start offset index send to each rank i
-  for (int i = 0; i < world; i++) {
-    // std::cout << rank << " <->" << i << " <" << send_to_vec[i] << ", " << recv_from_vec[i] << ">"<< std::endl;
-    recv_bytes += recv_from_vec[i];
-    send_row_index_rank[i] = (i == 0) ? 0 : send_to_vec[i - 1] + send_row_index_rank[i - 1];
-    recv_row_offset[i] = (i == 0) ? 0 : recv_from_vec[i - 1] + recv_row_offset[i - 1];
-  }
-  /**
-   * @brief send_row_index_rank stores start index current rank send to peer
-   * g_row_index_rank stores peer start index current rank expect get data from
-   *
-   */
-  MPI_Alltoall(&send_row_index_rank, 1, MPI_UNSIGNED_LONG, get_row_index_rank, 1, MPI_UNSIGNED_LONG, MPI_COMM_WORLD);
-  auto table = std::make_shared<mtable>(node_ptr, schema_ptr, recv_bytes * rowsize);
-  // copy local rows from input to new table
-  if (get_row_index_rank[rank] > 0) {
-    void* dest_ptr = table->payload_ptr() + rowsize * get_row_index_rank[rank];
-    memcpy(dest_ptr, input->range_ptr(rank), send_to_vec[rank] * rowsize);
+  // allocate buffer that stores data get from other ranks
+  for (int j = 0; j < world; j++) {
+    recv_buffers[j] = arrow::AllocateBuffer(recv_from_vec[j]).ValueOrDie();
   }
 
-  MPI_Request gets[node_ptr->world];
-  MPI_Status statuses[node_ptr->world];
-
-  input->build_window();
-  MPI_Win_fence(0, input->win);
   int toal_requests = 0;
   for (int dest = 0; dest < world; dest++) {
+    // create window that stores data get pulled from rank dest
+    MPI_Win_create(send_buffers[dest]->mutable_data(), send_to_vec[dest], sizeof(char), MPI_INFO_NULL, MPI_COMM_WORLD, &windows[dest]);
+
+    MPI_Win_fence(0, windows[dest]);
     // mpi put to local rank will silently fail, if no data fetching also skip MPI_GET
     if (dest == rank || recv_from_vec[dest] == 0) continue;
-    MPI_Aint offset = get_row_index_rank[dest];
+    MPI_Aint offset = 0;
     CHECK_EQ(MPI_SUCCESS,
-             MPI_Rget(table->payload_ptr() + rowsize * recv_row_offset[dest], recv_from_vec[dest], row_type, dest, offset, recv_from_vec[dest], row_type, input->win, &gets[toal_requests++]));
+             MPI_Rget(recv_buffers[dest]->mutable_data(), recv_from_vec[dest], MPI_CHAR, dest, offset, recv_from_vec[dest], MPI_CHAR, windows[dest], &gets[toal_requests++]));
   }
   MPI_Waitall(toal_requests, gets, statuses);
 
-  MPI_Win_fence(0, input->win);
-  input->release_window();
-  MPI_Type_free(&row_type);
+  for (int i = 0; i < world; i++) {
+    MPI_Win_free(&windows[i]);
+    if (gets[i] != MPI_REQUEST_NULL)
+      MPI_Request_free(&gets[i]);
+  }
 
-  table->offset = recv_bytes * rowsize;
-  table->row_count = recv_bytes;
-  return table;
-}
-
-static void release_malloced_type(struct ArrowSchema* schema) {
-  if (schema->release == NULL) return;
-  int i;
-  for (i = 0; i < schema->n_children; ++i) {
-    struct ArrowSchema* child = schema->children[i];
-    if (child->release != NULL) {
-      child->release(child);
+  std::vector<std::shared_ptr<arrow::RecordBatch>> arrow_tables;
+  for (int i = 0; i < world; i++) {
+    if (recv_from_vec[i] > 0 && i != rank) {
+      auto _buffer = recv_buffers[i];
+      auto arrow_table = utils::deserialize(_buffer, schema);
+      arrow_tables.push_back(arrow_table);
     }
   }
-  free(schema->children);
-  // Mark released
-  schema->release = NULL;
-}
+  arrow_tables.push_back(utils::deserialize(recv_buffers[rank], schema));
 
-static void release_malloced_array(struct ArrowArray* array) {
-  if (array->release == NULL) return;
-  int i;
-  // Free children
-  for (i = 0; i < array->n_children; ++i) {
-    struct ArrowArray* child = array->children[i];
-    if (child->release != NULL) {
-      child->release(child);
-    }
+  size_t total_rows = 0;
+  for (auto& batch : arrow_tables) {
+    total_rows += batch->num_rows();
   }
-  free(array->children);
-  // Free buffers
-  for (i = 0; i < array->n_buffers; ++i) {
-    free((void*)array->buffers[i]);
-  }
-  free(array->buffers);
-  // Mark released
-  array->release = NULL;
+
+  size_t shuffle_row_sum = 0;
+  MPI_Allreduce(&total_rows, &shuffle_row_sum, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
+  // check before and after shuffle total row count equal
+  // CHECK_EQ(shuffle_row_sum, orgin_row_sum);
+
+  return arrow_tables;
 }
 
 std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_two_side(const std::vector<std::shared_ptr<arrow::RecordBatch>>& batches, std::string filedname, std::function<size_t(size_t, int, int)> partitioner, int rank, int world) {
@@ -280,7 +248,7 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_two_side(co
   }
   MPI_Waitall(send_count, sends, statuses);
   MPI_Waitall(recv_count, recvs, statuses);
-  
+
   for (int i = 0; i < world; i++) {
     if (sends[i] != MPI_REQUEST_NULL)
       MPI_Request_free(&sends[i]);
@@ -311,7 +279,7 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_two_side(co
 
 std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_x(const std::vector<std::shared_ptr<arrow::RecordBatch>>& batch, std::string field_name, std::function<size_t(size_t, int, int)> partitioner, bool singleside, int rank, int world) {
   auto start = MPI_Wtime();
-  auto out = processors::shuffle_two_side(batch, field_name, partitioner, rank, world);
+  auto out = singleside ? processors::shuffle_one_side(batch, field_name, partitioner, rank, world) : processors::shuffle_two_side(batch, field_name, partitioner, rank, world);
   LOG(INFO) << "shuffle takes " << MPI_Wtime() - start << " seconds";
   // TODO: we observed a bug in tcp MPI_GET that lead to one row of garbage
   return std::move(out);
@@ -324,6 +292,40 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::java_x(const std::v
     out.push_back(std::move(result));
   }
   return std::move(out);
+}
+
+static void release_malloced_type(struct ArrowSchema* schema) {
+  if (schema->release == NULL) return;
+  int i;
+  for (i = 0; i < schema->n_children; ++i) {
+    struct ArrowSchema* child = schema->children[i];
+    if (child->release != NULL) {
+      child->release(child);
+    }
+  }
+  free(schema->children);
+  // Mark released
+  schema->release = NULL;
+}
+
+static void release_malloced_array(struct ArrowArray* array) {
+  if (array->release == NULL) return;
+  int i;
+  // Free children
+  for (i = 0; i < array->n_children; ++i) {
+    struct ArrowArray* child = array->children[i];
+    if (child->release != NULL) {
+      child->release(child);
+    }
+  }
+  free(array->children);
+  // Free buffers
+  for (i = 0; i < array->n_buffers; ++i) {
+    free((void*)array->buffers[i]);
+  }
+  free(array->buffers);
+  // Mark released
+  array->release = NULL;
 }
 
 std::shared_ptr<arrow::RecordBatch> processors::java(const std::shared_ptr<arrow::RecordBatch>& batch, std::string class_name, JNIEnv* env) {
