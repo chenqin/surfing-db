@@ -55,6 +55,17 @@ typedef datasketches::frequent_items_sketch<std::string> frequent_strings_sketch
  */
 class utils {
 public:
+  static void jvmGC(JNIEnv* env) {
+    jclass systemClass = nullptr;
+    jmethodID systemGCMethod = nullptr;
+    // ...
+    // Take out the trash.
+    systemClass = env->FindClass("java/lang/System");
+    systemGCMethod = env->GetStaticMethodID(systemClass, "gc", "()V");
+    env->CallStaticVoidMethod(systemClass, systemGCMethod);
+    CHECK(env->ExceptionCheck() == JNI_FALSE);
+    env->DeleteLocalRef(systemClass);
+  }
   static std::shared_ptr<arrow::ArrayBuilder> getBuilder(const RowType::type& type) {
     if (type == RowType::BOOL) {
       return std::make_shared<arrow::BooleanBuilder>();
@@ -587,7 +598,7 @@ public:
   static std::shared_ptr<arrow::Buffer> serializeSchema(std::shared_ptr<arrow::Schema> schema) {
     return arrow::ipc::SerializeSchema(*schema.get()).ValueOrDie();
   }
-  
+
   static std::shared_ptr<arrow::Schema> deserializeSchema(std::shared_ptr<arrow::Buffer> buffer) {
     arrow::io::BufferReader reader(buffer);
     arrow::ipc::DictionaryMemo empty_memo;

@@ -185,6 +185,7 @@ int main(int argc, char** argv) {
     if (node->rank == 0) {
       std::cout << "iteration pull " << throughput << " @ qps" << std::endl;
     }
+    utils::jvmGC(node->env);
     std::this_thread::sleep_for(3s);
   }
   t1.wait();
