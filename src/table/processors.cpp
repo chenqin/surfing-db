@@ -127,7 +127,7 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_one_side(co
   }
 
   auto schema = batches[0]->schema();
-  size_t org_row_sum = 0;
+  size_t local_org_row = 0;
   size_t total_bytes = 0;
 
   // mark start offset in send window for each recive to pull from
@@ -136,7 +136,7 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_one_side(co
   size_t recv_from_vec_offset[world];
   for (int j = 0; j < world; j++) {
     auto send_to_dest_table = utils::group(batches, filedname, partitioner, j, rank, world);
-    org_row_sum += send_to_dest_table->num_rows();
+    local_org_row += send_to_dest_table->num_rows();
     auto buffer = utils::serialize(send_to_dest_table);
     // store data get pulled from rank j to send_buffers[j]
     send_buffers[j] = buffer;
@@ -163,9 +163,10 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_one_side(co
 
    int toal_requests = 0;
   for (int dest = 0; dest < world; dest++) {
+    if (dest == rank || recv_from_vec[dest] == 0) continue;
+
     recv_buffers[dest] = arrow::AllocateBuffer(recv_from_vec[dest]).ValueOrDie();
     // mpi put to local rank will silently fail, if no data fetching also skip MPI_GET
-    // if (dest == rank || recv_from_vec[dest] == 0) continue;
     MPI_Aint offset = recv_from_vec_offset[dest];
     //std::cout << "get " << rank << " <- " << dest << " offset " << recv_from_vec_offset[dest] << std::endl;
     CHECK_EQ(MPI_SUCCESS,
@@ -178,8 +179,14 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_one_side(co
 
   std::vector<std::shared_ptr<arrow::RecordBatch>> arrow_tables;
   for (int i = 0; i < world; i++) {
+      if (i == rank || recv_from_vec[i] == 0) continue;
       auto _buffer = recv_buffers[i];
       auto arrow_table = utils::deserialize(_buffer, schema);
+      arrow_tables.push_back(arrow_table);
+  }
+
+  if(send_to_vec[rank] >0) {
+      auto arrow_table = utils::deserialize(send_buffers[rank], schema);
       arrow_tables.push_back(arrow_table);
   }
 
@@ -189,8 +196,13 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_one_side(co
   }
 
   size_t shuffle_row_sum = 0;
+  size_t org_row_sum = 0;
+
+  MPI_Allreduce(&local_org_row, &org_row_sum, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
+  
   MPI_Allreduce(&total_rows, &shuffle_row_sum, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
-  // check before and after shuffle total row count equal
+  
+  // check before and after shuffle total row count equal across all ranks
   CHECK_EQ(shuffle_row_sum, org_row_sum);
 
   return arrow_tables;
