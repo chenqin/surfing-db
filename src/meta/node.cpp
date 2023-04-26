@@ -32,8 +32,8 @@ node::node(int* argc, char*** argv) {
    */
   MPI_Initialized(&mpi_inited);
   if (!mpi_inited) {
-    MPI_Init_thread(argc, argv, MPI_THREAD_FUNNELED, &supported);
-    CHECK_EQ(supported, MPI_THREAD_FUNNELED);
+    MPI_Init_thread(argc, argv, MPI_THREAD_MULTIPLE, &supported);
+    CHECK_EQ(supported, MPI_THREAD_MULTIPLE);
   }
   MPI_Comm_size(MPI_COMM_WORLD, &this->world);
   MPI_Comm_rank(MPI_COMM_WORLD, &this->rank);

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "processors.h"
+#include <omp.h>
 #include <arrow/c/bridge.h>
 #include "mtable.h"
 #include "utils.h"
@@ -143,7 +144,7 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_one_side(co
     send_to_vec[j] = buffer->size();
     send_to_vec_offset[j] = j == 0 ? 0 : send_to_vec_offset[j - 1] + send_to_vec[j - 1];
     total_bytes += send_to_vec[j];
-    //std::cout << "prep  " << j << " <- " << rank << " offset " << send_to_vec_offset[j] << std::endl;
+    // std::cout << "prep  " << j << " <- " << rank << " offset " << send_to_vec_offset[j] << std::endl;
   }
   // recv_from_vec[j] is the total bytes rank can pull from rank j
   MPI_Alltoall(&send_to_vec, 1, MPI_UNSIGNED_LONG, recv_from_vec, 1, MPI_UNSIGNED_LONG, MPI_COMM_WORLD);
@@ -152,42 +153,42 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_one_side(co
 
   /**
    * @brief contact send buffers into one window buffer
-   * 
+   *
    */
   auto window_buffer = arrow::ConcatenateBuffers(send_buffers).ValueOrDie();
   CHECK_EQ(total_bytes, window_buffer->size());
   MPI_Win_create(window_buffer->mutable_data(), window_buffer->size(), sizeof(char), MPI_INFO_NULL, MPI_COMM_WORLD, &window);
-  
+
   // starts non overlap mpi_gets
   MPI_Win_fence(0, window);
 
-   int toal_requests = 0;
+#pragma omp parallel for 
   for (int dest = 0; dest < world; dest++) {
     if (dest == rank || recv_from_vec[dest] == 0) continue;
 
     recv_buffers[dest] = arrow::AllocateBuffer(recv_from_vec[dest]).ValueOrDie();
     // mpi put to local rank will silently fail, if no data fetching also skip MPI_GET
     MPI_Aint offset = recv_from_vec_offset[dest];
-    //std::cout << "get " << rank << " <- " << dest << " offset " << recv_from_vec_offset[dest] << std::endl;
+    // std::cout << "get " << rank << " <- " << dest << " offset " << recv_from_vec_offset[dest] << std::endl;
     CHECK_EQ(MPI_SUCCESS,
              MPI_Get(recv_buffers[dest]->mutable_data(), recv_from_vec[dest], MPI_CHAR, dest, offset, recv_from_vec[dest], MPI_CHAR, window));
   }
-  
+
   MPI_Win_fence(0, window);
 
   MPI_Win_free(&window);
 
   std::vector<std::shared_ptr<arrow::RecordBatch>> arrow_tables;
   for (int i = 0; i < world; i++) {
-      if (i == rank || recv_from_vec[i] == 0) continue;
-      auto _buffer = recv_buffers[i];
-      auto arrow_table = utils::deserialize(_buffer, schema);
-      arrow_tables.push_back(arrow_table);
+    if (i == rank || recv_from_vec[i] == 0) continue;
+    auto _buffer = recv_buffers[i];
+    auto arrow_table = utils::deserialize(_buffer, schema);
+    arrow_tables.push_back(arrow_table);
   }
 
-  if(send_to_vec[rank] >0) {
-      auto arrow_table = utils::deserialize(send_buffers[rank], schema);
-      arrow_tables.push_back(arrow_table);
+  if (send_to_vec[rank] > 0) {
+    auto arrow_table = utils::deserialize(send_buffers[rank], schema);
+    arrow_tables.push_back(arrow_table);
   }
 
   size_t total_rows = 0;
@@ -199,9 +200,9 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_one_side(co
   size_t org_row_sum = 0;
 
   MPI_Allreduce(&local_org_row, &org_row_sum, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
-  
+
   MPI_Allreduce(&total_rows, &shuffle_row_sum, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
-  
+
   // check before and after shuffle total row count equal across all ranks
   CHECK_EQ(shuffle_row_sum, org_row_sum);
 
@@ -310,8 +311,10 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_x(const std
 
 std::vector<std::shared_ptr<arrow::RecordBatch>> processors::java_x(const std::vector<std::shared_ptr<arrow::RecordBatch>>& batch, std::string class_name, JNIEnv* env) {
   std::vector<std::shared_ptr<arrow::RecordBatch>> out;
+#pragma omp parallel for
   for (auto& b : batch) {
     auto result = java(b, class_name, env);
+#pragma omp critical
     out.push_back(std::move(result));
   }
   return std::move(out);
