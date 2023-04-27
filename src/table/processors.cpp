@@ -16,6 +16,7 @@
 #include "processors.h"
 #include <omp.h>
 #include <arrow/c/bridge.h>
+#include <arrow/c/helpers.h>
 #include "mtable.h"
 #include "utils.h"
 #include "xgbop.h"
@@ -320,40 +321,6 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::java_x(const std::v
   return std::move(out);
 }
 
-static void release_malloced_type(struct ArrowSchema* schema) {
-  if (schema->release == NULL) return;
-  int i;
-  for (i = 0; i < schema->n_children; ++i) {
-    struct ArrowSchema* child = schema->children[i];
-    if (child->release != NULL) {
-      child->release(child);
-    }
-  }
-  free(schema->children);
-  // Mark released
-  schema->release = NULL;
-}
-
-static void release_malloced_array(struct ArrowArray* array) {
-  if (array->release == NULL) return;
-  int i;
-  // Free children
-  for (i = 0; i < array->n_children; ++i) {
-    struct ArrowArray* child = array->children[i];
-    if (child->release != NULL) {
-      child->release(child);
-    }
-  }
-  free(array->children);
-  // Free buffers
-  for (i = 0; i < array->n_buffers; ++i) {
-    free((void*)array->buffers[i]);
-  }
-  free(array->buffers);
-  // Mark released
-  array->release = NULL;
-}
-
 std::shared_ptr<arrow::RecordBatch> processors::java(const std::shared_ptr<arrow::RecordBatch>& batch, std::string class_name, JNIEnv* env) {
   const jclass bridge = env->FindClass(class_name.c_str());
   CHECK_NOTNULL(bridge);
@@ -382,10 +349,10 @@ std::shared_ptr<arrow::RecordBatch> processors::java(const std::shared_ptr<arrow
   if (env->ExceptionCheck()) {
     LOG(ERROR) << "fail to call jni";
     env->DeleteLocalRef(bridge);
-    release_malloced_array(&arrowArrayIn);
-    release_malloced_array(&arrowArrayOut);
-    release_malloced_type(&arrowSchemaIn);
-    release_malloced_type(&arrowSchemaOut);
+    ArrowArrayRelease(&arrowArrayIn);
+    ArrowArrayRelease(&arrowArrayOut);
+    ArrowSchemaRelease(&arrowSchemaIn);
+    ArrowSchemaRelease(&arrowSchemaOut);
     return java(batch, class_name, env);
   }
   env->DeleteLocalRef(bridge);
@@ -395,10 +362,10 @@ std::shared_ptr<arrow::RecordBatch> processors::java(const std::shared_ptr<arrow
    */
   const auto resultImportVectorSchemaRoot = arrow::ImportRecordBatch(&arrowArrayOut, &arrowSchemaOut);
   std::shared_ptr<arrow::RecordBatch> out = resultImportVectorSchemaRoot.ValueOrDie();
-  release_malloced_array(&arrowArrayIn);
-  release_malloced_array(&arrowArrayOut);
-  release_malloced_type(&arrowSchemaIn);
-  release_malloced_type(&arrowSchemaOut);
+  ArrowArrayRelease(&arrowArrayIn);
+  ArrowArrayRelease(&arrowArrayOut);
+  ArrowSchemaRelease(&arrowSchemaIn);
+  ArrowSchemaRelease(&arrowSchemaOut);
   return std::move(out);
 }
 
