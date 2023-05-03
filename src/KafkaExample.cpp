@@ -167,15 +167,15 @@ int main(int argc, char** argv) {
     m1.insert(m1.end(), m2.begin(), m2.end());
     m3.insert(m3.end(), m4.begin(), m4.end());
 
-    auto signal_metric = processors::java_x(m1, "CleanupWrapper", node->env);
-    auto signal_log = processors::java_x(m3, "CleanupWrapper", node->env);
+    auto signal_metric = processors::jni(m1, "CleanupWrapper", node->env);
+    auto signal_log = processors::jni(m3, "CleanupWrapper", node->env);
     
     signal_metric.insert(signal_metric.end(), signal_log.begin(), signal_log.end());
 
-    auto app_signals = processors::shuffle_x(signal_metric, "appid", partitioner, false, node->rank, node->world);
-    auto app_state = processors::java_x(app_signals, "AggregateWrapper", node->env, true);
-    auto job_signals = processors::shuffle_x(app_state, "jobid", partitioner, false,  node->rank, node->world);
-    auto job_info = processors::java_x(job_signals, "JobInfoWrapper", node->env, true);
+    auto app_signals = processors::shuffle(signal_metric, "appid", partitioner, false, node->rank, node->world);
+    auto app_state = processors::jni(app_signals, "AggregateWrapper", node->env, true);
+    auto job_signals = processors::shuffle(app_state, "jobid", partitioner, false,  node->rank, node->world);
+    auto job_info = processors::jni(job_signals, "JobInfoWrapper", node->env, true);
 
     size_t global_row_count = 0;
     MPI_Allreduce(&local_row_count, &global_row_count, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);

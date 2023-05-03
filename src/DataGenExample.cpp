@@ -80,12 +80,12 @@ int main(int argc, char** argv) {
   
   while (terminal_signal == 0) {
     auto records = con.poll_once();
-    auto signals = processors::java_x(records, "CleanupWrapper", node->env);
-    auto app_signals = processors::shuffle_x(signals, "appid", partitioner, true, node->rank, node->world);
-    auto app_state = processors::java_x(app_signals, "AggregateWrapper", node->env, true);
-    auto job_signals = processors::shuffle_x(app_state, "jobid", partitioner, false, node->rank, node->world);
-    auto job_info = processors::java_x(job_signals, "JobInfoWrapper", node->env, true);
-    utils::jvmGC(node->env);
+    auto signals = processors::jni(records, "CleanupWrapper", node->env);
+    auto app_signals = processors::shuffle(signals, "appid", partitioner, true, node->rank, node->world);
+    auto app_state = processors::jni(app_signals, "AggregateWrapper", node->env, true);
+    auto job_signals = processors::shuffle(app_state, "jobid", partitioner, false, node->rank, node->world);
+    auto job_info = processors::jni(job_signals, "JobInfoWrapper", node->env, true);
+    //utils::jvmGC(node->env);
   }
   t1.wait();
   return terminal_signal;

@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 #include "processors.h"
-#include <omp.h>
 #include <arrow/c/bridge.h>
 #include <arrow/c/helpers.h>
+#include <omp.h>
 #include "mtable.h"
 #include "utils.h"
 #include "xgbop.h"
@@ -163,7 +163,7 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_one_side(co
   // starts non overlap mpi_gets
   MPI_Win_fence(0, window);
 
-#pragma omp parallel for 
+#pragma omp parallel for
   for (int dest = 0; dest < world; dest++) {
     if (dest == rank || recv_from_vec[dest] == 0) continue;
 
@@ -302,35 +302,47 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_two_side(co
   return arrow_tables;
 }
 
-std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_x(const std::vector<std::shared_ptr<arrow::RecordBatch>>& batch, std::string field_name, std::function<size_t(size_t, int, int)> partitioner, bool singleside, int rank, int world) {
+std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle(const std::vector<std::shared_ptr<arrow::RecordBatch>>& batch, std::string field_name, std::function<size_t(size_t, int, int)> partitioner, bool singleside, int rank, int world) {
   auto start = MPI_Wtime();
   auto out = singleside ? processors::shuffle_one_side(batch, field_name, partitioner, rank, world) : processors::shuffle_two_side(batch, field_name, partitioner, rank, world);
   LOG(INFO) << "shuffle takes " << MPI_Wtime() - start << " seconds";
   // TODO: we observed a bug in tcp MPI_GET that lead to one row of garbage
   return std::move(out);
 }
+std::map<std::string, jobject> java_instances;
 
-std::vector<std::shared_ptr<arrow::RecordBatch>> processors::java_x(const std::vector<std::shared_ptr<arrow::RecordBatch>>& batch, std::string class_name, JNIEnv* env, bool singleton) {
+std::vector<std::shared_ptr<arrow::RecordBatch>> processors::jni(const std::vector<std::shared_ptr<arrow::RecordBatch>>& batch, std::string class_name, JNIEnv* env, bool singleton) {
   std::vector<std::shared_ptr<arrow::RecordBatch>> out;
+  jclass clz = env->FindClass(class_name.c_str());
+  jmethodID constructor = env->GetMethodID(clz, "<init>", "()V");
+  CHECK_NOTNULL(clz);
+  if (singleton && java_instances.find(class_name) == java_instances.end()) {
+    jobject instance = env->NewObject(clz, constructor);
+    java_instances[class_name] = instance;
+  }
+  jobject instance = singleton ? java_instances[class_name] : (env->NewObject(clz, constructor));
 #pragma omp parallel for
   for (auto& b : batch) {
-    auto result = java(b, class_name, env);
+    auto result = java(b, class_name, env, &clz, &instance);
 #pragma omp critical
     out.push_back(std::move(result));
   }
+  if (!singleton) {
+    env->DeleteLocalRef(instance);
+  }
+  env->DeleteLocalRef(clz);
   return std::move(out);
 }
 
-std::shared_ptr<arrow::RecordBatch> processors::java(const std::shared_ptr<arrow::RecordBatch>& batch, std::string class_name, JNIEnv* env) {
-  const jclass clz = env->FindClass(class_name.c_str());
-  CHECK_NOTNULL(clz);
-  jmethodID constructor = env->GetMethodID(clz, "<init>", "()V");
-  jobject instance = env->NewObject(clz, constructor);
+std::shared_ptr<arrow::RecordBatch> processors::java(const std::shared_ptr<arrow::RecordBatch>& batch, std::string class_name, JNIEnv* env, jclass* clz, jobject* instance) {
 
-  CHECK_NOTNULL(instance);
+  CHECK_NOTNULL(*clz);
+  jmethodID constructor = env->GetMethodID(*clz, "<init>", "()V");
+
+  CHECK_NOTNULL(*instance);
   struct ArrowSchema arrowSchemaIn, arrowSchemaOut;
   struct ArrowArray arrowArrayIn, arrowArrayOut;
-  const jmethodID invoke_method = env->GetMethodID(clz, std::string(BRIDGE_METHOD_NAME).c_str(), "(JJJJ)V");
+  const jmethodID invoke_method = env->GetMethodID(*clz, std::string(BRIDGE_METHOD_NAME).c_str(), "(JJJJ)V");
   CHECK_NOTNULL(invoke_method);
 
   /**
@@ -348,7 +360,7 @@ std::shared_ptr<arrow::RecordBatch> processors::java(const std::shared_ptr<arrow
   jlong array_in_addres = static_cast<jlong>(reinterpret_cast<jlong>(&arrowArrayIn));
   jlong schema_out_addres = static_cast<jlong>(reinterpret_cast<jlong>(&arrowSchemaOut));
   jlong array_out_addres = static_cast<jlong>(reinterpret_cast<jlong>(&arrowArrayOut));
-  env->CallVoidMethod(instance, invoke_method,
+  env->CallVoidMethod(*instance, invoke_method,
                       schema_in_addres,
                       array_in_addres,
                       schema_out_addres,
@@ -363,9 +375,6 @@ std::shared_ptr<arrow::RecordBatch> processors::java(const std::shared_ptr<arrow
   ArrowArrayRelease(&arrowArrayOut);
   ArrowSchemaRelease(&arrowSchemaIn);
   ArrowSchemaRelease(&arrowSchemaOut);
-
-  env->DeleteLocalRef(instance);
-  env->DeleteLocalRef(clz);
   return std::move(out);
 }
 

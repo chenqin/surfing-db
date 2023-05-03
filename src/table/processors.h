@@ -34,6 +34,11 @@
 namespace surfingdb {
 namespace table {
 class processors {
+private:
+  static std::vector<std::shared_ptr<arrow::RecordBatch>> shuffle_one_side(const std::vector<std::shared_ptr<arrow::RecordBatch>>&, std::string, std::function<size_t(size_t, int, int)>, int, int);
+  static std::vector<std::shared_ptr<arrow::RecordBatch>> shuffle_two_side(const std::vector<std::shared_ptr<arrow::RecordBatch>>&, std::string, std::function<size_t(size_t, int, int)>, int, int);
+  static std::shared_ptr<arrow::RecordBatch> java(const std::shared_ptr<arrow::RecordBatch>&, std::string class_name, JNIEnv* env,  jclass* clz, jobject* instance);
+
 public:
   /**
    * @brief v1 apis
@@ -43,16 +48,9 @@ public:
   static std::shared_ptr<mtable> map(std::shared_ptr<mtable>, std::shared_ptr<mschema>, std::function<bool(mrow&, mrow&, const mschema&)>);
   static void reduce(std::shared_ptr<mtable>, Field&, std::shared_ptr<std::unordered_map<Value, std::shared_ptr<mrow>, ValueHasher>> result_ptr, std::shared_ptr<mschema> result_schema_ptr, std::function<void(Value&, std::vector<std::unique_ptr<mrow>>&, std::shared_ptr<mrow>&)>);
   static void xgb(std::shared_ptr<mtable>, std::vector<Field>, Field&, const XGBParameters&);
-  /**
-   * @brief shuffle sorted data with one side RMA MPI_Get network call
-   *
-   * @return std::shared_ptr<mtable>
-   */
-  static std::vector<std::shared_ptr<arrow::RecordBatch>> shuffle_one_side(const std::vector<std::shared_ptr<arrow::RecordBatch>>&, std::string, std::function<size_t(size_t, int, int)>, int, int);
-  static std::vector<std::shared_ptr<arrow::RecordBatch>> shuffle_two_side(const std::vector<std::shared_ptr<arrow::RecordBatch>>&, std::string, std::function<size_t(size_t, int, int)>, int, int);
-  static std::vector<std::shared_ptr<arrow::RecordBatch>> shuffle_x(const std::vector<std::shared_ptr<arrow::RecordBatch>>&, std::string, std::function<size_t(size_t, int, int)>, bool, int, int);
-  static std::shared_ptr<arrow::RecordBatch> java(const std::shared_ptr<arrow::RecordBatch>&, std::string class_name, JNIEnv* env);
-  static std::vector<std::shared_ptr<arrow::RecordBatch>> java_x(const std::vector<std::shared_ptr<arrow::RecordBatch>>&, std::string class_name, JNIEnv* env, bool singleton = false);
+
+  static std::vector<std::shared_ptr<arrow::RecordBatch>> shuffle(const std::vector<std::shared_ptr<arrow::RecordBatch>>&, std::string, std::function<size_t(size_t, int, int)>, bool, int, int);
+  static std::vector<std::shared_ptr<arrow::RecordBatch>> jni(const std::vector<std::shared_ptr<arrow::RecordBatch>>&, std::string class_name, JNIEnv* env, bool singleton = false);
 };
 } // namespace table
 } // namespace surfingdb
