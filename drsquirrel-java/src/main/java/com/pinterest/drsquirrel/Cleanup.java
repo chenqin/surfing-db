@@ -115,14 +115,6 @@ public class Cleanup {
                 }
             }
         }
-        /**
-         * insert a placeholder for now
-         */
-        jobId.setSafe(count, new Text(""));
-        appId.setSafe(count, new Text(""));
-        type.setSafe(count, new Text());
-        json.setSafe(count, new Text());
-        count++;
 
         jobId.setValueCount(count);
         appId.setValueCount(count);

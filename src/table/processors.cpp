@@ -310,7 +310,7 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_x(const std
   return std::move(out);
 }
 
-std::vector<std::shared_ptr<arrow::RecordBatch>> processors::java_x(const std::vector<std::shared_ptr<arrow::RecordBatch>>& batch, std::string class_name, JNIEnv* env) {
+std::vector<std::shared_ptr<arrow::RecordBatch>> processors::java_x(const std::vector<std::shared_ptr<arrow::RecordBatch>>& batch, std::string class_name, JNIEnv* env, bool singleton) {
   std::vector<std::shared_ptr<arrow::RecordBatch>> out;
 #pragma omp parallel for
   for (auto& b : batch) {
@@ -322,11 +322,15 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::java_x(const std::v
 }
 
 std::shared_ptr<arrow::RecordBatch> processors::java(const std::shared_ptr<arrow::RecordBatch>& batch, std::string class_name, JNIEnv* env) {
-  const jclass bridge = env->FindClass(class_name.c_str());
-  CHECK_NOTNULL(bridge);
+  const jclass clz = env->FindClass(class_name.c_str());
+  CHECK_NOTNULL(clz);
+  jmethodID constructor = env->GetMethodID(clz, "<init>", "()V");
+  jobject instance = env->NewObject(clz, constructor);
+
+  CHECK_NOTNULL(instance);
   struct ArrowSchema arrowSchemaIn, arrowSchemaOut;
   struct ArrowArray arrowArrayIn, arrowArrayOut;
-  const jmethodID invoke_method = env->GetStaticMethodID(bridge, std::string(BRIDGE_METHOD_NAME).c_str(), "(JJJJ)V");
+  const jmethodID invoke_method = env->GetMethodID(clz, std::string(BRIDGE_METHOD_NAME).c_str(), "(JJJJ)V");
   CHECK_NOTNULL(invoke_method);
 
   /**
@@ -340,22 +344,15 @@ std::shared_ptr<arrow::RecordBatch> processors::java(const std::shared_ptr<arrow
    * @brief invoke java method, passing pointers
    *
    */
-  env->CallStaticVoidMethod(bridge, invoke_method,
-                            static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchemaIn)),
-                            static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArrayIn)),
-                            static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowSchemaOut)),
-                            static_cast<jlong>(reinterpret_cast<uintptr_t>(&arrowArrayOut)));
-
-  if (env->ExceptionCheck()) {
-    LOG(ERROR) << "fail to call jni";
-    env->DeleteLocalRef(bridge);
-    ArrowArrayRelease(&arrowArrayIn);
-    ArrowArrayRelease(&arrowArrayOut);
-    ArrowSchemaRelease(&arrowSchemaIn);
-    ArrowSchemaRelease(&arrowSchemaOut);
-    return java(batch, class_name, env);
-  }
-  env->DeleteLocalRef(bridge);
+  jlong schema_in_addres = static_cast<jlong>(reinterpret_cast<jlong>(&arrowSchemaIn));
+  jlong array_in_addres = static_cast<jlong>(reinterpret_cast<jlong>(&arrowArrayIn));
+  jlong schema_out_addres = static_cast<jlong>(reinterpret_cast<jlong>(&arrowSchemaOut));
+  jlong array_out_addres = static_cast<jlong>(reinterpret_cast<jlong>(&arrowArrayOut));
+  env->CallVoidMethod(instance, invoke_method,
+                      schema_in_addres,
+                      array_in_addres,
+                      schema_out_addres,
+                      array_out_addres);
   /**
    * @brief import schema and data from java
    *
@@ -366,6 +363,9 @@ std::shared_ptr<arrow::RecordBatch> processors::java(const std::shared_ptr<arrow
   ArrowArrayRelease(&arrowArrayOut);
   ArrowSchemaRelease(&arrowSchemaIn);
   ArrowSchemaRelease(&arrowSchemaOut);
+
+  env->DeleteLocalRef(instance);
+  env->DeleteLocalRef(clz);
   return std::move(out);
 }
 

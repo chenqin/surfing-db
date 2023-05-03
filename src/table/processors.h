@@ -18,7 +18,7 @@
 #define SURFINGDB_PROCESSORS_H
 
 // define static method name in java side
-#define BRIDGE_METHOD_NAME "_internal_invoke"
+#define BRIDGE_METHOD_NAME "CppInvoke"
 
 #include <arrow/api.h>
 #include <arrow/compute/api.h>
@@ -37,8 +37,8 @@ class processors {
 public:
   /**
    * @brief v1 apis
-   * 
-   * @return std::shared_ptr<mtable> 
+   *
+   * @return std::shared_ptr<mtable>
    */
   static std::shared_ptr<mtable> map(std::shared_ptr<mtable>, std::shared_ptr<mschema>, std::function<bool(mrow&, mrow&, const mschema&)>);
   static void reduce(std::shared_ptr<mtable>, Field&, std::shared_ptr<std::unordered_map<Value, std::shared_ptr<mrow>, ValueHasher>> result_ptr, std::shared_ptr<mschema> result_schema_ptr, std::function<void(Value&, std::vector<std::unique_ptr<mrow>>&, std::shared_ptr<mrow>&)>);
@@ -52,7 +52,7 @@ public:
   static std::vector<std::shared_ptr<arrow::RecordBatch>> shuffle_two_side(const std::vector<std::shared_ptr<arrow::RecordBatch>>&, std::string, std::function<size_t(size_t, int, int)>, int, int);
   static std::vector<std::shared_ptr<arrow::RecordBatch>> shuffle_x(const std::vector<std::shared_ptr<arrow::RecordBatch>>&, std::string, std::function<size_t(size_t, int, int)>, bool, int, int);
   static std::shared_ptr<arrow::RecordBatch> java(const std::shared_ptr<arrow::RecordBatch>&, std::string class_name, JNIEnv* env);
-  static std::vector<std::shared_ptr<arrow::RecordBatch>> java_x(const std::vector<std::shared_ptr<arrow::RecordBatch>>&, std::string class_name, JNIEnv* env);
+  static std::vector<std::shared_ptr<arrow::RecordBatch>> java_x(const std::vector<std::shared_ptr<arrow::RecordBatch>>&, std::string class_name, JNIEnv* env, bool singleton = false);
 };
 } // namespace table
 } // namespace surfingdb

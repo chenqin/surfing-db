@@ -54,12 +54,14 @@ node::node(int* argc, char*** argv) {
   MPI_Comm_size(role_comm, &role_world);
 
   JavaVMInitArgs vm_args;
-  JavaVMOption options[2];
+  JavaVMOption options[3];
   options[0].optionString = "-Djava.class.path=../surfing-db-java.jar";
-  options[1].optionString = "-DXcheck:jni:pedantic";
+  //options[1].optionString = "-XX:+UseG1GC"; //user full gc to avoid memory leak
+  options[1].optionString = "-verbose:jni";
   vm_args.version = JNI_VERSION_1_8;
   vm_args.nOptions = 2;
   vm_args.options = options;
+  vm_args.ignoreUnrecognized = JNI_TRUE;
   int status = JNI_CreateJavaVM(&jvm, (void**)&env, &vm_args);
   if (status < 0) {
     std::cerr << "\n<<<<< Unable to Launch JVM >>>>>\n"

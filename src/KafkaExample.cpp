@@ -173,9 +173,9 @@ int main(int argc, char** argv) {
     signal_metric.insert(signal_metric.end(), signal_log.begin(), signal_log.end());
 
     auto app_signals = processors::shuffle_x(signal_metric, "appid", partitioner, false, node->rank, node->world);
-    auto app_state = processors::java_x(app_signals, "AggregateWrapper", node->env);
+    auto app_state = processors::java_x(app_signals, "AggregateWrapper", node->env, true);
     auto job_signals = processors::shuffle_x(app_state, "jobid", partitioner, false,  node->rank, node->world);
-    auto job_info = processors::java_x(job_signals, "JobInfoWrapper", node->env);
+    auto job_info = processors::java_x(job_signals, "JobInfoWrapper", node->env, true);
 
     size_t global_row_count = 0;
     MPI_Allreduce(&local_row_count, &global_row_count, 1, MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
@@ -185,7 +185,7 @@ int main(int argc, char** argv) {
     if (node->rank == 0) {
       std::cout << "iteration pull " << throughput << " @ qps" << std::endl;
     }
-    utils::jvmGC(node->env);
+    //utils::jvmGC(node->env);
     std::this_thread::sleep_for(3s);
   }
   t1.wait();

@@ -82,9 +82,9 @@ int main(int argc, char** argv) {
     auto records = con.poll_once();
     auto signals = processors::java_x(records, "CleanupWrapper", node->env);
     auto app_signals = processors::shuffle_x(signals, "appid", partitioner, true, node->rank, node->world);
-    auto app_state = processors::java_x(app_signals, "AggregateWrapper", node->env);
+    auto app_state = processors::java_x(app_signals, "AggregateWrapper", node->env, true);
     auto job_signals = processors::shuffle_x(app_state, "jobid", partitioner, false, node->rank, node->world);
-    auto job_info = processors::java_x(job_signals, "JobInfoWrapper", node->env);
+    auto job_info = processors::java_x(job_signals, "JobInfoWrapper", node->env, true);
     utils::jvmGC(node->env);
   }
   t1.wait();
