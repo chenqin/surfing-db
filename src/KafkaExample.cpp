@@ -25,8 +25,6 @@
 #include "table/processors.h"
 #include "table/utils.h"
 
-#define FLUSH_DIR "/tmp/"
-
 using namespace surfingdb::table::schema;
 using surfingdb::meta::node;
 using namespace surfingdb::table;

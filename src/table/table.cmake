@@ -20,6 +20,7 @@ add_library(${TABLE} STATIC
 
 target_link_libraries(${TABLE}
         PRIVATE ${META}
+        PRIVATE ${JNI_LIBRARIES}
         PRIVATE ${PARQUET_LIBRARY}
         PUBLIC ${XGBOOST_LIBRARY})
 

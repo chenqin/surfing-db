@@ -20,7 +20,7 @@ target_link_libraries(${META}
         PUBLIC ${GLOG_LIBRARY}
         PUBLIC ${GFLAGS_LIBRARY}
         PUBLIC ${ARROW_LIBRARY}
-        PUBLIC ${JNI_LIBRARIES}
+        PRIVATE ${JNI_LIBRARIES}
         PRIVATE ${THRIFT_LIBRARY})
 
 # discover all gtests in this module
