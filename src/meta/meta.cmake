@@ -12,13 +12,16 @@ add_library(${META} STATIC
         ${SURFINGDB_SRC}/meta/node.cpp
         ${SURFINGDB_SRC}/meta/schema.cpp)
 
+# define basic package dependencies
 target_link_libraries(${META}
+        PUBLIC Threads::Threads
+        PUBLIC MPI::MPI_CXX
+        PUBLIC OpenMP::OpenMP_CXX
         PUBLIC ${GLOG_LIBRARY}
         PUBLIC ${GFLAGS_LIBRARY}
-        PUBLIC ${JSON_LIBRARY}
-        PUBLIC ${FMT_LIBRARY}
         PUBLIC ${ARROW_LIBRARY}
-        PUBLIC ${JNI_LIBRARIES})
+        PUBLIC ${JNI_LIBRARIES}
+        PRIVATE ${THRIFT_LIBRARY})
 
 # discover all gtests in this module
 include(GoogleTest)

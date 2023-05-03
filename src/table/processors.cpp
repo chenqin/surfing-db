@@ -321,10 +321,10 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::jni(const std::vect
     java_instances[class_name] = instance;
   }
   jobject instance = singleton ? java_instances[class_name] : (env->NewObject(clz, constructor));
-#pragma omp parallel for
-  for (auto& b : batch) {
+
+  for (int i = 0 ; i < batch.size(); i++) {
+    auto& b = batch[i];
     auto result = java(b, class_name, env, &clz, &instance);
-#pragma omp critical
     out.push_back(std::move(result));
   }
   if (!singleton) {

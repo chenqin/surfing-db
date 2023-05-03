@@ -204,26 +204,19 @@ set(CMAKE_CXX_FLAGS ${NCFLAGS})
 set(CMAKE_CXX_FLAGS_DEBUG "-g -DNDBG")
 set(CMAKE_CXX_FLAGS_RELEASE ${NCFLAGS_RELEASE})
 
-OPTION(USE_OpenMP "Use OpenMP" OFF)
-
-IF (USE_OpenMP)
-    message(STATUS "USE_OpenMP=${USE_OpenMP}")
-    find_package(OpenMP REQUIRED)
-    IF (OPENMP_FOUND)
-        SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
-        SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-    ENDIF ()
-    if (NOT TARGET OpenMP::OpenMP_CXX)
-        add_library(OpenMP_TARGET INTERFACE)
-        add_library(OpenMP::OpenMP_CXX ALIAS OpenMP_TARGET)
-        target_compile_options(OpenMP_TARGET INTERFACE ${OpenMP_CXX_FLAGS})
-        find_package(Threads REQUIRED)
-        target_link_libraries(OpenMP_TARGET INTERFACE Threads::Threads)
-        target_link_libraries(OpenMP_TARGET INTERFACE ${OpenMP_CXX_FLAGS})
-    endif ()
-ENDIF (USE_OpenMP)
-
-
+find_package(OpenMP REQUIRED)
+IF (OPENMP_FOUND)
+    SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+ENDIF ()
+if (NOT TARGET OpenMP::OpenMP_CXX)
+    add_library(OpenMP_TARGET INTERFACE)
+    add_library(OpenMP::OpenMP_CXX ALIAS OpenMP_TARGET)
+    target_compile_options(OpenMP_TARGET INTERFACE ${OpenMP_CXX_FLAGS})
+    find_package(Threads REQUIRED)
+    target_link_libraries(OpenMP_TARGET INTERFACE Threads::Threads)
+    target_link_libraries(OpenMP_TARGET INTERFACE ${OpenMP_CXX_FLAGS})
+endif ()
 find_package(MPI REQUIRED)
 set(ENV{MPI_HOSTS} ${PROJECT_SOURCE_DIR}/host_file)
 
@@ -239,7 +232,7 @@ else ()
     set(CELLAR_ROOT /home/linuxbrew/.linuxbrew/Cellar)
 endif ()
 
-include(ext/FMT_Ext.cmake)
+#include(ext/FMT_Ext.cmake)
 
 # add a basic gtest dependency
 include(ext/Gtest_Ext.cmake)
@@ -251,7 +244,7 @@ include(ext/Gtest_Ext.cmake)
 #include(ext/Glog_Ext.cmake)
 
 # include utils
-include(ext/Gflatbuffers_Ext.cmake)
+#include(ext/Gflatbuffers_Ext.cmake)
 include(ext/Json_Ext.cmake)
 include(ext/OPENSSL_Ext.cmake)
 

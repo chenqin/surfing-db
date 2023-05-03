@@ -16,7 +16,6 @@
 
 #include <chrono>
 #include <csignal>
-#include <fmt/core.h>
 #include <glog/logging.h>
 #include <iostream>
 

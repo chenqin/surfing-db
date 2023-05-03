@@ -45,7 +45,7 @@ node::node(int* argc, char*** argv) {
 
   std::cout << processor << " on " << rank << std::endl;
   stage = 0;
-  LOG(INFO) << "cluster size " << world << " node rank " << rank << " alias " << processor;
+  LOG(INFO) << "cluster size " << world << " node rank " << rank << " alias " << processor << " total threads " << omp_get_num_threads();
 
   trainer = 0;
 

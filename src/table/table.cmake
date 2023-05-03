@@ -19,14 +19,8 @@ add_library(${TABLE} STATIC
         ${SURFINGDB_SRC}/table/processors.cpp)
 
 target_link_libraries(${TABLE}
-        PUBLIC Threads::Threads
-        PUBLIC MPI::MPI_CXX
-        PUBLIC ${THRIFT_LIBRARY}
-        PUBLIC ${GLOG_LIBRARY}
-        PUBLIC ${GFLAGS_LIBRARY}
-        PUBLIC ${JSON_LIBRARY}
-        PUBLIC ${ARROW_LIBRARY}
-        PUBLIC ${PARQUET_LIBRARY}
+        PRIVATE ${META}
+        PRIVATE ${PARQUET_LIBRARY}
         PUBLIC ${XGBOOST_LIBRARY})
 
 # build test binary
@@ -34,14 +28,9 @@ add_executable(TableTest
         ${SURFINGDB_SRC}/table/test/TestIntegration.cpp)
 
 target_link_libraries(TableTest
-        PRIVATE ${META}
         PRIVATE ${TABLE}
-        PRIVATE ${JSON_LIBRARY}
         PRIVATE ${GTEST_LIBRARY}
-        PRIVATE ${GTEST_MAIN_LIBRARY}
-        PRIVATE ${ARROW_LIBRARY}
-        PRIVATE ${PARQUET_LIBRARY}
-        PRIVATE ${XGBOOST_LIBRARY})
+        PRIVATE ${GTEST_MAIN_LIBRARY})
 
 # discover all gtests in this module
 include(GoogleTest)

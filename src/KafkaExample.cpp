@@ -15,12 +15,9 @@
  */
 
 #include <chrono>
-#include <fmt/core.h>
 #include <future>
 #include <glog/logging.h>
 #include <iostream>
-#include <omp.h>
-#include <rapidjson/document.h>
 #include <string>
 #include "connector/kafka.h"
 #include "engine/engine.h"

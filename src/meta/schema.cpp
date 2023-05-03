@@ -15,7 +15,6 @@
  */
 
 #include "schema.h"
-#include <fmt/core.h>
 
 namespace surfingdb {
 namespace meta {

@@ -17,6 +17,7 @@
 #include <iostream>
 #include <functional>
 #include <memory>
+#include <omp.h>
 #include <mpi.h>
 #include <vector>
 #include <jni.h>

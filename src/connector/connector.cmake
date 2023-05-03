@@ -7,21 +7,16 @@ set(CONNECTOR surfconnector)
 #execute_process(COMMAND sudo apt install librdkafka++-dev)
 # build nebula.ingest library
 add_library(${CONNECTOR} STATIC
-        ${SURFINGDB_SRC}/connector/kafka.cpp ${SURFINGDB_SRC}/connector/datagen.cpp)
+                ${SURFINGDB_SRC}/connector/kafka.cpp 
+                ${SURFINGDB_SRC}/connector/datagen.cpp)
 
 include_directories(${KC_INCLUDE_DIRS})
-include_directories(${ZOOKEEPER_INCLUDE_DIR})
 
 target_link_libraries(${CONNECTOR}
-        PUBLIC ${META}
+        PRIVATE ${META}
         PRIVATE ${TABLE}
-        PUBLIC ${GLOG_LIBRARY}
-        PUBLIC ${GFLAGS_LIBRARY}
-        PUBLIC ${JSON_LIBRARY}
-        PUBLIC ${THRIFT_LIBRARY}
-        PUBLIC ${ARROW_LIBRARY}
-        PUBLIC ${PARQUET_LIBRARY}
-        PUBLIC ${KAFKA_LIBRARY})
+        PRIVATE ${PARQUET_LIBRARY}
+        PRIVATE ${KAFKA_LIBRARY})
 
 # discover all gtests in this module
 include(GoogleTest)
