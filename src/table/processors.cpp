@@ -136,16 +136,21 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_one_side(co
   size_t send_to_vec_offset[world];
   // mark start offset in each sender buffer current rank can pull from with mpi_get
   size_t recv_from_vec_offset[world];
+
+#pragma omp parallel for private(batches)
   for (int j = 0; j < world; j++) {
     auto send_to_dest_table = utils::group(batches, filedname, partitioner, j, rank, world);
     local_org_row += send_to_dest_table->num_rows();
     auto buffer = utils::serialize(send_to_dest_table);
     // store data get pulled from rank j to send_buffers[j]
+#pragma omp critical
     send_buffers[j] = buffer;
-    send_to_vec[j] = buffer->size();
+  }
+
+  for(int j = 0 ; j < world; j++) {
+    send_to_vec[j] = send_buffers[j]->size();
     send_to_vec_offset[j] = j == 0 ? 0 : send_to_vec_offset[j - 1] + send_to_vec[j - 1];
     total_bytes += send_to_vec[j];
-    // std::cout << "prep  " << j << " <- " << rank << " offset " << send_to_vec_offset[j] << std::endl;
   }
   // recv_from_vec[j] is the total bytes rank can pull from rank j
   MPI_Alltoall(&send_to_vec, 1, MPI_UNSIGNED_LONG, recv_from_vec, 1, MPI_UNSIGNED_LONG, MPI_COMM_WORLD);
@@ -163,7 +168,7 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_one_side(co
   // starts non overlap mpi_gets
   MPI_Win_fence(0, window);
 
-#pragma omp parallel for
+#pragma omp parallel for private(recv_from_vec)
   for (int dest = 0; dest < world; dest++) {
     if (dest == rank || recv_from_vec[dest] == 0) continue;
 
@@ -180,10 +185,13 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_one_side(co
   MPI_Win_free(&window);
 
   std::vector<std::shared_ptr<arrow::RecordBatch>> arrow_tables;
+
+#pragma omp parallel for private(recv_from_vec, recv_buffers)
   for (int i = 0; i < world; i++) {
     if (i == rank || recv_from_vec[i] == 0) continue;
     auto _buffer = recv_buffers[i];
     auto arrow_table = utils::deserialize(_buffer, schema);
+#pragma omp critical
     arrow_tables.push_back(arrow_table);
   }
 
@@ -238,6 +246,7 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_two_side(co
 
   auto schema = batches[0]->schema();
 
+#pragma omp parallel for private(send_to_vec, batches, send_buffers)
   for (int j = 0; j < world; j++) {
     auto send_to_dest_table = utils::group(batches, filedname, partitioner, j, rank, world);
     auto buffer = utils::serialize(send_to_dest_table);
@@ -282,10 +291,12 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::shuffle_two_side(co
   }
 
   std::vector<std::shared_ptr<arrow::RecordBatch>> arrow_tables;
+#pragma omp parallel for private(recv_from_vec, tranfer_bytes_rank_index, schema, recv_buffer)
   for (int i = 0; i < world; i++) {
     if (recv_from_vec[i] > 0) {
       auto _buffer = arrow::SliceBuffer(recv_buffer, tranfer_bytes_rank_index[i], recv_from_vec[i]);
       auto arrow_table = utils::deserialize(_buffer, schema);
+#pragma omp critical
       arrow_tables.push_back(arrow_table);
     }
   }
@@ -321,10 +332,12 @@ std::vector<std::shared_ptr<arrow::RecordBatch>> processors::jni(const std::vect
     java_instances[class_name] = instance;
   }
   jobject instance = singleton ? java_instances[class_name] : (env->NewObject(clz, constructor));
-
+  CHECK_NOTNULL(instance);
+#pragma omp parallel for private(batch, instance, clz)
   for (int i = 0 ; i < batch.size(); i++) {
     auto& b = batch[i];
     auto result = java(b, class_name, env, &clz, &instance);
+  #pragma omp critical
     out.push_back(std::move(result));
   }
   if (!singleton) {

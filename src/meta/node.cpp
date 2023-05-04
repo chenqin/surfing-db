@@ -38,6 +38,8 @@ node::node(int* argc, char*** argv) {
   MPI_Comm_size(MPI_COMM_WORLD, &this->world);
   MPI_Comm_rank(MPI_COMM_WORLD, &this->rank);
   MPI_Get_processor_name(processor_name, &name_len);
+  
+  omp_set_num_threads(omp_get_num_procs());
 
   processor = std::string(processor_name);
   MPI_Info_create(&info);
