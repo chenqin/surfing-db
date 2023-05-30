@@ -1,4 +1,4 @@
-namespace cpp surfingdb.meta.schema //
+namespace cpp matcha.meta.schema //
 
 enum RowType {
     VOID,

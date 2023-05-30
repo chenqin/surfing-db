@@ -13,7 +13,7 @@
 #include <thrift/transport/TTransport.h>
 
 
-namespace surfingdb { namespace meta { namespace schema {
+namespace matcha { namespace meta { namespace schema {
 
 struct RowType {
   enum type {

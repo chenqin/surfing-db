@@ -1,9 +1,11 @@
-mkdir build
-cd build
+mkdir ~/matcha/build
+cd ~/matcha/build
 
 sudo apt update
 
-sudo apt install -y python3.10 python3-testresources python3-pip libthrift-dev maven
+sudo apt install -y python3.10 python3-testresources python3-pip libthrift-dev libsasl2-dev
+
+sudo apt install -y maven
 
 sudo apt install -y build-essential openjdk-8-jdk gcc g++ ninja-build libomp-dev libopenmpi-dev libssl-dev libboost-dev pybind11-dev libgoogle-glog-dev flex bison libunwind-dev
 
@@ -14,46 +16,42 @@ tar vzxf cmake-3.22.6-linux-x86_64.tar.gz
 rm cmake-3.22.6-linux-x86_64.tar.gz
 popd
 
-echo 'export CMAKE_HOME=~/cmake-3.22.6-linux-x86_64' >> ~/.bashrc 
-echo 'export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64' >> ~/.bashrc 
+export CMAKE_HOME=~/cmake-3.22.6-linux-x86_64
+export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+export PATH=$PATH:$CMAKE_HOME/bin:$JAVA_HOME/bin
 
-#install cuda-11-8 and depdencies, build pytorch 1.13.1
+
+#install cuda-11-8 and depdencies, build pytorch 1.13.1 to run cnn example
 #sudo wget -O /etc/apt/preferences.d/cuda-repository-pin-600 https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-ubuntu2004.pin
 #sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/3bf863cc.pub
 #sudo add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/ /"
 #sudo apt update
 #sudo apt install -y cuda-11-8 
 #sudo apt install -y cuda-toolkit-11-8
-#echo 'export CUDA_ROOT=/usr/local/cuda' >> ~/.bashrc 
-
+#export CUDA_ROOT=/usr/local/cuda
 #sudo ln -s /usr/bin/gcc $CUDA_ROOT/bin/gcc
 #sudo ln -s /usr/bin/g++ $CUDA_ROOT/bin/g++
-
 #wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/libcudnn8-dev_8.7.0.84-1+cuda11.8_amd64.deb
 #wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/libcudnn8_8.7.0.84-1+cuda11.8_amd64.deb
 #sudo dpkg -i libcudnn8*
 #rm libcudnn8*
+#export PATH=$PATH:$CMAKE_HOME/bin:$JAVA_HOME/bin:$CUDA_ROOT/bin
+#python download_mnist.py -d build/data/mnist
 
-#echo 'export PATH=$PATH:$CMAKE_HOME/bin:$JAVA_HOME/bin:$CUDA_ROOT/bin' >> ~/.bashrc
-echo 'export PATH=$PATH:$CMAKE_HOME/bin:$JAVA_HOME/bin' >> ~/.bashrc
-source ~/.bashrc
 
-#https://arrow.apache.org/install/
-sudo apt install ca-certificates lsb-release wget
+sudo apt install -y ca-certificates lsb-release wget
 wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
 sudo apt install -y ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
 rm ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
 
 sudo apt update
-sudo apt install -y libarrow-dev libarrow-cuda-dev libarrow-glib-dev libarrow-dataset-dev libarrow-dataset-glib-dev libarrow-flight-dev libarrow-flight-glib-dev libgandiva-dev libgandiva-glib-dev libparquet-dev libparquet-glib-dev
+sudo apt install -y libarrow-dev libarrow-glib-dev libarrow-dataset-dev libarrow-dataset-glib-dev libarrow-flight-dev libarrow-flight-glib-dev libgandiva-dev libgandiva-glib-dev libparquet-dev libparquet-glib-dev
 
+#sudo apt install -y libarrow-cuda-dev 
 #sudo pip install "pybind11[global]"
 
-git clone https://github.com/edenhill/librdkafka.git 
-cd librdkafka
-./configure --prefix /usr
-make
-sudo make install
-
-
-#python download_mnist.py -d build/data/mnist
+#git clone https://github.com/edenhill/librdkafka.git 
+#cd librdkafka
+#./configure --prefix /usr
+#make
+#sudo make install

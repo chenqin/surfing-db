@@ -52,6 +52,7 @@ public class JobInfo {
                 output = process(input);
                 Data.exportVectorSchemaRoot(allocator, output, null, array_out, schema_out);
             } catch (Exception e) {
+                System.out.println(e.getMessage());
             } finally {
                 if (input != null) input.close();
                 if (output != null) output.close();
@@ -100,6 +101,7 @@ public class JobInfo {
                 FlinkJobInfo jobInfo = s.toJobInfo(state);
                 // serialize job info
                 String jobInfoStr = DrSquirrelUtils.serializeJobInfo(jobInfo);
+                System.out.print(jobInfoStr);
                 jobinfo_out.setSafe(count, jobInfoStr.getBytes(StandardCharsets.UTF_8));
                 count++;
             }

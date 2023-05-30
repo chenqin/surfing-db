@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef SURFINGDB_CONNECTOR_H
-#define SURFINGDB_CONNECTOR_H
+#ifndef MATCHA_CONNECTOR_H
+#define MATCHA_CONNECTOR_H
 
 #include <string>
 #include <vector>
@@ -23,11 +23,12 @@
 #include "meta/schema.h"
 #include "table/mrow.h"
 #include "table/mtable.h"
+#include "table/utils.h"
 
-namespace surfingdb {
+namespace matcha {
 namespace connector {
-using namespace surfingdb::meta;
-using namespace surfingdb::table;
+using namespace matcha::meta;
+using namespace matcha::table;
 
 /**
  * thin kafka client wrapper
@@ -69,7 +70,7 @@ public:
    * @param deser 
    * @return std::shared_ptr<arrow::RecordBatch> 
    */
-  virtual std::shared_ptr<arrow::RecordBatch> consume_batch(std::function<void(const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders)> deser) = 0;
+  virtual std::shared_ptr<arrow::RecordBatch> consume_batch(std::function<size_t(const void* payload, size_t len, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders)> deser) = 0;
 
   /**
    * @brief
@@ -89,7 +90,7 @@ public:
         auto t = consume_batch(arrow_deser);
         std::unique_lock<std::mutex> lock(record_mutex);
         // wait until record batch contains less than max_batch_size rows
-        record_batch_not_full.wait(lock, [this] { 
+        record_batch_not_full.wait(lock, [&] { 
           size_t total = 0;
           for(auto& batch : record_batch){
             total += batch->num_rows();
@@ -105,21 +106,26 @@ public:
     }
   }
 
-  std::vector<std::shared_ptr<arrow::RecordBatch>> poll_once() {
+  std::shared_ptr<arrow::RecordBatch> poll_once(std::shared_ptr<arrow::Schema> schema) {
     std::unique_lock<std::mutex> lock(record_mutex);
     /**
      * @brief this assumes no partition should be 0 rows all the time
      * 
      */
-    record_batch_not_empty.wait(lock, [this] { return !this->record_batch.empty(); });
-    std::vector<std::shared_ptr<arrow::RecordBatch>> ret = std::move(record_batch);
+    record_batch_not_empty.wait(lock, [&] { return !record_batch.empty(); });
+    arrow::RecordBatchVector ret = std::move(record_batch);
     record_batch.clear();
     CHECK_EQ(record_batch.size(), 0);
     lock.unlock();
     record_batch_not_full.notify_one();
-    return ret;
+    if(ret.size() > 0 ) {
+      CHECK(schema->Equals(ret[0]->schema()));
+      return utils::merge(ret, ret[0]->schema());
+    } else {
+      return arrow::RecordBatch::MakeEmpty(schema).ValueOrDie();
+    }
   }
-  void setDeser(std::function<void(const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders)> deser) {
+  void setDeser(std::function<size_t(const void* payload, size_t len, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders)> deser) {
     this->arrow_deser = deser;
   }
 
@@ -131,11 +137,11 @@ protected:
   std::shared_ptr<node> node_ptr;
   std::mutex record_mutex;
   std::condition_variable record_batch_not_full, record_batch_not_empty;
-  std::vector<std::shared_ptr<arrow::RecordBatch>> record_batch;
+  arrow::RecordBatchVector record_batch;
   std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser;
-  std::function<void(const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders)> arrow_deser;
+  std::function<size_t(const void* payload, size_t len, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders)> arrow_deser;
 };
 } // namespace connector
 
-} // namespace surfingdb
-#endif // SURFINGDB_CONNECTOR_H
+} // namespace matcha
+#endif //  MATCHA_CONNECTOR_H

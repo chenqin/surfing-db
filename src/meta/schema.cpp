@@ -16,7 +16,7 @@
 
 #include "schema.h"
 
-namespace surfingdb {
+namespace matcha {
 namespace meta {
 
 void SchemaUtils::validSchema(const RowSchema& rowSchema) {
@@ -216,4 +216,4 @@ MPI_Datatype* mschema::schemaMPIType() {
   return &_row_type;
 }
 } // namespace meta
-} // namespace surfingdb
+} // namespace matcha

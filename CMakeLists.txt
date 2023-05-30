@@ -1,7 +1,7 @@
 # Require CMake 3.16+ on Mac OSX, as previous versions of CMake had trouble locating
 # OpenMP on Mac. See https://github.com/dmlc/xgboost/pull/5146#issuecomment-568312706
 cmake_minimum_required(VERSION 3.10)
-project(surfingdb LANGUAGES CXX VERSION 0.1)
+project(matcha LANGUAGES CXX VERSION 0.1)
 
 find_package(Java 1.8 REQUIRED)
 
@@ -17,7 +17,7 @@ endif ()
 find_package(Threads REQUIRED)
 find_package(MPI REQUIRED)
 find_package(Boost REQUIRED)
-
+find_package(CURL REQUIRED)
 find_package(JNI REQUIRED)
 include_directories(${JNI_INCLUDE_DIRS})
 
@@ -31,7 +31,7 @@ SET(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc")
 #find_package(Torch REQUIRED)
 #find_package(ArrowCUDA REQUIRED)
 find_package(ArrowDataset REQUIRED)
-set(ARROW_DATASET_LIBRARY ArrowDataset::arrow_dataset_shared)
+set(ARROW_DATASET_LIBRARY ArrowDataset::arrow_dataset_static)
 #set(ARROW_CUDA_LIBRARY ArrowCUDA::arrow_cuda_shared)
 
 if(APPLE)
@@ -67,12 +67,12 @@ find_package(OpenSSL REQUIRED)
 #https://pybind11.readthedocs.io/en/stable/advanced/embedding.html
 find_package(pybind11 REQUIRED)
 
-set(SURFINGDB_ROOT ${PROJECT_SOURCE_DIR})
-set(SURFINGDB_SRC ${SURFINGDB_ROOT}/src)
+set(MATCHA_ROOT ${PROJECT_SOURCE_DIR})
+set(MATCHA_SRC ${MATCHA_ROOT}/src)
 
 #SET(CMAKE_C_FLAGS ${CMAKE_C_FLAGS} -fopenmp)
 
-include_directories(include ${glog_INCLUDE_DIRS} ${SURFINGDB_SRC} ${MPI_CXX_INCLUDE_PATH} ${MPI_INCLUDE_PATH} ~/libtorch/include)
+include_directories(include ${glog_INCLUDE_DIRS} ${MATCHA_SRC} ${MPI_CXX_INCLUDE_PATH} ${MPI_INCLUDE_PATH} ~/libtorch/include)
 
 # a switch to use clang or g++
 # clang or g++
@@ -253,10 +253,10 @@ include(ext/OPENSSL_Ext.cmake)
 
 #arrow
 find_package(Arrow REQUIRED)
-set(ARROW_LIBRARY Arrow::arrow_shared)
+set(ARROW_LIBRARY Arrow::arrow_static)
 #find_package(ArrowCUDA REQUIRED)
 find_package(Parquet REQUIRED)
-set(PARQUET_LIBRARY Parquet::parquet_shared)
+set(PARQUET_LIBRARY Parquet::parquet_static)
 
 
 find_package(Python3 COMPONENTS Interpreter Development)
@@ -265,7 +265,6 @@ find_package(Python3 COMPONENTS Interpreter Development)
 include(ext/Sketches_Ext.cmake)
 include(ext/XGBoost_Ext.cmake)
 #find_package(lz4)
-#find_package(RdKafka)
 include(ext/Kafka_Ext.cmake)
 set(KAFKA_LIBRARY rdkafka)
 
@@ -284,39 +283,36 @@ include(src/table/table.cmake)
 # build table representation
 include(src/connector/connector.cmake)
 
-#build toplogy orchestration engine
-include(src/engine/engine.cmake)
-
 # build test binary
-add_executable(KafkaExample src/KafkaExample.cpp)
-add_executable(DataGenExample src/DataGenExample.cpp)
+add_executable(FlinkJobWatcher src/FlinkJobWatcher.cpp)
+add_executable(MABS 
+    ${MATCHA_SRC}/mabs/mabs_types.cpp
+    ${MATCHA_SRC}/mabs/mabs_constants.cpp
+    ${MATCHA_SRC}/MABS.cpp)
 
 # workaround make issue for now
-add_custom_command(TARGET KafkaExample PRE_BUILD
+add_custom_command(TARGET FlinkJobWatcher PRE_BUILD
         COMMAND make kafka
         COMMAND make xgboost
         COMMAND make thrift)
 
-add_custom_command(TARGET KafkaExample PRE_BUILD
+add_custom_command(TARGET FlinkJobWatcher PRE_BUILD
         COMMAND cd ${CMAKE_SOURCE_DIR}/drsquirrel-java && mvn clean package -Darrow.version=${ARROW_VERSION} 
         COMMAND cp ${CMAKE_SOURCE_DIR}/drsquirrel-java/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_SOURCE_DIR}/surfing-db-java.jar)
 
-set_target_properties(DataGenExample PROPERTIES
-    LINK_FLAGS "${MPI_LINK_FLAGS}")
+set_target_properties(MABS PROPERTIES LINK_FLAGS "${MPI_LINK_FLAGS}")
 
-target_link_libraries(DataGenExample
+target_link_libraries(MABS
         PRIVATE ${META}
         PRIVATE ${TABLE}
         PRIVATE ${CONNECTOR}
-        PRIVATE ${ENGINE}
-        PRIVATE ${ARROW_LIBRARY})
+        PRIVATE ${ARROW_LIBRARY}
+        PRIVATE ${THRIFT_LIBRARY})
 
-set_target_properties(KafkaExample 
-    PROPERTIES COMPILE_FLAGS "${MPI_COMPILE_FLAGS}")
+set_target_properties(FlinkJobWatcher PROPERTIES COMPILE_FLAGS "${MPI_COMPILE_FLAGS}")
 
-target_link_libraries(KafkaExample
+target_link_libraries(FlinkJobWatcher
     PRIVATE ${META}
     PRIVATE ${TABLE}
     PRIVATE ${CONNECTOR}
-    PRIVATE ${ENGINE}
     PRIVATE ${ARROW_LIBRARY})

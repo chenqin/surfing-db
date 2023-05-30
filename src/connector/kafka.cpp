@@ -14,21 +14,24 @@
  * limitations under the License.
  */
 #include "kafka.h"
-#include <chrono>
-#include <csignal>
+
 #include <ctype.h>
-#include <experimental/random>
-#include <fstream>
 #include <glog/logging.h>
-#include <iostream>
 #include <mpi.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/time.h>
+
+#include <chrono>
+#include <csignal>
+#include <experimental/random>
+#include <fstream>
+#include <iostream>
 #include <vector>
+
 #include "table/utils.h"
 
-namespace surfingdb {
+namespace matcha {
 namespace connector {
 
 bool issubscriber;
@@ -36,10 +39,61 @@ bool issubscriber;
 int exit_eof = 0;
 int wait_eof = 0; /* number of partitions awaiting EOF */
 
-void KafkaConnector::print_partition_list(const rd_kafka_topic_partition_list_t* partitions) {
+void KafkaConnector::print_partition_list(
+    const rd_kafka_topic_partition_list_t* partitions, int rank, int world) {
   for (int i = 0; i < partitions->cnt; i++) {
-    LOG(INFO) << "topic " << partitions->elems[i].topic << " partition " << partitions->elems[i].partition << " offset " << partitions->elems[i].offset;
+    LOG(INFO) << "kafka topic " << partitions->elems[i].topic << " partition "
+              << partitions->elems[i].partition << " offset "
+              << partitions->elems[i].offset << " rank "
+              << rank << " world " << world; 
   }
+}
+
+int rank, world;
+
+void KafkaConnector::cb(rd_kafka_t* rk, rd_kafka_resp_err_t err,
+               rd_kafka_topic_partition_list_t* partitions, void* opaque) {
+rd_kafka_error_t* error = NULL;
+    rd_kafka_resp_err_t ret_err = RD_KAFKA_RESP_ERR_NO_ERROR;
+    LOG(INFO) << "Consumer group rebalanced:";
+
+    switch (err) {
+      case RD_KAFKA_RESP_ERR__ASSIGN_PARTITIONS:
+        LOG(INFO) << "assigned " << rd_kafka_rebalance_protocol(rk);
+        KafkaConnector::print_partition_list(partitions, rank , world);
+
+        if (!strcmp(rd_kafka_rebalance_protocol(rk), "COOPERATIVE"))
+          error = rd_kafka_incremental_assign(rk, partitions);
+        else
+          ret_err = rd_kafka_assign(rk, partitions);
+        wait_eof += partitions->cnt;
+        break;
+
+      case RD_KAFKA_RESP_ERR__REVOKE_PARTITIONS:
+        LOG(INFO) << "revoked " << rd_kafka_rebalance_protocol(rk);
+        KafkaConnector::print_partition_list(partitions, rank, world);
+        if (!strcmp(rd_kafka_rebalance_protocol(rk), "COOPERATIVE")) {
+          error = rd_kafka_incremental_unassign(rk, partitions);
+          wait_eof -= partitions->cnt;
+        } else {
+          ret_err = rd_kafka_assign(rk, NULL);
+          wait_eof = 0;
+        }
+        break;
+
+      default:
+        fprintf(stderr, "failed: %s\n", rd_kafka_err2str(err));
+        rd_kafka_assign(rk, NULL);
+        break;
+    }
+
+    if (error) {
+      fprintf(stderr, "incremental assign failure: %s\n",
+              rd_kafka_error_string(error));
+      rd_kafka_error_destroy(error);
+    } else if (ret_err) {
+      fprintf(stderr, "assign failure: %s\n", rd_kafka_err2str(ret_err));
+    }
 }
 
 std::string serversettobrokers(std::string serversetpath) {
@@ -50,7 +104,6 @@ std::string serversettobrokers(std::string serversetpath) {
   std::ifstream myfile(serversetpath.c_str());
   if (myfile.is_open()) {
     while (getline(myfile, line) && count < 5) {
-      // std::cout << line << '\n';
       if (start-- < 0) {
         brokers += line + ",";
         count++;
@@ -72,9 +125,9 @@ void KafkaConnector::generate(bool pii) {
    * host or host:port (default port 9092).
    * librdkafka will use the bootstrap brokers to acquire the full
    * set of brokers from the cluster. */
-  if (rd_kafka_conf_set(conf, "bootstrap.servers", (char*)serversettobrokers(serversetpath).c_str(),
-                        errstr, sizeof(errstr))
-      != RD_KAFKA_CONF_OK) {
+  if (rd_kafka_conf_set(conf, "bootstrap.servers",
+                        (char*)serversettobrokers(serversetpath).c_str(),
+                        errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
     LOG(ERROR) << errstr;
     rd_kafka_conf_destroy(conf);
     return;
@@ -84,9 +137,8 @@ void KafkaConnector::generate(bool pii) {
    * @brief set linger.ms
    *
    */
-  if (rd_kafka_conf_set(conf, "linger.ms", "120",
-                        errstr, sizeof(errstr))
-      != RD_KAFKA_CONF_OK) {
+  if (rd_kafka_conf_set(conf, "linger.ms", "120", errstr, sizeof(errstr)) !=
+      RD_KAFKA_CONF_OK) {
     LOG(ERROR) << errstr;
     rd_kafka_conf_destroy(conf);
     return;
@@ -97,9 +149,8 @@ void KafkaConnector::generate(bool pii) {
    * group, and the subscribed topic' partitions will be assigned
    * according to the partition.assignment.strategy
    * (consumer config property) to the consumers in the group. */
-  if (rd_kafka_conf_set(conf, "group.id", this->groupid,
-                        errstr, sizeof(errstr))
-      != RD_KAFKA_CONF_OK) {
+  if (rd_kafka_conf_set(conf, "group.id", this->groupid, errstr,
+                        sizeof(errstr)) != RD_KAFKA_CONF_OK) {
     LOG(ERROR) << errstr;
     rd_kafka_conf_destroy(conf);
     return;
@@ -116,37 +167,38 @@ void KafkaConnector::generate(bool pii) {
     'enable.sparse.connections': False,
     'error_cb': self.error_cb,
     */
-    if (rd_kafka_conf_set(conf, "security.protocol", "ssl",
-                          errstr, sizeof(errstr))
-        != RD_KAFKA_CONF_OK) {
+    if (rd_kafka_conf_set(conf, "security.protocol", "ssl", errstr,
+                          sizeof(errstr)) != RD_KAFKA_CONF_OK) {
       LOG(ERROR) << errstr;
       rd_kafka_conf_destroy(conf);
       return;
     }
-    if (rd_kafka_conf_set(conf, "ssl.key.location", "/var/lib/normandie/fuse/key/generic",
-                          errstr, sizeof(errstr))
-        != RD_KAFKA_CONF_OK) {
+    if (rd_kafka_conf_set(conf, "ssl.key.location",
+                          "/var/lib/normandie/fuse/key/generic", errstr,
+                          sizeof(errstr)) != RD_KAFKA_CONF_OK) {
       LOG(ERROR) << errstr;
       rd_kafka_conf_destroy(conf);
       return;
     }
-    if (rd_kafka_conf_set(conf, "ssl.certificate.location", "/var/lib/normandie/fuse/chain/generic",
-                          errstr, sizeof(errstr))
-        != RD_KAFKA_CONF_OK) {
+    if (rd_kafka_conf_set(conf, "ssl.certificate.location",
+                          "/var/lib/normandie/fuse/chain/generic", errstr,
+                          sizeof(errstr)) != RD_KAFKA_CONF_OK) {
       LOG(ERROR) << errstr;
       rd_kafka_conf_destroy(conf);
       return;
     }
-    if (rd_kafka_conf_set(conf, "ssl.ca.location", "/var/lib/normandie/fuse/ca/root",
-                          errstr, sizeof(errstr))
-        != RD_KAFKA_CONF_OK) {
+    if (rd_kafka_conf_set(conf, "ssl.ca.location",
+                          "/var/lib/normandie/fuse/ca/root", errstr,
+                          sizeof(errstr)) != RD_KAFKA_CONF_OK) {
       LOG(ERROR) << errstr;
       rd_kafka_conf_destroy(conf);
       return;
     }
-    if (rd_kafka_conf_set(conf, "debug", "generic,broker,topic,metadata,feature,queue,msg,protocol,cgrp,security,fetch,interceptor,plugin,consumer,admin,eos,mock,all",
-                        errstr, sizeof(errstr))
-        != RD_KAFKA_CONF_OK) {
+    if (rd_kafka_conf_set(
+            conf, "debug",
+            "generic,broker,topic,metadata,feature,queue,msg,protocol,cgrp,"
+            "security,fetch,interceptor,plugin,consumer,admin,eos,mock,all",
+            errstr, sizeof(errstr)) != RD_KAFKA_CONF_OK) {
       LOG(ERROR) << errstr;
       rd_kafka_conf_destroy(conf);
       return;
@@ -155,58 +207,8 @@ void KafkaConnector::generate(bool pii) {
 
   /* Set default topic config for pattern-matched topics. */
   rd_kafka_conf_set_default_topic_conf(conf, topic_conf);
-  auto cb = [](rd_kafka_t* rk, rd_kafka_resp_err_t err,
-               rd_kafka_topic_partition_list_t* partitions,
-               void* opaque) {
-    rd_kafka_error_t* error = NULL;
-    rd_kafka_resp_err_t ret_err = RD_KAFKA_RESP_ERR_NO_ERROR;
-
-    fprintf(stderr, "%% Consumer group rebalanced: ");
-
-    switch (err) {
-      case RD_KAFKA_RESP_ERR__ASSIGN_PARTITIONS:
-        fprintf(stderr, "assigned (%s):\n",
-                rd_kafka_rebalance_protocol(rk));
-        KafkaConnector::print_partition_list(partitions);
-
-        if (!strcmp(rd_kafka_rebalance_protocol(rk), "COOPERATIVE"))
-          error = rd_kafka_incremental_assign(rk, partitions);
-        else
-          ret_err = rd_kafka_assign(rk, partitions);
-        wait_eof += partitions->cnt;
-        break;
-
-      case RD_KAFKA_RESP_ERR__REVOKE_PARTITIONS:
-        fprintf(stderr, "revoked (%s):\n",
-                rd_kafka_rebalance_protocol(rk));
-        KafkaConnector::print_partition_list(partitions);
-        if (!strcmp(rd_kafka_rebalance_protocol(rk), "COOPERATIVE")) {
-          error = rd_kafka_incremental_unassign(rk, partitions);
-          wait_eof -= partitions->cnt;
-        } else {
-          ret_err = rd_kafka_assign(rk, NULL);
-          wait_eof = 0;
-        }
-        break;
-
-      default:
-        fprintf(stderr, "failed: %s\n",
-                rd_kafka_err2str(err));
-        rd_kafka_assign(rk, NULL);
-        break;
-    }
-
-    if (error) {
-      fprintf(stderr, "incremental assign failure: %s\n",
-              rd_kafka_error_string(error));
-      rd_kafka_error_destroy(error);
-    } else if (ret_err) {
-      fprintf(stderr, "assign failure: %s\n",
-              rd_kafka_err2str(ret_err));
-    }
-  };
   /* Callback called on partition assignment changes */
-  rd_kafka_conf_set_rebalance_cb(conf, cb);
+  rd_kafka_conf_set_rebalance_cb(conf, KafkaConnector::cb);
 
   rd_kafka_conf_set(conf, "enable.partition.eof", "false", NULL, 0);
   rd_kafka_conf_set(conf, "fetch.max.bytes", "524288000", NULL, 0);
@@ -217,9 +219,8 @@ void KafkaConnector::generate(bool pii) {
    * in the partition to start fetching messages.
    * By setting this to earliest the consumer will read all messages
    * in the partition if there was no previously committed offset. */
-  if (rd_kafka_conf_set(conf, "auto.offset.reset", "earliest",
-                        errstr, sizeof(errstr))
-      != RD_KAFKA_CONF_OK) {
+  if (rd_kafka_conf_set(conf, "auto.offset.reset", "latest", errstr,
+                        sizeof(errstr)) != RD_KAFKA_CONF_OK) {
     LOG(ERROR) << errstr;
     rd_kafka_conf_destroy(conf);
     return;
@@ -253,8 +254,7 @@ void KafkaConnector::generate(bool pii) {
   /* Convert the list of topics to a format suitable for librdkafka */
   subscription = rd_kafka_topic_partition_list_new(topic_cnt);
 
-  rd_kafka_topic_partition_list_add(subscription,
-                                    topics,
+  rd_kafka_topic_partition_list_add(subscription, topics,
                                     /* the partition is ignored
                                      * by subscribe() */
                                     RD_KAFKA_PARTITION_UA);
@@ -263,7 +263,8 @@ void KafkaConnector::generate(bool pii) {
   err = rd_kafka_subscribe(rk, subscription);
 
   if (err) {
-    LOG(ERROR) << "Failed to subscribe to " << subscription->cnt << " topics: " << rd_kafka_err2str(err);
+    LOG(ERROR) << "Failed to subscribe to " << subscription->cnt
+               << " topics: " << rd_kafka_err2str(err);
     rd_kafka_topic_partition_list_destroy(subscription);
     rd_kafka_destroy(rk);
   }
@@ -276,14 +277,12 @@ void KafkaConnector::generate(bool pii) {
 
 KafkaConnector::KafkaConnector(const std::shared_ptr<node> node_ptr,
                                std::string connector_name,
-                               size_t max_batch_size,
-                               int timeout,
+                               size_t max_batch_size, int timeout,
                                std::shared_ptr<mschema> schema_ptr,
-                               std::vector<std::string> topicvect, std::string serversetpath, std::string groupid, bool pii = false) : Connector(node_ptr,
-                                                                                                                                                 connector_name,
-                                                                                                                                                 max_batch_size,
-                                                                                                                                                 timeout,
-                                                                                                                                                 schema_ptr) {
+                               std::vector<std::string> topicvect,
+                               std::string serversetpath, std::string groupid,
+                               bool pii = false)
+    : Connector(node_ptr, connector_name, max_batch_size, timeout, schema_ptr) {
   assigned = false;
   this->serversetpath = serversetpath;
   this->groupid = (char*)groupid.c_str();
@@ -295,6 +294,8 @@ KafkaConnector::KafkaConnector(const std::shared_ptr<node> node_ptr,
   topics = const_cast<char*>(str.c_str());
 
   topic_cnt = topicvect.size();
+  rank = node_ptr->rank;
+  world = node_ptr->world;
   generate(pii);
 }
 
@@ -312,7 +313,11 @@ std::shared_ptr<mtable> KafkaConnector::consume_batch() {
   return consume_batch(deser);
 }
 
-std::shared_ptr<arrow::RecordBatch> KafkaConnector::consume_batch(std::function<void(const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders)> deser) {
+std::shared_ptr<arrow::RecordBatch> KafkaConnector::consume_batch(
+    std::function<
+        size_t(const void* payload, size_t len,
+             std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders)>
+        deser) {
   // auto schema = utils::toArrow(this->schema_ptr);
   auto start = MPI_Wtime();
   int total = 0;
@@ -323,13 +328,15 @@ std::shared_ptr<arrow::RecordBatch> KafkaConnector::consume_batch(std::function<
     auto type = schema_ptr->fields.at(i).type;
     if (type == RowType::LIST) {
       auto keytype = schema_ptr->fields.at(i).list_type;
-      builders.push_back(std::make_shared<arrow::ListBuilder>(pool, utils::getBuilder(keytype)));
+      builders.push_back(std::make_shared<arrow::ListBuilder>(
+          pool, utils::getBuilder(keytype)));
       continue;
     }
     if (type == RowType::MAP) {
       auto keytype = schema_ptr->fields.at(i).map_key_type;
       auto valuetype = schema_ptr->fields.at(i).map_value_type;
-      builders.push_back(std::make_shared<arrow::MapBuilder>(pool, utils::getBuilder(keytype), utils::getBuilder(valuetype)));
+      builders.push_back(std::make_shared<arrow::MapBuilder>(
+          pool, utils::getBuilder(keytype), utils::getBuilder(valuetype)));
       continue;
     }
     builders.push_back(utils::getBuilder(type));
@@ -353,7 +360,7 @@ std::shared_ptr<arrow::RecordBatch> KafkaConnector::consume_batch(std::function<
       rd_kafka_message_destroy(rkm);
       continue;
     }
-    deser((const char*)rkm->payload, builders);
+    deser((const void*)rkm->payload, rkm->len,  builders);
     total++;
     rd_kafka_message_destroy(rkm);
   }
@@ -365,8 +372,12 @@ std::shared_ptr<arrow::RecordBatch> KafkaConnector::consume_batch(std::function<
   return arrow::RecordBatch::Make(utils::toArrow(schema_ptr), total, arrays);
 }
 
-std::shared_ptr<mtable> KafkaConnector::consume_batch(std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser) {
-  auto t = std::make_shared<mtable>(node_ptr, schema_ptr, max_batch_size * schema_ptr->rowSize());
+std::shared_ptr<mtable> KafkaConnector::consume_batch(
+    std::function<std::shared_ptr<mrow>(const char* payload,
+                                        const mschema& schema)>
+        deser) {
+  auto t = std::make_shared<mtable>(node_ptr, schema_ptr,
+                                    max_batch_size * schema_ptr->rowSize());
   auto start = MPI_Wtime();
   int total = 0;
   while ((MPI_Wtime() - start) * 1000 < timeout && total < max_batch_size) {
@@ -400,5 +411,5 @@ std::shared_ptr<mtable> KafkaConnector::consume_batch(std::function<std::shared_
    */
   return t;
 }
-} // namespace connector
-} // namespace surfingdb
+}  // namespace connector
+}  // namespace matcha

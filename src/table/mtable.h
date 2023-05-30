@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef SURFINGDB_MTABLE_H
-#define SURFINGDB_MTABLE_H
+#ifndef MATCHA_MTABLE_H
+#define MATCHA_MTABLE_H
 #pragma once
 
 #include <arrow/api.h>
@@ -31,10 +31,10 @@
 
 #pragma once
 
-namespace surfingdb {
+namespace matcha {
 namespace table {
-using surfingdb::meta::node;
-using namespace surfingdb::meta;
+using matcha::meta::node;
+using namespace matcha::meta;
 
 /**
  * mtable is foundation data management unit.
@@ -101,5 +101,5 @@ public:
 };
 
 } // namespace table
-} // namespace surfingdb
-#endif // SURFINGDB_MTABLE_H
+} // namespace matcha
+#endif //  MATCHA_MTABLE_H

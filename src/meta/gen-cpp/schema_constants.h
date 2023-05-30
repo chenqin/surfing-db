@@ -9,7 +9,7 @@
 
 #include "schema_types.h"
 
-namespace surfingdb { namespace meta { namespace schema {
+namespace matcha { namespace meta { namespace schema {
 
 class schemaConstants {
  public:

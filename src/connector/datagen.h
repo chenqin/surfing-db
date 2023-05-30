@@ -14,40 +14,47 @@
  * limitations under the License.
  */
 
-#ifndef SURFINGDB_DATAGEN_H
-#define SURFINGDB_DATAGEN_H
+#ifndef MATCHA_DATAGEN_H
+#define MATCHA_DATAGEN_H
 
 #include <rdkafka.h>
+
 #include <string>
 #include <vector>
+
 #include "connector/connector.h"
 #include "meta/node.h"
 #include "meta/schema.h"
 #include "table/mrow.h"
 #include "table/mtable.h"
 
-namespace surfingdb {
+namespace matcha {
 namespace connector {
 using namespace std;
-using namespace surfingdb::meta;
-using namespace surfingdb::table;
+using namespace matcha::meta;
+using namespace matcha::table;
 
 /**
  * @brief data generator
  *
  */
 class DataGenConnector : public Connector {
-public:
+ public:
   DataGenConnector(const std::shared_ptr<node> node_ptr,
-                   std::string connector_name,
-                   size_t max_batch_size,
-                   int timeout,
-                   std::shared_ptr<mschema> schema_ptr);
+                   std::string connector_name, size_t max_batch_size,
+                   int timeout, std::shared_ptr<mschema> schema_ptr);
 
-  shared_ptr<mtable> consume_batch(std::function<std::shared_ptr<mrow>(const char* payload, const mschema& schema)> deser);
-  std::shared_ptr<arrow::RecordBatch> consume_batch(std::function<void(const char* payload, std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders)> deser);
+  shared_ptr<mtable> consume_batch(
+      std::function<std::shared_ptr<mrow>(const char* payload,
+                                          const mschema& schema)>
+          deser);
+  std::shared_ptr<arrow::RecordBatch> consume_batch(
+      std::function<
+          size_t(const void* payload, size_t len,
+               std::vector<std::shared_ptr<arrow::ArrayBuilder>>& builders)>
+          deser);
 };
-} // namespace connector
+}  // namespace connector
 
-} // namespace surfingdb
-#endif // SURFINGDB_DATAGEN_H
+}  // namespace matcha
+#endif  //  MATCHA_DATAGEN_H

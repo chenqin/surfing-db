@@ -14,15 +14,17 @@
  * limitations under the License.
  */
 #include "mtable.h"
+
 #include <math.h> /* isnan, sqrt */
 #include <sys/uio.h>
 #include <unistd.h>
+
 #include "KMeanOperator.h"
 #include "arrow/io/file.h"
 #include "parquet/stream_writer.h"
 #include "xgbop.h"
 
-namespace surfingdb {
+namespace matcha {
 namespace table {
 
 mtable::~mtable() {
@@ -39,16 +41,19 @@ mtable::mtable(const std::shared_ptr<mschema> schema_ptr, size_t capacity) {
   CHECK(sizeof(uint8_t) == sizeof(char));
   payload = (uint8_t*)malloc(capacity * sizeof(uint8_t));
   schedule_size = -1;
-  key_dist = std::make_unique<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>>();
-  key_groups = std::make_unique<std::map<size_t, std::vector<size_t>, std::less<size_t>>>();
+  key_dist =
+      std::make_unique<std::map<size_t, std::vector<std::pair<int, size_t>>,
+                                std::less<size_t>>>();
+  key_groups = std::make_unique<
+      std::map<size_t, std::vector<size_t>, std::less<size_t>>>();
   placement_index = std::make_unique<std::map<int, size_t>>();
 
   offset = 0;
   row_count = 0;
 }
 
-mtable::mtable(const std::shared_ptr<node> node_ptr, const std::shared_ptr<mschema> schema_ptr,
-               size_t capacity) {
+mtable::mtable(const std::shared_ptr<node> node_ptr,
+               const std::shared_ptr<mschema> schema_ptr, size_t capacity) {
   CHECK_GE(capacity, 0);
   this->capacity = capacity;
   this->schema_ptr = schema_ptr;
@@ -61,11 +66,16 @@ mtable::mtable(const std::shared_ptr<node> node_ptr, const std::shared_ptr<msche
     rank = node_ptr->rank;
     world = node_ptr->world;
   }
-  if (node_ptr != nullptr) MPI_Alloc_mem(capacity * sizeof(uint8_t), MPI_INFO_NULL, &payload);
-  if (node_ptr == nullptr) payload = (uint8_t*)malloc(capacity * sizeof(uint8_t));
+  if (node_ptr != nullptr)
+    MPI_Alloc_mem(capacity * sizeof(uint8_t), MPI_INFO_NULL, &payload);
+  if (node_ptr == nullptr)
+    payload = (uint8_t*)malloc(capacity * sizeof(uint8_t));
   schedule_size = -1;
-  key_dist = std::make_unique<std::map<size_t, std::vector<std::pair<int, size_t>>, std::less<size_t>>>();
-  key_groups = std::make_unique<std::map<size_t, std::vector<size_t>, std::less<size_t>>>();
+  key_dist =
+      std::make_unique<std::map<size_t, std::vector<std::pair<int, size_t>>,
+                                std::less<size_t>>>();
+  key_groups = std::make_unique<
+      std::map<size_t, std::vector<size_t>, std::less<size_t>>>();
   placement_index = std::make_unique<std::map<int, size_t>>();
 
   offset = 0;
@@ -86,7 +96,8 @@ void mtable::reserveRow(size_t rows) {
 std::unique_ptr<mrow> mtable::readRow(int index) {
   CHECK_LT(index, row_count);
   CHECK_NOTNULL(schema_ptr);
-  return std::make_unique<mrow>(schema_ptr, &payload[schema_ptr->rowSize() * index]);
+  return std::make_unique<mrow>(schema_ptr,
+                                &payload[schema_ptr->rowSize() * index]);
 }
 
 size_t mtable::placement(size_t key) {
@@ -95,21 +106,21 @@ size_t mtable::placement(size_t key) {
   return key % base;
 }
 
-uint8_t* mtable::payload_ptr() {
-  return &this->payload[0];
-}
+uint8_t* mtable::payload_ptr() { return &this->payload[0]; }
 
 void mtable::appendRow(mrow& row) {
-  CHECK_EQ(row.schema_sig(), schema_ptr->signature()); // check schema signature
-  CHECK_EQ(schema_ptr->rowSize(), row.capacity());     // check row size
-  CHECK_LE(row.capacity() + offset, capacity);         // check capacity of temp table
+  CHECK_EQ(row.schema_sig(),
+           schema_ptr->signature());                // check schema signature
+  CHECK_EQ(schema_ptr->rowSize(), row.capacity());  // check row size
+  CHECK_LE(row.capacity() + offset, capacity);  // check capacity of temp table
   memcpy(&payload[offset], row.payload_ptr(), row.capacity());
   offset += row.capacity();
   row_count++;
   CHECK_LE(offset, capacity);
 }
 
-void mtable::verifyShuffle(const Field& field, std::function<size_t(size_t, int, int)> partitioner) {
+void mtable::verifyShuffle(
+    const Field& field, std::function<size_t(size_t, int, int)> partitioner) {
   CHECK(world > 0);
   CHECK_LT(rank, world);
   for (size_t i = 0; i < row_count; i++) {
@@ -124,8 +135,8 @@ void mtable::verifyShuffle(const Field& field, std::function<size_t(size_t, int,
 void mtable::group(const Field& f, bool local) {
   CHECK(schema_ptr->containField(f));
 
-  key_groups->clear(); // reset key_groups
-  key_dist->clear();   // reset key_dist
+  key_groups->clear();  // reset key_groups
+  key_dist->clear();    // reset key_dist
 
   for (size_t i = 0; i < row_count; i++) {
     auto r = readRow(i);
@@ -134,7 +145,7 @@ void mtable::group(const Field& f, bool local) {
     size_t key = value_hasher.hash_value(f, v);
     if (key_groups->find(key) == key_groups->end()) {
       std::vector<size_t> arr;
-      key_groups->insert({ key, arr });
+      key_groups->insert({key, arr});
     }
     key_groups->at(key).emplace_back(i);
   }
@@ -156,7 +167,8 @@ void mtable::group(const Field& f, bool local) {
    * merge key_count array into one
    */
   size_t local_group_sizes[world];
-  memset(local_group_sizes, 0, world * sizeof(size_t)); // always clear memory before use
+  memset(local_group_sizes, 0,
+         world * sizeof(size_t));  // always clear memory before use
 
   int recvcounts[world], displs[world];
   memset(recvcounts, 0, world * sizeof(int));
@@ -165,13 +177,14 @@ void mtable::group(const Field& f, bool local) {
   displs[0] = 0;
   local_group_sizes[rank] = key_groups->size() * 3;
 
-  size_t recv[world]; // type should be same as local_group_sizes
+  size_t recv[world];  // type should be same as local_group_sizes
   memcpy(recv, local_group_sizes, world * sizeof(size_t));
 
-  MPI_Allreduce(&local_group_sizes, &recv, world, MPI_UNSIGNED_LONG, MPI_MAX, MPI_COMM_WORLD);
+  MPI_Allreduce(&local_group_sizes, &recv, world, MPI_UNSIGNED_LONG, MPI_MAX,
+                MPI_COMM_WORLD);
 
-  std::vector<size_t> _g_groups; // keep key, row counts on each process
-  size_t _global_group_size;     // apply to group_by
+  std::vector<size_t> _g_groups;  // keep key, row counts on each process
+  size_t _global_group_size;      // apply to group_by
 
   _global_group_size = recv[0];
   recvcounts[0] = recv[0];
@@ -184,8 +197,9 @@ void mtable::group(const Field& f, bool local) {
   CHECK_GE(_global_group_size, key_groups->size() * 3);
   _g_groups.resize(_global_group_size);
 
-  MPI_Allgatherv(key_count, key_groups->size() * 3, MPI_UNSIGNED_LONG, &_g_groups[0], recvcounts, displs,
-                 MPI_UNSIGNED_LONG, MPI_COMM_WORLD);
+  MPI_Allgatherv(key_count, key_groups->size() * 3, MPI_UNSIGNED_LONG,
+                 &_g_groups[0], recvcounts, displs, MPI_UNSIGNED_LONG,
+                 MPI_COMM_WORLD);
 
   // build key_hash to node and row count map
   for (size_t j = 0; j < _global_group_size; j += 3) {
@@ -197,7 +211,7 @@ void mtable::group(const Field& f, bool local) {
     if (key_dist->find(key) == key_dist->end()) {
       std::vector<std::pair<int, size_t>> vector;
       vector.emplace_back(pair);
-      key_dist->insert({ key, vector });
+      key_dist->insert({key, vector});
     } else {
       key_dist->at(key).emplace_back(pair);
     }
@@ -228,7 +242,9 @@ size_t mtable::range_row_size(int dest) {
 /**
  * sort rows based on destination process and update _start_index map
  */
-std::shared_ptr<mtable> mtable::placement_sort(const Field& f, std::function<size_t(size_t key, int rank, int world)> partitioner) {
+std::shared_ptr<mtable> mtable::placement_sort(
+    const Field& f,
+    std::function<size_t(size_t key, int rank, int world)> partitioner) {
   // auto start = MPI_Wtime();
   placement_index->clear();
   key_groups->clear();
@@ -243,18 +259,19 @@ std::shared_ptr<mtable> mtable::placement_sort(const Field& f, std::function<siz
 
     if (key_groups->find(key) == key_groups->end()) {
       std::vector<size_t> arr;
-      key_groups->insert({ key, arr });
+      key_groups->insert({key, arr});
     }
     key_groups->at(key).emplace_back(i);
   }
   /***
    * build another table and sort rows based on field key placement to rank
    */
-  auto sender = std::make_shared<mtable>(node_ptr, schema_ptr, row_count * schema_ptr->rowSize());
+  auto sender = std::make_shared<mtable>(node_ptr, schema_ptr,
+                                         row_count * schema_ptr->rowSize());
 
   int index = 0;
   for (int i = 0; i < world; i++) {
-    sender->placement_index->insert({ i, index });
+    sender->placement_index->insert({i, index});
     for (auto g : *key_groups) {
       size_t placement = partitioner(g.first, rank, world);
       CHECK_LT(placement, world);
@@ -264,7 +281,8 @@ std::shared_ptr<mtable> mtable::placement_sort(const Field& f, std::function<siz
        */
       if (placement == (size_t)i) {
         for (auto item : g.second) {
-          // std::cout << "place to rank " << placement << " with key " << g.first << " from row " << item << std::endl;
+          // std::cout << "place to rank " << placement << " with key " <<
+          // g.first << " from row " << item << std::endl;
           CHECK_LT(item, row_count);
           auto row = this->readRow(item);
           Value v;
@@ -272,7 +290,7 @@ std::shared_ptr<mtable> mtable::placement_sort(const Field& f, std::function<siz
           size_t key = value_hasher.hash_value(f, v);
           if (sender->key_groups->find(key) == sender->key_groups->end()) {
             std::vector<size_t> arr;
-            sender->key_groups->insert({ key, arr });
+            sender->key_groups->insert({key, arr});
           }
           sender->key_groups->at(key).emplace_back(index);
           sender->appendRow(*row.get());
@@ -287,7 +305,8 @@ std::shared_ptr<mtable> mtable::placement_sort(const Field& f, std::function<siz
 /**
  * append buffer to file in batch
  */
-void mtable::flush(const std::string& path, uint8_t* ptr, size_t rows, size_t len) {
+void mtable::flush(const std::string& path, uint8_t* ptr, size_t rows,
+                   size_t len) {
   // LOG(INFO) << "write to " << path;
   struct iovec iov[FILE_IO_VECTOR];
   ssize_t nr;
@@ -297,7 +316,8 @@ void mtable::flush(const std::string& path, uint8_t* ptr, size_t rows, size_t le
   size_t sig = schema_ptr->signature();
   CHECK_GE(::write(fd, &sig, sizeof(size_t)), 0);
   CHECK_GE(::write(fd, reinterpret_cast<const void*>(&len), sizeof(size_t)), 0);
-  CHECK_GE(::write(fd, reinterpret_cast<const void*>(&rows), sizeof(size_t)), 0);
+  CHECK_GE(::write(fd, reinterpret_cast<const void*>(&rows), sizeof(size_t)),
+           0);
 
   size_t index = 0;
   /* fill out three iovec structures */
@@ -305,7 +325,8 @@ void mtable::flush(const std::string& path, uint8_t* ptr, size_t rows, size_t le
     int batch = 0;
     for (int i = 0; i < FILE_IO_VECTOR && index < len; i++) {
       iov[i].iov_base = ptr + index;
-      size_t payload_size = index + SSD_CHUNK_SIZ < len ? SSD_CHUNK_SIZ : len - index;
+      size_t payload_size =
+          index + SSD_CHUNK_SIZ < len ? SSD_CHUNK_SIZ : len - index;
       iov[i].iov_len = payload_size;
       index += payload_size;
       batch++;
@@ -343,7 +364,8 @@ void mtable::load(const std::string& path) {
     int batch = 0;
     for (int i = 0; i < FILE_IO_VECTOR && index < offset; i++) {
       iov[i].iov_base = &payload[index];
-      size_t payload_size = index + SSD_CHUNK_SIZ < offset ? SSD_CHUNK_SIZ : offset - index;
+      size_t payload_size =
+          index + SSD_CHUNK_SIZ < offset ? SSD_CHUNK_SIZ : offset - index;
       iov[i].iov_len = payload_size;
       index += payload_size;
       batch++;
@@ -356,13 +378,9 @@ void mtable::load(const std::string& path) {
   close(fd);
 }
 
-size_t mtable::row_size() {
-  return this->row_count;
-}
+size_t mtable::row_size() { return this->row_count; }
 
-std::shared_ptr<mschema> mtable::getSchema() {
-  return this->schema_ptr;
-}
+std::shared_ptr<mschema> mtable::getSchema() { return this->schema_ptr; }
 
 void mtable::print() {
   if (this->row_count == 0) return;
@@ -374,7 +392,8 @@ void mtable::print() {
 }
 
 /**
- * for xgboost, we need to extract list of numerical fields and pass as array map float
+ * for xgboost, we need to extract list of numerical fields and pass as array
+ * map float
  * @param fields features
  * @param data pointer to external float array
  */
@@ -421,9 +440,7 @@ void mtable::writeField(const Field& field, const float* data) {
   }
 }
 
-std::shared_ptr<node> mtable::getNodePtr() {
-  return this->node_ptr;
-}
+std::shared_ptr<node> mtable::getNodePtr() { return this->node_ptr; }
 
 void mtable::release() {
   key_dist->clear();
@@ -440,12 +457,13 @@ void mtable::appendRows(std::vector<std::shared_ptr<mrow>>& rows) {
 void mtable::build_window() {
   MPI_Aint window_size;
   window_size = this->capacity;
-  CHECK(MPI_Win_create(payload, window_size, sizeof(char), node_ptr->info, MPI_COMM_WORLD, &win) == 0);
+  CHECK(MPI_Win_create(payload, window_size, sizeof(char), node_ptr->info,
+                       MPI_COMM_WORLD, &win) == 0);
 }
 
 void mtable::release_window() {
   if (win != MPI_WIN_NULL) MPI_Win_free(&win);
 }
 
-} // namespace table
-} // namespace surfingdb
+}  // namespace table
+}  // namespace matcha

@@ -22,14 +22,14 @@
 #include <vector>
 #include <jni.h>
 
-#ifndef SURFINGDB_NODE_H
-#define SURFINGDB_NODE_H
-namespace surfingdb {
+#ifndef MATCHA_NODE_H
+#define MATCHA_NODE_H
+namespace matcha {
 namespace meta {
 
 class node {
 public:
-  node(int* argc, char*** argv);
+  node(int* argc, char*** argv, std::string jar="");
   node(int, int, std::string);
   ~node(){
     MPI_Comm_free(&role_comm);
@@ -75,5 +75,5 @@ public:
   JNIEnv* env;
 };
 } // namespace meta
-} // namespace surfingdb
-#endif // SURFINGDB_NODE_H
+} // namespace matcha
+#endif //  MATCHA_NODE_H

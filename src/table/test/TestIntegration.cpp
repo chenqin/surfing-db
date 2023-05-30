@@ -13,17 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <gtest/gtest.h>
+
 #include <chrono>
 #include <fstream>
-#include <gtest/gtest.h>
 #include <iostream>
 #include <kll_sketch.hpp>
 #include <random>
+
 #include "frequent_items_sketch.hpp"
 #include "table/mtable.h"
 #include "table/utils.h"
 
-namespace surfingdb {
+namespace matcha {
 namespace table {
 namespace test {
 
@@ -41,8 +43,10 @@ TEST(TableTest, testCompact) {
   field4 = SchemaUtils::initField(r, "d", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
   field5 = SchemaUtils::initField(r, "e", RowType::STRING, 64);
 
-  field6 = SchemaUtils::initListField(r, "l", RowType::DOUBLE, 3, sizeof(DOUBLE_TYPE));
-  field7 = SchemaUtils::initMapField(r, "m", RowType::STRING, RowType::LONG, 3, MAX_STR_LEN, sizeof(long));
+  field6 = SchemaUtils::initListField(r, "l", RowType::DOUBLE, 3,
+                                      sizeof(DOUBLE_TYPE));
+  field7 = SchemaUtils::initMapField(r, "m", RowType::STRING, RowType::LONG, 3,
+                                     MAX_STR_LEN, sizeof(long));
   Value v1, v2, v3, v4, v5, v6, v7;
   v1.p_val.int_val = 3;
 
@@ -68,14 +72,15 @@ TEST(TableTest, testCompact) {
 
   // build continuous buffer with fixed fields offsets
   std::shared_ptr<mschema> tpr = std::make_shared<mschema>(r);
-  surfingdb::table::mrow b(tpr);
+  matcha::table::mrow b(tpr);
   CHECK_EQ(b.write(field1, v1), sizeof(int));
   CHECK_EQ(b.write(field2, v2), sizeof(long));
   CHECK_EQ(b.write(field3, v3), sizeof(bool));
   CHECK_EQ(b.write(field4, v4), sizeof(DOUBLE_TYPE));
   CHECK_EQ(b.write(field5, v5), 6 + HEADER_SIZE);
   CHECK_EQ(b.write(field6, v6), HEADER_SIZE + 1 * sizeof(DOUBLE_TYPE));
-  CHECK_EQ(b.write(field7, v7), HEADER_SIZE + 1 * (HEADER_SIZE + 6 + sizeof(long)));
+  CHECK_EQ(b.write(field7, v7),
+           HEADER_SIZE + 1 * (HEADER_SIZE + 6 + sizeof(long)));
   mtable t(nullptr, tpr, 10240000);
   t.appendRow(b);
   Value mapValue;
@@ -128,7 +133,7 @@ TEST(TableTest, testCompact) {
 
 TEST(TableTest, testmrow) {
   RowSchema r;
-  r.fields = std::vector<surfingdb::table::schema::Field>();
+  r.fields = std::vector<matcha::table::schema::Field>();
 
   Field field1, field2, field3, field4, field5, field6, field7;
 
@@ -137,8 +142,10 @@ TEST(TableTest, testmrow) {
   field3 = SchemaUtils::initField(r, "c", RowType::BOOL, sizeof(bool));
   field4 = SchemaUtils::initField(r, "d", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
   field5 = SchemaUtils::initField(r, "e", RowType::STRING, MAX_STR_LEN);
-  field6 = SchemaUtils::initListField(r, "l", RowType::DOUBLE, 3, sizeof(DOUBLE_TYPE));
-  field7 = SchemaUtils::initMapField(r, "m", RowType::STRING, RowType::LONG, 3, 1024, sizeof(long));
+  field6 = SchemaUtils::initListField(r, "l", RowType::DOUBLE, 3,
+                                      sizeof(DOUBLE_TYPE));
+  field7 = SchemaUtils::initMapField(r, "m", RowType::STRING, RowType::LONG, 3,
+                                     1024, sizeof(long));
 
   Value v1, v2, v3, v4, v5, v6, v7;
   v1.p_val.byte_val = 'a';
@@ -165,7 +172,7 @@ TEST(TableTest, testmrow) {
 
   // build continuous buffer with fixed fields offsets
   std::shared_ptr<mschema> tpr = std::make_shared<mschema>(r);
-  surfingdb::table::mrow b(tpr);
+  matcha::table::mrow b(tpr);
   b.write(field1, v1);
   b.write(field2, v2);
   b.write(field3, v3);
@@ -276,27 +283,26 @@ TEST(TableTest, TestPlacementSort) {
   v1.p_val.int_val = 0;
   v2.p_val.int_val = 2;
   v3.p_val.int_val = 3;
-  surfingdb::table::mrow row1(schema_ptr), row2(schema_ptr), row3(schema_ptr);
+  matcha::table::mrow row1(schema_ptr), row2(schema_ptr), row3(schema_ptr);
   row1.write(field1, v1);
   row2.write(field1, v2);
   row3.write(field1, v3);
-  auto org = std::make_shared<mtable>(nullptr, schema_ptr, schema_ptr->rowSize() * 3);
+  auto org =
+      std::make_shared<mtable>(nullptr, schema_ptr, schema_ptr->rowSize() * 3);
   org->appendRow(row1);
   org->appendRow(row2);
   org->appendRow(row3);
   CHECK_EQ(org->row_count, 3);
 
   org->world = 3;
-  auto sorted = org->placement_sort(field1, [](int key, int rank, int world) {
-    return key % 3;
-  });
+  auto sorted = org->placement_sort(
+      field1, [](int key, int rank, int world) { return key % 3; });
   sorted->world = 3;
 
   auto arrow_org = utils::toArrow(org);
   std::map<std::string, uint64_t> units;
-  auto sorted_arrow = utils::fromArrow(
-    { arrow_org }, units, nullptr);
- 
+  auto sorted_arrow = utils::fromArrow({arrow_org}, units, nullptr);
+
   for (int i = 0; i < sorted_arrow->row_count; i++) {
     auto r = sorted_arrow->readRow(i);
     auto row_org = sorted->readRow(i);
@@ -321,8 +327,10 @@ TEST(TableTest, TestUtils) {
   field4 = SchemaUtils::initField(r, "d", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
   field5 = SchemaUtils::initField(r, "e", RowType::STRING, 5);
 
-  field6 = SchemaUtils::initListField(r, "l", RowType::CHAR, 3, sizeof(char)); // binary
-  field7 = SchemaUtils::initMapField(r, "m", RowType::STRING, RowType::LONG, 3, MAX_STR_LEN, sizeof(long));
+  field6 = SchemaUtils::initListField(r, "l", RowType::CHAR, 3,
+                                      sizeof(char));  // binary
+  field7 = SchemaUtils::initMapField(r, "m", RowType::STRING, RowType::LONG, 3,
+                                     MAX_STR_LEN, sizeof(long));
 
   std::shared_ptr<mschema> schema_ptr = std::make_shared<mschema>(r);
   /**
@@ -356,7 +364,7 @@ TEST(TableTest, TestUtils) {
   pair.second = value;
   v7.map_value.insert(pair);
 
-  surfingdb::table::mrow row(schema_ptr);
+  matcha::table::mrow row(schema_ptr);
   row.write(field1, v1);
   row.write(field2, v2);
   row.write(field3, v3);
@@ -365,7 +373,7 @@ TEST(TableTest, TestUtils) {
   row.write(field6, v6);
   row.write(field7, v7);
 
-  surfingdb::table::mrow row2(schema_ptr);
+  matcha::table::mrow row2(schema_ptr);
   v1.p_val.int_val = 4;
   row.write(field1, v1);
   row.write(field2, v2);
@@ -379,7 +387,8 @@ TEST(TableTest, TestUtils) {
    * @brief  row test mtable
    *
    */
-  auto table_ptr = std::make_shared<mtable>(nullptr, schema_ptr, schema_ptr->rowSize() * 2);
+  auto table_ptr =
+      std::make_shared<mtable>(nullptr, schema_ptr, schema_ptr->rowSize() * 2);
   table_ptr->appendRow(row);
   table_ptr->appendRow(row2);
   /**
@@ -404,13 +413,15 @@ TEST(TableTest, TestUtils) {
    * @brief convert to internal data structure from arrow
    *
    */
-  std::map<std::string, uint64_t> units{ { "l", 3 }, { "m", 3 }, { "e", 6 } };
+  std::map<std::string, uint64_t> units{{"l", 3}, {"m", 3}, {"e", 6}};
   auto new_schema_ptr = utils::fromArrow(arrow_schema_ptr, units);
   EXPECT_EQ(new_schema_ptr->fields.at(0), schema_ptr->fields.at(0));
-  EXPECT_EQ(new_schema_ptr->fields.at(6).max_unit_size, schema_ptr->fields.at(6).max_unit_size);
-  EXPECT_EQ(new_schema_ptr->fields.at(6).max_map_key_unit_size, schema_ptr->fields.at(6).max_map_key_unit_size);
+  EXPECT_EQ(new_schema_ptr->fields.at(6).max_unit_size,
+            schema_ptr->fields.at(6).max_unit_size);
+  EXPECT_EQ(new_schema_ptr->fields.at(6).max_map_key_unit_size,
+            schema_ptr->fields.at(6).max_map_key_unit_size);
 
-  auto new_table_ptr = utils::fromArrow({ arrow_table_ptr }, units, nullptr);
+  auto new_table_ptr = utils::fromArrow({arrow_table_ptr}, units, nullptr);
 
   EXPECT_EQ(table_ptr->row_count, new_table_ptr->row_count);
   EXPECT_EQ(table_ptr->row_size(), new_table_ptr->row_size());
@@ -421,10 +432,12 @@ TEST(TableTest, TestUtils) {
     Value v, v1;
     r->read(field1, v);
     row_org->read(field1, v1);
-    // std::cout << "compare " << v.p_val.int_val << " " << v1.p_val.int_val << std::endl;
+    // std::cout << "compare " << v.p_val.int_val << " " << v1.p_val.int_val <<
+    // std::endl;
   }
 
-  // new_table_ptr->verifyShuffle(new_schema_ptr->fields.at(0), [](size_t key, int rank, int world) { return 0; });
+  // new_table_ptr->verifyShuffle(new_schema_ptr->fields.at(0), [](size_t key,
+  // int rank, int world) { return 0; });
 
   auto new_row = new_table_ptr->readRow(0);
   Value newv5, newv6, newv7;
@@ -445,14 +458,16 @@ TEST(TableTest, TestUtils) {
   }
 
   auto buffer = utils::serialize(arrow_table_ptr);
-  auto arrow_table_ptr_desr = utils::deserialize(buffer, arrow_table_ptr->schema());
+  auto arrow_table_ptr_desr =
+      utils::deserialize(buffer, arrow_table_ptr->schema());
   EXPECT_GT(buffer->size(), 0);
   EXPECT_EQ(arrow_table_ptr_desr->num_rows(), arrow_table_ptr->num_rows());
 }
 
 TEST(TableTest, TestXGBOperator) {
   RowSchema r;
-  Field f = SchemaUtils::initField(r, "test", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
+  Field f =
+      SchemaUtils::initField(r, "test", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
   XGBParameters parameters;
   parameters.tree_method = "hist";
   parameters.objective = "binary:logistic";
@@ -462,18 +477,22 @@ TEST(TableTest, TestXGBOperator) {
   parameters.verbosity = true;
   parameters.eval_metric = "error";
   xgbop op(r.fields, f, parameters, 0, 1);
-  const float data1[] = { 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0,
-                          0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 };
-  const float label1[] = { 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0,
-                           0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 };
+  const float data1[] = {0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                         1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                         0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0};
+  const float label1[] = {0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                          1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                          0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0};
   op.train(data1, label1, 50, 1);
-  const float label2[] = { 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0,
-                           0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 };
+  const float label2[] = {0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                          1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                          0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0};
   op.predict(data1, label2, 50, 1);
 }
 
 TEST(TableTest, TestSketchFrequency) {
-  typedef datasketches::frequent_items_sketch<std::string> frequent_strings_sketch;
+  typedef datasketches::frequent_items_sketch<std::string>
+      frequent_strings_sketch;
 
   // this section generates two sketches and serializes them into files
   {
@@ -501,7 +520,8 @@ TEST(TableTest, TestSketchFrequency) {
     sketch2.serialize(os2);
   }
 
-  // this section deserializes the sketches, produces a union and prints the result
+  // this section deserializes the sketches, produces a union and prints the
+  // result
   {
     std::ifstream is1("freq_str_sketch1.bin");
     frequent_strings_sketch sketch1 = frequent_strings_sketch::deserialize(is1);
@@ -510,7 +530,8 @@ TEST(TableTest, TestSketchFrequency) {
     frequent_strings_sketch sketch2 = frequent_strings_sketch::deserialize(is2);
 
     // we could merge sketch2 into sketch1 or the other way around
-    // this is an example of using a new sketch as a union and keeping the original sketches intact
+    // this is an example of using a new sketch as a union and keeping the
+    // original sketches intact
     frequent_strings_sketch u(64);
     u.merge(sketch1);
     u.merge(sketch2);
@@ -520,34 +541,39 @@ TEST(TableTest, TestSketchFrequency) {
     std::cout << "Str\tEst\tLB\tUB" << std::endl;
     for (auto row : items) {
       std::cout << row.get_item() << "\t" << row.get_estimate() << "\t"
-                << row.get_lower_bound() << "\t" << row.get_upper_bound() << std::endl;
+                << row.get_lower_bound() << "\t" << row.get_upper_bound()
+                << std::endl;
     }
   }
 }
 
 TEST(TableTest, TestSketchQuantile) {
-  // this section generates two sketches from random data and serializes them into files
+  // this section generates two sketches from random data and serializes them
+  // into files
   {
-    std::default_random_engine generator(std::chrono::system_clock::now().time_since_epoch().count());
-    std::normal_distribution<float> nd(0, 1); // mean=0, stddev=1
+    std::default_random_engine generator(
+        std::chrono::system_clock::now().time_since_epoch().count());
+    std::normal_distribution<float> nd(0, 1);  // mean=0, stddev=1
 
     datasketches::kll_sketch<float> sketch1;  // default k=200
     for (int i = 0; i < 10000; i++) {
-      sketch1.update(nd(generator));          // mean=0, stddev=1
+      sketch1.update(nd(generator));  // mean=0, stddev=1
     }
     std::ofstream os1("kll_sketch_float1.bin");
     sketch1.serialize(os1);
 
-    datasketches::kll_sketch<float> sketch2; // default k=200
+    datasketches::kll_sketch<float> sketch2;  // default k=200
     // assert(nd != null);
     for (int i = 0; i < 10000; i++) {
-      sketch2.update(nd(generator) + 1); // shift the mean for the second sketch
+      sketch2.update(nd(generator) +
+                     1);  // shift the mean for the second sketch
     }
     std::ofstream os2("kll_sketch_float2.bin");
     sketch2.serialize(os2);
   }
 
-  // this section deserializes the sketches, produces a union and prints some results
+  // this section deserializes the sketches, produces a union and prints some
+  // results
   {
     std::ifstream is1("kll_sketch_float1.bin");
     auto sketch1 = datasketches::kll_sketch<float>::deserialize(is1);
@@ -556,8 +582,9 @@ TEST(TableTest, TestSketchQuantile) {
     auto sketch2 = datasketches::kll_sketch<float>::deserialize(is2);
 
     // we could merge sketch2 into sketch1 or the other way around
-    // this is an example of using a new sketch as a union and keeping the original sketches intact
-    datasketches::kll_sketch<float> u; // default k=200
+    // this is an example of using a new sketch as a union and keeping the
+    // original sketches intact
+    datasketches::kll_sketch<float> u;  // default k=200
     u.merge(sketch1);
     u.merge(sketch2);
 
@@ -565,28 +592,34 @@ TEST(TableTest, TestSketchQuantile) {
     // u.to_stream(std::cout);
 
     std::cout << "Min, Median, Max values" << std::endl;
-    const double fractions[3]{ 0, 0.5, 1 };
+    const double fractions[3]{0, 0.5, 1};
     auto quantiles = u.get_quantiles(fractions, 3);
-    std::cout << quantiles[0] << ", " << quantiles[1] << ", " << quantiles[2] << std::endl;
+    std::cout << quantiles[0] << ", " << quantiles[1] << ", " << quantiles[2]
+              << std::endl;
 
-    std::cout
-      << "Probability Histogram: estimated probability mass in 4 bins: (-inf, -2), [-2, 0), [0, 2), [2, +inf)"
-      << std::endl;
-    const float split_points[]{ -2, 0, 2 };
+    std::cout << "Probability Histogram: estimated probability mass in 4 bins: "
+                 "(-inf, -2), [-2, 0), [0, 2), [2, +inf)"
+              << std::endl;
+    const float split_points[]{-2, 0, 2};
     const int num_split_points = 3;
     auto pmf = u.get_PMF(split_points, num_split_points);
-    std::cout << pmf[0] << ", " << pmf[1] << ", " << pmf[2] << ", " << pmf[3] << std::endl;
+    std::cout << pmf[0] << ", " << pmf[1] << ", " << pmf[2] << ", " << pmf[3]
+              << std::endl;
 
-    std::cout << "Frequency Histogram: estimated number map original values in the same bins" << std::endl;
+    std::cout << "Frequency Histogram: estimated number map original values in "
+                 "the same bins"
+              << std::endl;
     const int num_bins = num_split_points + 1;
     int histogram[num_bins];
     for (int i = 0; i < num_bins; i++) {
-      histogram[i] = pmf[i] * u.get_n(); // scale the fractions by the total count of values
+      histogram[i] =
+          pmf[i] *
+          u.get_n();  // scale the fractions by the total count of values
     }
-    std::cout << histogram[0] << ", " << histogram[1] << ", " << histogram[2] << ", " << histogram[3]
-              << std::endl;
+    std::cout << histogram[0] << ", " << histogram[1] << ", " << histogram[2]
+              << ", " << histogram[3] << std::endl;
   }
 }
-} // namespace test
-} // namespace table
-} // namespace surfingdb
+}  // namespace test
+}  // namespace table
+}  // namespace matcha

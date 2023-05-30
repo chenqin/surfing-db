@@ -8,7 +8,7 @@
 
 #include <algorithm>
 
-namespace surfingdb { namespace meta { namespace schema {
+namespace matcha { namespace meta { namespace schema {
 
 int _kRowTypeValues[] = {
   RowType::VOID,

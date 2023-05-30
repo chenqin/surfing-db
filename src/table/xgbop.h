@@ -18,10 +18,10 @@
 #include <xgboost/c_api.h>
 #include "meta/node.h"
 #include "mrow.h"
-#ifndef SURFINGDB_XGBOPERATOR_H
-#define SURFINGDB_XGBOPERATOR_H
+#ifndef MATCHA_XGBOPERATOR_H
+#define MATCHA_XGBOPERATOR_H
 
-namespace surfingdb {
+namespace matcha {
 namespace table {
 
 #define safe_xgboost(call)                                                                       \
@@ -212,5 +212,5 @@ public:
   }
 };
 } // namespace table
-} // namespace surfingdb
-#endif //SURFINGDB_XGBOPERATOR_H
+} // namespace matcha
+#endif //MATCHA_XGBOPERATOR_H

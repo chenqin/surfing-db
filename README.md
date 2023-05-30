@@ -1,22 +1,11 @@
-# HPCArrow
+# FlinkJobWatcher
 
-A efficient and powerful HPC workload engine with MPI and Apache Arrow.
+GLOG_log_dir=~ mpirun -np 18 FlinkJobWatcher ../surfingdb-java.jar testgroupid
 
-# features
+# MABS
+mpirun --hostfile ~/matcha/hostfile ~/matcha/build/MABS ~/matcha/surfing-db-java.jar test4 --mca oob_tcp_port_min_v4 7337 -mca btl_tcp_if_exclude lo,docker0 -mca orte_base_help_aggregate 0
 
-- Unified data communication (ML / Data) under MPI protocol
-- Efficient languages support with Apache Arrow 
-- XGBoost Pytorch GPU support
-# how to run
-- run install.sh for dependencies
-
-cd build
-mpirun --hostfile hostfile KafkaExample --mca oob_tcp_port_min_v4 7337 -mca btl_tcp_if_exclude lo,docker0
-
-# configuration
-- src/meta/schema.h 
--- MAX_STR_LEN defines max size of string before truncate (lower is better for perf)
--- MEM_PAGE_SIZE defines mtable pre allocated memory
-
+# contab check
+1 * * * * ~/matcha/demon.sh MABS
 
 created @Maui, Hawaii, U.S.A since 2021

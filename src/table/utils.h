@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef SURFINGDB_UTILS_H
-#define SURFINGDB_UTILS_H
+#ifndef MATCHA_UTILS_H
+#define MATCHA_UTILS_H
 #pragma once
 
 #include <arrow/api.h>
@@ -44,9 +44,9 @@
 
 #pragma once
 
-namespace surfingdb {
+namespace matcha {
 namespace table {
-using namespace surfingdb::meta;
+using namespace matcha::meta;
 
 typedef datasketches::frequent_items_sketch<std::string> frequent_strings_sketch;
 /**
@@ -231,7 +231,7 @@ public:
     return std::make_shared<mschema>(r);
   }
 
-  static std::map<std::string, uint64_t> toUnits(std::vector<std::shared_ptr<arrow::RecordBatch>> records) {
+  static std::map<std::string, uint64_t> toUnits(arrow::RecordBatchVector records) {
     std::map<std::string, uint64_t> units;
 
     for (auto& record_ptr : records) {
@@ -319,8 +319,8 @@ public:
     return units;
   }
 
-  static std::vector<std::shared_ptr<arrow::RecordBatch>> hash(std::vector<std::shared_ptr<arrow::RecordBatch>>& batch, std::string field_name, std::function<size_t(size_t, int, int)>& partitioner, int rank, int world) {
-    std::vector<std::shared_ptr<arrow::RecordBatch>> arrow_tables;
+  static arrow::RecordBatchVector hash(arrow::RecordBatchVector& batch, std::string field_name, std::function<size_t(size_t, int, int)>& partitioner, int rank, int world) {
+    arrow::RecordBatchVector arrow_tables;
     for (auto& b : batch) {
       arrow::Int8Builder hash_builder;
       for (int i = 0; i < b->num_rows(); i++) {
@@ -340,7 +340,105 @@ public:
     return arrow_tables;
   }
 
-  static std::shared_ptr<arrow::RecordBatch> group(const std::vector<std::shared_ptr<arrow::RecordBatch>>& batch, std::string field_name, std::function<size_t(size_t, int, int)>& partitioner, int dest, int rank, int world) {
+  static std::shared_ptr<arrow::ArrayBuilder> getBuilder(const std::shared_ptr<arrow::Field>& field) {
+      switch (field->type()->id()) {
+        case arrow::Type::BOOL: {
+        return std::make_shared<arrow::BooleanBuilder>();
+      }
+
+      case arrow::Type::INT8: {
+        return std::make_shared<arrow::Int8Builder>();
+      }
+
+      case arrow::Type::INT32: {
+        return std::make_shared<arrow::Int32Builder>();
+      }
+
+      case arrow::Type::INT64: {
+        return std::make_shared<arrow::Int64Builder>();
+      }
+
+      case arrow::Type::FLOAT: {
+        return std::make_shared<arrow::FloatBuilder>();
+      }
+
+      case arrow::Type::DOUBLE: {
+        return std::make_shared<arrow::DoubleBuilder>();
+      }
+
+      case arrow::Type::BINARY: {
+        return std::make_shared<arrow::BinaryBuilder>();
+      }
+
+      case arrow::Type::STRING: {
+        return std::make_shared<arrow::StringBuilder>();
+      }
+      default: {
+        throw std::runtime_error("Unsupported data type");
+      }
+    }
+  }
+
+  static std::shared_ptr<arrow::RecordBatch> merge(const arrow::RecordBatchVector& batch, const std::shared_ptr<arrow::Schema>& schema) {
+    if(batch.size() == 0) {
+      return arrow::RecordBatch::MakeEmpty(schema).ValueOrDie();
+    } else {
+      auto table = arrow::Table::FromRecordBatches(batch).ValueOrDie();
+      auto merge = table->CombineChunksToBatch().ValueOrDie();
+      return merge;
+    }
+  }
+
+  static std::shared_ptr<arrow::RecordBatch> group_two(const arrow::RecordBatchVector& batch, std::string field_name, std::function<size_t(size_t, int, int)>& partitioner, int dest, int rank, int world) { 
+      //https://github.com/apache/arrow/blob/cd6e2a4d2b9373b942da18b4cc82cb41431764d9/cpp/src/arrow/dataset/partition_test.cc#L188
+    CHECK_GT(batch.size(), 0);
+    auto schema = batch[0]->schema();
+
+    arrow::RecordBatchVector rows;
+    for (auto& b : batch) {
+      auto col = b->GetColumnByName(field_name);
+      for (int i = 0; i < b->num_rows(); i++) {
+        auto v = col->GetScalar(i).ValueOrDie();
+        auto dest_rank = partitioner(v->hash(), rank, world);
+        if(dest_rank == dest) {
+          auto row = b->Slice(i, 1);
+          rows.push_back(row);
+        }
+      }
+    }
+    
+    if (rows.size() == 0){
+      return arrow::RecordBatch::MakeEmpty(schema).ValueOrDie();
+    } else {
+      return merge(rows, schema);
+    }
+  }
+
+  static std::map<std::string, std::shared_ptr<arrow::RecordBatch>> keywindow(const arrow::RecordBatchVector& batch, std::string key_field, std::string time_field, double ttl=10) { 
+    std::map<std::string, std::shared_ptr<arrow::RecordBatch>> keylist;
+    if(batch.size() == 0 ) return keylist;
+    CHECK_GT(batch.size(), 0);
+    auto schema = batch[0]->schema();
+    for (auto& b : batch) {
+      auto col = b->GetColumnByName(key_field);
+      auto ts = b->GetColumnByName(time_field);
+      for (int i = 0; i < b->num_rows(); i++) {
+        auto t = ts->GetScalar(i).ValueOrDie();
+        auto bc = (arrow::Int64Scalar*)t.get();
+        if( bc->value < 1000 * (MPI_Wtime() - 10)) continue;
+        auto v = col->GetScalar(i).ValueOrDie();
+        auto key = v->ToString();
+        if(keylist.find(key) == keylist.end()){
+          keylist.insert({key, arrow::RecordBatch::MakeEmpty(schema).ValueOrDie()});
+        }
+        auto row = b->Slice(i, 1);
+        keylist[key] = merge({row, keylist[key]}, schema);
+      }
+    }
+    return keylist;
+  }
+
+  static std::shared_ptr<arrow::RecordBatch> group(const arrow::RecordBatchVector& batch, std::string field_name, std::function<size_t(size_t, int, int)>& partitioner, int dest, int rank, int world) {
     CHECK_GT(batch.size(), 0);
     auto schema = batch[0]->schema();
 
@@ -352,50 +450,31 @@ public:
       auto field = schema->field(i);
       switch (field->type()->id()) {
 
-      case arrow::Type::BOOL: {
-        std::shared_ptr<arrow::BooleanBuilder> builder = std::make_shared<arrow::BooleanBuilder>();
+      case arrow::Type::BOOL: 
+      case arrow::Type::INT8: 
+      case arrow::Type::INT32:
+      case arrow::Type::INT64:
+      case arrow::Type::FLOAT:
+      case arrow::Type::DOUBLE:
+      case arrow::Type::BINARY: 
+      case arrow::Type::STRING:
+        array_builders.push_back(getBuilder(field));
+      break;
+
+      case arrow::Type::MAP: {
+        auto mtype = (arrow::MapType*)field->type().get();
+        auto keybuilder = getBuilder(mtype->key_field());
+        auto itembuilder = getBuilder(mtype->item_field());
+        arrow::MemoryPool* pool = arrow::default_memory_pool();
+        std::shared_ptr<arrow::MapBuilder> builder = std::make_shared<arrow::MapBuilder>(pool, keybuilder, itembuilder);
         array_builders.push_back(builder);
         break;
       }
-
-      case arrow::Type::INT8: {
-        std::shared_ptr<arrow::Int8Builder> builder = std::make_shared<arrow::Int8Builder>();
-        array_builders.push_back(builder);
-        break;
-      }
-
-      case arrow::Type::INT32: {
-        std::shared_ptr<arrow::Int32Builder> builder = std::make_shared<arrow::Int32Builder>();
-        array_builders.push_back(builder);
-        break;
-      }
-
-      case arrow::Type::INT64: {
-        std::shared_ptr<arrow::Int64Builder> builder = std::make_shared<arrow::Int64Builder>();
-        array_builders.push_back(builder);
-        break;
-      }
-
-      case arrow::Type::FLOAT: {
-        std::shared_ptr<arrow::FloatBuilder> builder = std::make_shared<arrow::FloatBuilder>();
-        array_builders.push_back(builder);
-        break;
-      }
-
-      case arrow::Type::DOUBLE: {
-        std::shared_ptr<arrow::DoubleBuilder> builder = std::make_shared<arrow::DoubleBuilder>();
-        array_builders.push_back(builder);
-        break;
-      }
-
-      case arrow::Type::BINARY: {
-        std::shared_ptr<arrow::BinaryBuilder> builder = std::make_shared<arrow::BinaryBuilder>();
-        array_builders.push_back(builder);
-        break;
-      }
-
-      case arrow::Type::STRING: {
-        std::shared_ptr<arrow::StringBuilder> builder = std::make_shared<arrow::StringBuilder>();
+      case arrow::Type::LIST: {
+        auto ltype = (arrow::ListType *)field->type().get();
+        auto itembuilder = getBuilder(ltype->value_field());
+        arrow::MemoryPool* pool = arrow::default_memory_pool();
+        std::shared_ptr<arrow::ListBuilder> builder = std::make_shared<arrow::ListBuilder>(pool, itembuilder);
         array_builders.push_back(builder);
         break;
       }
@@ -431,7 +510,7 @@ public:
     return arrow::RecordBatch::Make(schema, count, arrays);
   }
 
-  static std::shared_ptr<mtable> fromArrow(std::vector<std::shared_ptr<arrow::RecordBatch>> records, std::map<std::string, uint64_t>& units, std::shared_ptr<node> node_ptr) {
+  static std::shared_ptr<mtable> fromArrow(arrow::RecordBatchVector records, std::map<std::string, uint64_t>& units, std::shared_ptr<node> node_ptr) {
     CHECK(records.size() > 0);
     auto schema = fromArrow(records.at(0)->schema(), units);
 
@@ -620,7 +699,7 @@ public:
       .ValueOrDie();
   }
 
-  static std::shared_ptr<arrow::RecordBatch> toArrow(const std::shared_ptr<surfingdb::table::mtable> table) {
+  static std::shared_ptr<arrow::RecordBatch> toArrow(const std::shared_ptr<matcha::table::mtable> table) {
     /**
      * Build list of builders to append
      */
@@ -668,5 +747,5 @@ public:
 };
 
 } // namespace table
-} // namespace surfingdb
-#endif // SURFINGDB_UTILS_H
+} // namespace matcha
+#endif //  MATCHA_UTILS_H

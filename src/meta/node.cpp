@@ -17,10 +17,10 @@
 #include "node.h"
 #include <glog/logging.h>
 
-namespace surfingdb {
+namespace matcha {
 namespace meta {
 
-node::node(int* argc, char*** argv) {
+node::node(int* argc, char*** argv, std::string jar) {
   // Initialize the MPI environment
   int supported;
   // Get the name of the processor
@@ -32,14 +32,15 @@ node::node(int* argc, char*** argv) {
    */
   MPI_Initialized(&mpi_inited);
   if (!mpi_inited) {
-    MPI_Init_thread(argc, argv, MPI_THREAD_MULTIPLE, &supported);
-    CHECK_EQ(supported, MPI_THREAD_MULTIPLE);
+    //TODO: tcp doesn't support RDMA with MPI_THREAD_SINGLE, only EFA works
+    MPI_Init_thread(argc, argv, MPI_THREAD_SINGLE, &supported);
+    CHECK_EQ(supported, MPI_THREAD_SINGLE);
   }
   MPI_Comm_size(MPI_COMM_WORLD, &this->world);
   MPI_Comm_rank(MPI_COMM_WORLD, &this->rank);
   MPI_Get_processor_name(processor_name, &name_len);
   
-  omp_set_num_threads(omp_get_num_procs());
+  omp_set_num_threads(4);
 
   processor = std::string(processor_name);
   MPI_Info_create(&info);
@@ -48,18 +49,18 @@ node::node(int* argc, char*** argv) {
   std::cout << processor << " on " << rank << std::endl;
   stage = 0;
   LOG(INFO) << "cluster size " << world << " node rank " << rank << " alias " << processor << " total threads " << omp_get_num_threads();
-
   trainer = 0;
 
   MPI_Comm_split(MPI_COMM_WORLD, trainer, rank, &role_comm);
   MPI_Comm_rank(role_comm, &role_rank);
   MPI_Comm_size(role_comm, &role_world);
-
+  /*
   JavaVMInitArgs vm_args;
   JavaVMOption options[3];
-  options[0].optionString = "-Djava.class.path=../surfing-db-java.jar";
-  //options[1].optionString = "-XX:+UseG1GC"; //user full gc to avoid memory leak
-  options[1].optionString = "-verbose:jni";
+  std::string s = "-Djava.class.path=" + jar;
+  options[0].optionString = (char*) s.c_str();
+  options[1].optionString = "-XX:+UseG1GC"; //user full gc to avoid memory leak
+  //options[1].optionString = "-verbose:jni";
   vm_args.version = JNI_VERSION_1_8;
   vm_args.nOptions = 2;
   vm_args.options = options;
@@ -71,6 +72,7 @@ node::node(int* argc, char*** argv) {
     env = nullptr;
   }
   CHECK_NOTNULL(env);
+  */
 }
 
 /**
@@ -96,4 +98,4 @@ node::node(int rank, int world, std::string processor) {
   stage = 0;
 }
 } // namespace meta
-} // namespace surfingdb
+} // namespace matcha

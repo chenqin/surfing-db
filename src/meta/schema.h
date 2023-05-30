@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef SURFINGDB_SCHEMA_H
-#define SURFINGDB_SCHEMA_H
+#ifndef MATCHA_SCHEMA_H
+#define MATCHA_SCHEMA_H
 #include "meta/gen-cpp/schema_constants.h"
 #include "meta/gen-cpp/schema_types.h"
 
@@ -33,7 +33,7 @@
 
 #pragma once
 
-namespace surfingdb {
+namespace matcha {
 namespace meta {
 
 #define MAX_STR_LEN 52400
@@ -48,7 +48,7 @@ namespace meta {
 /**
  * build a continous memory buffer
  */
-using namespace surfingdb::meta::schema;
+using namespace matcha::meta::schema;
 using std::hash;
 using std::string;
 
@@ -253,5 +253,5 @@ public:
 };
 
 } // namespace meta
-} // namespace surfingdb
-#endif // SURFINGDB_SCHEMA_H
+} // namespace matcha
+#endif //  MATCHA_SCHEMA_H

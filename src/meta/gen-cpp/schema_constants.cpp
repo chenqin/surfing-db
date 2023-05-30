@@ -6,7 +6,7 @@
  */
 #include "schema_constants.h"
 
-namespace surfingdb { namespace meta { namespace schema {
+namespace matcha { namespace meta { namespace schema {
 
 const schemaConstants g_schema_constants;
 

@@ -13,6 +13,7 @@ SET(KAFKA_OPTS
 	-DRDKAFKA_BUILD_STATIC=ON
         -DENABLE_LZ4_EXT=ON
         -DWITH_SSL=ON
+        -DWITH_CURL=ON
         -DWITH_SASL=OFF)
 
 ExternalProject_Add(kafka
@@ -46,7 +47,9 @@ set_target_properties(${KC_LIBRARY} PROPERTIES
 target_link_libraries(${KC_LIBRARY}
         INTERFACE ${OPENSSL_LIBRARY}
         INTERFACE ${CRYPTO_LIBRARY}
+        INTERFACE ${CURL_LIBRARY}
         INTERFACE ${ZSTD_LIBRARY}
+        INTERFACE ${SASL_LIBRARY}
         INTERFACE ${LZ4_LIBRARY})
 
 

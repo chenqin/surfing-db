@@ -14,21 +14,21 @@
  * limitations under the License.
  */
 
-#ifndef SURFINGDB_ROW_H
-#define SURFINGDB_ROW_H
+#ifndef MATCHA_ROW_H
+#define MATCHA_ROW_H
 
 #include "meta/schema.h"
 #include <arrow/buffer.h>
 #include <arrow/buffer_builder.h>
 #pragma once
 
-namespace surfingdb {
+namespace matcha {
 namespace table {
 
 /**
  * build a continous memory buffer
  */
-using namespace surfingdb::meta::schema;
+using namespace matcha::meta::schema;
 using std::hash;
 using std::string;
 /**
@@ -111,5 +111,5 @@ public:
   size_t read(const Field& f, Value& v, const uint64_t& offset);
 };
 } // namespace table
-} // namespace surfingdb
-#endif // SURFINGDB_ROW_H
+} // namespace matcha
+#endif //  MATCHA_ROW_H

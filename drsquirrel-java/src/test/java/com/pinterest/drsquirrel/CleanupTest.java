@@ -10,11 +10,16 @@ import junit.framework.Assert;
 import junit.framework.Test;
 import junit.framework.TestCase;
 import junit.framework.TestSuite;
+import org.apache.arrow.memory.ArrowBuf;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
+import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.complex.MapVector;
+import org.apache.arrow.vector.complex.impl.UnionMapWriter;
+import org.apache.arrow.vector.holders.VarCharHolder;
 import org.apache.arrow.vector.util.Text;
 
 import java.nio.charset.StandardCharsets;
@@ -105,6 +110,103 @@ public class CleanupTest
          * filter both metric and log
          */
         //Assert.assertEquals(cleanupdoc.getRowCount(), 1);
+    }
+
+    public void testMabsMetric() throws Exception {
+        BigIntVector timestamp = new BigIntVector("timestamp", allocator);
+        VarCharVector service_tags = new VarCharVector("service_tags", allocator);
+        VarCharVector node_tags = new VarCharVector("node_tags", allocator);
+        MapVector counters = MapVector.empty("counters", allocator, false);
+        MapVector gauges = MapVector.empty("gauges", allocator, false);
+        MapVector histograms = MapVector.empty("histograms", allocator, false);
+        VarCharVector service_name = new VarCharVector("service_name", allocator);
+        MapVector double_counters = MapVector.empty("double_counters", allocator, false);
+
+        timestamp.allocateNew();
+        service_tags.allocateNew();
+        node_tags.allocateNew();
+        counters.allocateNew();
+        gauges.allocateNew();
+        histograms.allocateNew();
+        service_name.allocateNew();
+        double_counters.allocateNew();
+
+        timestamp.setSafe(0, 1);
+        service_tags.setSafe(0, new Text("a"));
+        node_tags.setSafe(0, new Text("a"));
+        service_name.setSafe(0, new Text("a"));
+
+        UnionMapWriter mapWriter = histograms.getWriter();
+        mapWriter.startMap();
+        for (int j = 0; j < 2; j++) {
+            mapWriter.startEntry();
+
+            byte[] bytes = new String("b").getBytes();
+            ArrowBuf tempBuf = allocator.buffer(bytes.length);
+            tempBuf.setBytes(0, bytes);
+            mapWriter.key().varChar().writeVarChar(0, bytes.length, tempBuf);
+            tempBuf.close();
+            mapWriter.value().varChar().writeNull();
+            mapWriter.endEntry();
+        }
+        mapWriter.endMap();
+
+        mapWriter = counters.getWriter();
+        mapWriter.startMap();
+        for (int j = 0; j < 2; j++) {
+            mapWriter.startEntry();
+            byte[] bytes = new String("b").getBytes();
+            ArrowBuf tempBuf = allocator.buffer(bytes.length);
+            tempBuf.setBytes(0, bytes);
+            mapWriter.key().varChar().writeVarChar(0, bytes.length, tempBuf);
+            tempBuf.close();
+            mapWriter.value().bigInt().writeBigInt(1);
+            mapWriter.endEntry();
+        }
+        mapWriter.endMap();
+
+        mapWriter = gauges.getWriter();
+        mapWriter.startMap();
+        for (int j = 0; j < 2; j++) {
+            mapWriter.startEntry();
+            byte[] bytes = new String("b").getBytes();
+            ArrowBuf tempBuf = allocator.buffer(bytes.length);
+            tempBuf.setBytes(0, bytes);
+            mapWriter.key().varChar().writeVarChar(0, bytes.length, tempBuf);
+            tempBuf.close();
+            mapWriter.value().float8().writeFloat8(0.1);
+            mapWriter.endEntry();
+        }
+        mapWriter.endMap();
+
+        mapWriter = double_counters.getWriter();
+        mapWriter.startMap();
+        for (int j = 0; j < 2; j++) {
+            mapWriter.startEntry();
+            byte[] bytes = new String("b").getBytes();
+            ArrowBuf tempBuf = allocator.buffer(bytes.length);
+            tempBuf.setBytes(0, bytes);
+            mapWriter.key().varChar().writeVarChar(0, bytes.length, tempBuf);
+            tempBuf.close();
+            mapWriter.value().float8().writeFloat8(0.1);
+            mapWriter.endEntry();
+        }
+        mapWriter.endMap();
+
+        timestamp.setValueCount(1);
+        service_tags.setValueCount(1);
+        node_tags.setValueCount(1);
+        counters.setValueCount(1);
+        gauges.setValueCount(1);
+        histograms.setValueCount(1);
+        service_name.setValueCount(1);
+        double_counters.setValueCount(1);
+
+        List<FieldVector> vectors = Arrays.asList(timestamp, service_tags, node_tags, counters, gauges, histograms, service_name, double_counters);
+        VectorSchemaRoot vectorSchemaRoot = new VectorSchemaRoot(vectors);
+        vectorSchemaRoot.setRowCount(1);
+        VectorSchemaRoot output = MabsMetric.process(vectorSchemaRoot);
+        System.out.println(output.getRowCount());
     }
 
     public void testAggregate() throws Exception {

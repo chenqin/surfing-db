@@ -49,6 +49,7 @@ public class Cleanup {
                 output = process(input);
                 Data.exportVectorSchemaRoot(allocator, output, null, array_out, schema_out);
             } catch (Exception e) {
+                System.out.println(e.getMessage());
             } finally {
                 if (input != null) input.close();
                 if (output != null) output.close();

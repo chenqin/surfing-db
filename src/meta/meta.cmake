@@ -4,13 +4,13 @@
 set(META surfmeta)
 
 # generate schema skeleton
-#execute_process(COMMAND thrift --gen cpp ${SURFINGDB_SRC}/meta/schema.thrift)
+#execute_process(COMMAND thrift --gen cpp ${MATCHA_SRC}/meta/schema.thrift)
 
 # build nebula.ingest library
 add_library(${META} STATIC
-        ${SURFINGDB_SRC}/meta/gen-cpp
-        ${SURFINGDB_SRC}/meta/node.cpp
-        ${SURFINGDB_SRC}/meta/schema.cpp)
+        ${MATCHA_SRC}/meta/gen-cpp
+        ${MATCHA_SRC}/meta/node.cpp
+        ${MATCHA_SRC}/meta/schema.cpp)
 
 # define basic package dependencies
 target_link_libraries(${META}
@@ -21,7 +21,7 @@ target_link_libraries(${META}
         PUBLIC ${GFLAGS_LIBRARY}
         PUBLIC ${ARROW_LIBRARY}
         PRIVATE ${JNI_LIBRARIES}
-        PRIVATE ${THRIFT_LIBRARY})
+        PUBLIC ${THRIFT_LIBRARY})
 
 # discover all gtests in this module
 include(GoogleTest)
