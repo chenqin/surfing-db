@@ -285,6 +285,9 @@ include(src/connector/connector.cmake)
 
 # build test binary
 add_executable(FlinkJobWatcher src/FlinkJobWatcher.cpp)
+
+add_executable(LocalCluster ${MATCHA_SRC}/LocalCluster.cpp)
+
 add_executable(MABS 
     ${MATCHA_SRC}/mabs/mabs_types.cpp
     ${MATCHA_SRC}/mabs/mabs_constants.cpp
@@ -312,6 +315,14 @@ target_link_libraries(MABS
 set_target_properties(FlinkJobWatcher PROPERTIES COMPILE_FLAGS "${MPI_COMPILE_FLAGS}")
 
 target_link_libraries(FlinkJobWatcher
+    PRIVATE ${META}
+    PRIVATE ${TABLE}
+    PRIVATE ${CONNECTOR}
+    PRIVATE ${ARROW_LIBRARY})
+
+set_target_properties(LocalCluster PROPERTIES COMPILE_FLAGS "${MPI_COMPILE_FLAGS}")
+
+target_link_libraries(LocalCluster
     PRIVATE ${META}
     PRIVATE ${TABLE}
     PRIVATE ${CONNECTOR}
