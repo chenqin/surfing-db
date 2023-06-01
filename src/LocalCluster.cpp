@@ -89,6 +89,13 @@ int main(int argc, char* argv[]) {
   } else {
     cls = env->FindClass("org/apache/flink/runtime/taskexecutor/TaskManagerRunner");
   }
+  if (env->ExceptionCheck()) {
+    // An exception occurred while calling the method
+    env->ExceptionDescribe(); // Prints the stack trace of the exception
+    env->ExceptionClear();
+    // Now you can either return, terminate the program, or continue executing
+    // other code - the exception has been handled.
+  }
   CHECK(cls != nullptr);
 
   // Locate the static method
