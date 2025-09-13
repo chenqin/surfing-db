@@ -1,5 +1,6 @@
 # Adding kafka support to read streaming data
 find_package(Threads REQUIRED)
+find_package(ZLIB REQUIRED)
 
 # http://roaringbitmap.org/
 # by default, roaring is providng dynamic lib for linking
@@ -48,6 +49,7 @@ target_link_libraries(${KC_LIBRARY}
         INTERFACE ${OPENSSL_LIBRARY}
         INTERFACE ${CRYPTO_LIBRARY}
         INTERFACE ${CURL_LIBRARY}
+        INTERFACE ZLIB::ZLIB
         INTERFACE ${ZSTD_LIBRARY}
         INTERFACE ${SASL_LIBRARY}
         INTERFACE ${LZ4_LIBRARY})

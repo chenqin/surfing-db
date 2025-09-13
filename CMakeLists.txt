@@ -3,6 +3,8 @@
 cmake_minimum_required(VERSION 3.10)
 project(matcha LANGUAGES CXX VERSION 0.1)
 
+option(ENABLE_MPI_TESTS "Enable MPI-based shuffle tests" OFF)
+
 find_package(Java 1.8 REQUIRED)
 
 if (linux)
@@ -236,6 +238,7 @@ endif ()
 
 # add a basic gtest dependency
 include(ext/Gtest_Ext.cmake)
+enable_testing()
 
 # add a dependency of glog
 #include(ext/Gflags_Ext.cmake)
@@ -285,6 +288,7 @@ include(src/connector/connector.cmake)
 
 # build test binary
 add_executable(FlinkJobWatcher src/FlinkJobWatcher.cpp)
+add_dependencies(FlinkJobWatcher thrift kafka xgboost)
 
 add_executable(LocalCluster ${MATCHA_SRC}/LocalCluster.cpp)
 
@@ -292,12 +296,13 @@ add_executable(MABS
     ${MATCHA_SRC}/mabs/mabs_types.cpp
     ${MATCHA_SRC}/mabs/mabs_constants.cpp
     ${MATCHA_SRC}/MABS.cpp)
+add_dependencies(MABS thrift)
 
 # workaround make issue for now
 add_custom_command(TARGET FlinkJobWatcher PRE_BUILD
-        COMMAND make kafka
-        COMMAND make xgboost
-        COMMAND make thrift)
+        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target kafka
+        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target xgboost
+        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target thrift)
 
 add_custom_command(TARGET FlinkJobWatcher PRE_BUILD
         COMMAND cd ${CMAKE_SOURCE_DIR}/drsquirrel-java && mvn clean package -Darrow.version=${ARROW_VERSION} 
@@ -327,3 +332,71 @@ target_link_libraries(LocalCluster
     PRIVATE ${TABLE}
     PRIVATE ${CONNECTOR}
     PRIVATE ${ARROW_LIBRARY})
+
+# -----------------------------
+# C++ Tests
+# -----------------------------
+add_executable(SurfingDbTests
+    ${MATCHA_SRC}/table/test/TestIntegration.cpp)
+
+add_dependencies(SurfingDbTests gtest thrift kafka xgboost)
+
+target_link_libraries(SurfingDbTests
+    PRIVATE ${META}
+    PRIVATE ${TABLE}
+    PRIVATE ${CONNECTOR}
+    PRIVATE ${ARROW_LIBRARY}
+    PRIVATE ${PARQUET_LIBRARY}
+    PRIVATE ${GTEST_MAIN_LIBRARY}
+    PRIVATE ${GTEST_LIBRARY})
+
+add_test(NAME SurfingDbTests COMMAND SurfingDbTests)
+
+# -----------------------------
+# MPI Tests (optional)
+# -----------------------------
+include(CTest)
+if(ENABLE_MPI_TESTS)
+  find_package(MPI REQUIRED)
+  add_executable(MpiShuffleTest ${MATCHA_SRC}/table/test/MpiShuffleRunner.cpp)
+  add_dependencies(MpiShuffleTest thrift xgboost)
+  target_link_libraries(MpiShuffleTest
+      PRIVATE ${TABLE}
+      PRIVATE ${META}
+      PRIVATE ${ARROW_LIBRARY}
+      PRIVATE ${PARQUET_LIBRARY})
+
+  if(MPI_CXX_FOUND)
+    set(MPIEXEC_NUMPROC_FLAG "-np")
+    add_test(NAME MpiShuffleTest
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 $<TARGET_FILE:MpiShuffleTest>)
+  endif()
+
+  add_executable(MpiTwoSideShuffleTest ${MATCHA_SRC}/table/test/MpiTwoSideShuffleRunner.cpp)
+  add_dependencies(MpiTwoSideShuffleTest thrift xgboost)
+  target_link_libraries(MpiTwoSideShuffleTest
+      PRIVATE ${TABLE}
+      PRIVATE ${META}
+      PRIVATE ${ARROW_LIBRARY}
+      PRIVATE ${PARQUET_LIBRARY})
+  if(MPI_CXX_FOUND)
+    add_test(NAME MpiTwoSideShuffleTest_np2
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 $<TARGET_FILE:MpiTwoSideShuffleTest>)
+    add_test(NAME MpiTwoSideShuffleTest_np4
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 $<TARGET_FILE:MpiTwoSideShuffleTest>)
+  endif()
+
+  # Randomized distribution tests (one-sided and two-sided)
+  add_executable(MpiShuffleRandomTest ${MATCHA_SRC}/table/test/MpiShuffleRandomRunner.cpp)
+  target_link_libraries(MpiShuffleRandomTest
+      PRIVATE ${TABLE}
+      PRIVATE ${META}
+      PRIVATE ${ARROW_LIBRARY}
+      PRIVATE ${PARQUET_LIBRARY})
+  if(MPI_CXX_FOUND)
+    add_test(NAME MpiShuffleRandom_one_np4
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 $<TARGET_FILE:MpiShuffleRandomTest>)
+    add_test(NAME MpiShuffleRandom_two_np4
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 $<TARGET_FILE:MpiShuffleRandomTest> two)
+  endif()
+endif()

@@ -9,3 +9,18 @@ mpirun --hostfile ~/matcha/hostfile ~/matcha/build/MABS ~/matcha/surfing-db-java
 1 * * * * ~/matcha/demon.sh MABS
 
 created @Maui, Hawaii, U.S.A since 2021
+
+# Build & Test (Scripts)
+
+- Build + install deps + build project:
+  - `./scripts/build_install.sh`
+  - Options:
+    - `--no-sudo` to avoid sudo for apt
+    - `--arrow-prefix <DIR>` to set Arrow install prefix (default: `$HOME/arrow-12-install`)
+
+- Run tests:
+  - `./scripts/run_tests.sh`
+  - Runs C++ unit tests, MPI shuffle tests (np=2,4), and Java tests.
+  - For randomized MPI tests you can set `SHUFFLE_TEST_SEED=<uint64>` to make runs deterministic.
+
+Note: Scripts assume Ubuntu with `apt` available. Arrow C++ 12 is built from source.
