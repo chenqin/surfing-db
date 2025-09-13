@@ -30,6 +30,43 @@ created @Maui, Hawaii, U.S.A since 2021
   - Runs C++ unit tests, MPI shuffle tests (np=2,4), and Java tests.
   - For randomized MPI tests you can set `SHUFFLE_TEST_SEED=<uint64>` to make runs deterministic.
 
+## How To Run Locally (Quick Guide)
+
+Prerequisites
+- Ubuntu/Debian with `apt` (for system Arrow install)
+- OpenJDK 8 (installed by script)
+- OpenMPI (installed by script: `openmpi-bin`, `libopenmpi-dev`)
+
+Build
+- Default (uses system Arrow packages):
+  - `./scripts/build_install.sh`
+- Enable MPI tests at configure time:
+  - `CMAKE_EXTRA_FLAGS=-DENABLE_MPI_TESTS=ON ./scripts/build_install.sh`
+
+Run all tests
+- Full suite (includes MPI if enabled):
+  - `./scripts/run_tests.sh`
+- Quick (skip MPI):
+  - `./scripts/run_tests.sh --no-mpi`
+
+Run MPI tests manually
+- From `build/`:
+  - `export SHUFFLE_TEST_SEED=12345`
+  - `ctest -R "MpiShuffleTest|MpiTwoSideShuffleTest_np2|MpiTwoSideShuffleTest_np4|MpiShuffleRandom_one_np4|MpiShuffleRandom_two_np4" --output-on-failure`
+
+Run Java tests (JNI included)
+- Ensure native libs are discoverable:
+  - `export LD_LIBRARY_PATH=$PWD/build:$LD_LIBRARY_PATH`
+- Run:
+  - `mvn -f drsquirrel-java/pom.xml -Darrow.version=12.0.0 test`
+
+MPI Java JNI Runner (2 ranks)
+- Build shaded jar:
+  - `mvn -f drsquirrel-java/pom.xml -Darrow.version=12.0.0 -DskipTests package`
+- Run under MPI:
+  - `mpiexec -np 2 java -Djava.library.path=$PWD/build -cp drsquirrel-java/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar com.pinterest.drsquirrel.jni.JniFlinkJobWatcherRunner`
+
+
 ## Kafka JNI test (optional)
 
 The Java JNI test for Kafka will run only if you provide environment variables:
