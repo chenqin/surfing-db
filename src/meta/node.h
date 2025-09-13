@@ -35,7 +35,7 @@ public:
     MPI_Comm_free(&role_comm);
     MPI_Info_free(&info);
     MPI_Finalize();
-    jvm->DestroyJavaVM();
+    if (jvm) jvm->DestroyJavaVM();
   }
   void setissubscriber(bool*);
   /**
@@ -71,8 +71,8 @@ public:
    */
   long stage;
   std::string processor;
-  JavaVM* jvm;
-  JNIEnv* env;
+  JavaVM* jvm = nullptr;
+  JNIEnv* env = nullptr;
 };
 } // namespace meta
 } // namespace matcha

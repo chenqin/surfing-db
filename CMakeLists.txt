@@ -333,6 +333,17 @@ target_link_libraries(LocalCluster
     PRIVATE ${CONNECTOR}
     PRIVATE ${ARROW_LIBRARY})
 
+# JNI library to expose KafkaConnector to Java
+add_library(surfingkafkajni SHARED ${MATCHA_SRC}/connector/kafka_jni.cpp)
+target_link_libraries(surfingkafkajni
+    PRIVATE ${META}
+    PRIVATE ${TABLE}
+    PRIVATE ${CONNECTOR}
+    PRIVATE ${ARROW_LIBRARY}
+    PRIVATE ${PARQUET_LIBRARY}
+    PRIVATE ${GLOG_LIBRARY})
+set_target_properties(surfingkafkajni PROPERTIES OUTPUT_NAME surfingkafkajni)
+
 # -----------------------------
 # C++ Tests
 # -----------------------------

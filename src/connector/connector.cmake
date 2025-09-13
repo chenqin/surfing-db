@@ -10,6 +10,8 @@ add_library(${CONNECTOR} STATIC
                 ${MATCHA_SRC}/connector/kafka.cpp 
                 ${MATCHA_SRC}/connector/datagen.cpp)
 
+set_target_properties(${CONNECTOR} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 include_directories(${KC_INCLUDE_DIRS})
 
 target_link_libraries(${CONNECTOR}
