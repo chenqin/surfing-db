@@ -47,7 +47,6 @@ jobs:
 
   mpi-tests:
     runs-on: ubuntu-24.04
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     timeout-minutes: 180
     steps:
       - name: Checkout
@@ -79,6 +78,7 @@ jobs:
       - name: Run tests (including MPI)
         env:
           CTEST_OUTPUT_ON_FAILURE: '1'
+          SHUFFLE_TEST_SEED: '12345'
         run: |
           chmod +x scripts/run_tests.sh
           ./scripts/run_tests.sh
