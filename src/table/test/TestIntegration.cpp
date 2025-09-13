@@ -593,9 +593,11 @@ TEST(TableTest, TestSketchQuantile) {
 
     std::cout << "Min, Median, Max values" << std::endl;
     const double fractions[3]{0, 0.5, 1};
-    auto quantiles = u.get_quantiles(fractions, 3);
-    std::cout << quantiles[0] << ", " << quantiles[1] << ", " << quantiles[2]
-              << std::endl;
+    // Older DataSketches headers may not have get_quantiles; fetch individually
+    auto q0 = u.get_quantile(fractions[0]);
+    auto q1 = u.get_quantile(fractions[1]);
+    auto q2 = u.get_quantile(fractions[2]);
+    std::cout << q0 << ", " << q1 << ", " << q2 << std::endl;
 
     std::cout << "Probability Histogram: estimated probability mass in 4 bins: "
                  "(-inf, -2), [-2, 0), [0, 2), [2, +inf)"

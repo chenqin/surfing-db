@@ -12,6 +12,8 @@ add_library(${META} STATIC
         ${MATCHA_SRC}/meta/node.cpp
         ${MATCHA_SRC}/meta/schema.cpp)
 
+set_target_properties(${META} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 # define basic package dependencies
 target_link_libraries(${META}
         PUBLIC Threads::Threads

@@ -95,6 +95,12 @@
       <artifactId>t-digest</artifactId>
       <version>3.2</version>
     </dependency>
+    <!-- Kafka client for Java-native consumer path -->
+    <dependency>
+      <groupId>org.apache.kafka</groupId>
+      <artifactId>kafka-clients</artifactId>
+      <version>3.6.1</version>
+    </dependency>
   </dependencies>
   <build>
     <plugins>

@@ -18,6 +18,8 @@ add_library(${TABLE} STATIC
         ${MATCHA_SRC}/table/mtable.cpp
         ${MATCHA_SRC}/table/processors.cpp)
 
+set_target_properties(${TABLE} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 target_link_libraries(${TABLE}
         PRIVATE ${META}
         PRIVATE ${JNI_LIBRARIES}
