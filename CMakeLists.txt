@@ -268,8 +268,7 @@ find_package(Python3 COMPONENTS Interpreter Development)
 include(ext/Sketches_Ext.cmake)
 include(ext/XGBoost_Ext.cmake)
 #find_package(lz4)
-include(ext/Kafka_Ext.cmake)
-set(KAFKA_LIBRARY rdkafka)
+## Removed C++ Kafka connector; Java-native consumer is used instead
 
 # set up directory to search for headers
 include_directories(include ${GTEST_INCLUDE_DIRS})
@@ -287,43 +286,51 @@ include(src/table/table.cmake)
 include(src/connector/connector.cmake)
 
 # build test binary
-add_executable(FlinkJobWatcher src/FlinkJobWatcher.cpp)
-add_dependencies(FlinkJobWatcher thrift kafka xgboost)
+option(BUILD_CPP_KAFKA "Build C++ Kafka-based executables" OFF)
+if(BUILD_CPP_KAFKA)
+  add_executable(FlinkJobWatcher src/FlinkJobWatcher.cpp)
+  add_dependencies(FlinkJobWatcher thrift xgboost)
+endif()
 
 add_executable(LocalCluster ${MATCHA_SRC}/LocalCluster.cpp)
 
-add_executable(MABS 
-    ${MATCHA_SRC}/mabs/mabs_types.cpp
-    ${MATCHA_SRC}/mabs/mabs_constants.cpp
-    ${MATCHA_SRC}/MABS.cpp)
-add_dependencies(MABS thrift)
+if(BUILD_CPP_KAFKA)
+  add_executable(MABS 
+      ${MATCHA_SRC}/mabs/mabs_types.cpp
+      ${MATCHA_SRC}/mabs/mabs_constants.cpp
+      ${MATCHA_SRC}/MABS.cpp)
+  add_dependencies(MABS thrift)
+endif()
 
 # workaround make issue for now
-add_custom_command(TARGET FlinkJobWatcher PRE_BUILD
-        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target kafka
-        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target xgboost
-        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target thrift)
+if(BUILD_CPP_KAFKA)
+  add_custom_command(TARGET FlinkJobWatcher PRE_BUILD
+          COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target xgboost
+          COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target thrift)
 
-add_custom_command(TARGET FlinkJobWatcher PRE_BUILD
-        COMMAND cd ${CMAKE_SOURCE_DIR}/drsquirrel-java && mvn clean package -Darrow.version=${ARROW_VERSION} 
-        COMMAND cp ${CMAKE_SOURCE_DIR}/drsquirrel-java/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_SOURCE_DIR}/surfing-db-java.jar)
+  add_custom_command(TARGET FlinkJobWatcher PRE_BUILD
+          COMMAND cd ${CMAKE_SOURCE_DIR}/drsquirrel-java && mvn clean package -Darrow.version=${ARROW_VERSION} 
+          COMMAND cp ${CMAKE_SOURCE_DIR}/drsquirrel-java/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_SOURCE_DIR}/surfing-db-java.jar)
+endif()
 
-set_target_properties(MABS PROPERTIES LINK_FLAGS "${MPI_LINK_FLAGS}")
+if(BUILD_CPP_KAFKA)
+  set_target_properties(MABS PROPERTIES LINK_FLAGS "${MPI_LINK_FLAGS}")
+  target_link_libraries(MABS
+          PRIVATE ${META}
+          PRIVATE ${TABLE}
+          PRIVATE ${CONNECTOR}
+          PRIVATE ${ARROW_LIBRARY}
+          PRIVATE ${THRIFT_LIBRARY})
+endif()
 
-target_link_libraries(MABS
-        PRIVATE ${META}
-        PRIVATE ${TABLE}
-        PRIVATE ${CONNECTOR}
-        PRIVATE ${ARROW_LIBRARY}
-        PRIVATE ${THRIFT_LIBRARY})
-
-set_target_properties(FlinkJobWatcher PROPERTIES COMPILE_FLAGS "${MPI_COMPILE_FLAGS}")
-
-target_link_libraries(FlinkJobWatcher
-    PRIVATE ${META}
-    PRIVATE ${TABLE}
-    PRIVATE ${CONNECTOR}
-    PRIVATE ${ARROW_LIBRARY})
+if(BUILD_CPP_KAFKA)
+  set_target_properties(FlinkJobWatcher PROPERTIES COMPILE_FLAGS "${MPI_COMPILE_FLAGS}")
+  target_link_libraries(FlinkJobWatcher
+      PRIVATE ${META}
+      PRIVATE ${TABLE}
+      PRIVATE ${CONNECTOR}
+      PRIVATE ${ARROW_LIBRARY})
+endif()
 
 set_target_properties(LocalCluster PROPERTIES COMPILE_FLAGS "${MPI_COMPILE_FLAGS}")
 
@@ -360,7 +367,7 @@ set_target_properties(surfingprocessorsjni PROPERTIES OUTPUT_NAME surfingprocess
 add_executable(SurfingDbTests
     ${MATCHA_SRC}/table/test/TestIntegration.cpp)
 
-add_dependencies(SurfingDbTests gtest thrift kafka xgboost)
+add_dependencies(SurfingDbTests gtest thrift xgboost)
 
 target_link_libraries(SurfingDbTests
     PRIVATE ${META}

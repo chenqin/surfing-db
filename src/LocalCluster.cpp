@@ -21,7 +21,6 @@
 #include <iostream>
 #include <string>
 
-#include "connector/kafka.h"
 #include "meta/node.h"
 #include "table/processors.h"
 #include "table/utils.h"

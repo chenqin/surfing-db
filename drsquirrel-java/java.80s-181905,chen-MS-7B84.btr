@@ -1,0 +1,15 @@
+
+java:181905 terminated with signal 6 at PC=7e2f242a50bc SP=7e2f231fc930.  Backtrace:
+/lib/x86_64-linux-gnu/libc.so.6(pthread_kill+0x11c) [0x7e2f242a50bc]
+/lib/x86_64-linux-gnu/libc.so.6(gsignal+0x1e) [0x7e2f242456de]
+/lib/x86_64-linux-gnu/libc.so.6(abort+0x2c) [0x7e2f242288cd]
+/home/chen/surfing-db/build/libsurfingprocessorsjni.so(+0x43e34a) [0x7e2eb3a3e34a]
+/home/chen/surfing-db/build/libsurfingprocessorsjni.so(_ZN5arrow8internal14DieWithMessageERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE+0x63) [0x7e2eb395e143]
+/home/chen/surfing-db/build/libsurfingprocessorsjni.so(_ZN5arrow8internal17InvalidValueOrDieERKNS_6StatusE+0x13a) [0x7e2eb395e2aa]
+/home/chen/surfing-db/build/libsurfingprocessorsjni.so(_ZN6matcha5table5utils9group_twoERKSt6vectorISt10shared_ptrIN5arrow11RecordBatchEESaIS6_EENSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEERSt8functionIFmmiiEEiii+0x3ba) [0x7e2eb37b4bfa]
+/home/chen/surfing-db/build/libsurfingprocessorsjni.so(+0x1aca70) [0x7e2eb37aca70]
+/lib/x86_64-linux-gnu/libgomp.so.1(GOMP_parallel+0x49) [0x7e2ed41cd329]
+/home/chen/surfing-db/build/libsurfingprocessorsjni.so(_ZN6matcha5table10processors16shuffle_one_sideERKSt6vectorISt10shared_ptrIN5arrow11RecordBatchEESaIS6_EENSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESt8functionIFmmiiEEii+0x44a) [0x7e2eb37ad94a]
+/home/chen/surfing-db/build/libsurfingprocessorsjni.so(_ZN6matcha5table10processors7shuffleERSt10shared_ptrIN5arrow11RecordBatchEENSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESt8functionIFmmiiEEbii+0x116) [0x7e2eb37ae656]
+/home/chen/surfing-db/build/libsurfingprocessorsjni.so(Java_com_pinterest_drsquirrel_jni_NativeProcessors_shuffle+0x227) [0x7e2eb37a8497]
+[0x7e2f0d017de7]

@@ -21,20 +21,19 @@ public class NativeProcessorsTest extends TestCase {
         Schema schema = new Schema(Arrays.asList(key, val));
         VectorSchemaRoot root = VectorSchemaRoot.create(schema, alloc);
 
-        try (BigIntVector keyVec = (BigIntVector) root.getVector("key");
-             IntVector valVec = (IntVector) root.getVector("val")) {
-            root.allocateNew();
-            // 3 rows
-            keyVec.setSafe(0, 1);
-            valVec.setSafe(0, 10);
-            keyVec.setSafe(1, 2);
-            valVec.setSafe(1, 20);
-            keyVec.setSafe(2, 3);
-            valVec.setSafe(2, 30);
-            keyVec.setValueCount(3);
-            valVec.setValueCount(3);
-            root.setRowCount(3);
-        }
+        BigIntVector keyVec = (BigIntVector) root.getVector("key");
+        IntVector valVec = (IntVector) root.getVector("val");
+        root.allocateNew();
+        // 3 rows
+        keyVec.setSafe(0, 1);
+        valVec.setSafe(0, 10);
+        keyVec.setSafe(1, 2);
+        valVec.setSafe(1, 20);
+        keyVec.setSafe(2, 3);
+        valVec.setSafe(2, 30);
+        keyVec.setValueCount(3);
+        valVec.setValueCount(3);
+        root.setRowCount(3);
         return root;
     }
 
