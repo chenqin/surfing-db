@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# This script installs system dependencies, builds Arrow C++ from source (v12),
+# This script installs system dependencies, builds Arrow C++ from source (default v12),
 # configures the project with CMake + Ninja, and builds all targets.
 #
 # Usage:
@@ -10,15 +10,20 @@ set -euo pipefail
 # Options:
 #   --no-sudo        Do not use sudo for apt installs (assumes root)
 #   --arrow-prefix   Install prefix for Arrow (default: $HOME/arrow-12-install)
+#   --arrow-version  Arrow version to build (default: 12.0.0)
 
 USE_SUDO=1
 ARROW_PREFIX="${HOME}/arrow-12-install"
+ARROW_VERSION="12.0.0"
 for arg in "$@"; do
   case "$arg" in
     --no-sudo) USE_SUDO=0 ;;
     --arrow-prefix)
       shift
       ARROW_PREFIX="$1" ;;
+    --arrow-version)
+      shift
+      ARROW_VERSION="$1" ;;
   esac
 done
 
@@ -46,17 +51,44 @@ ${SUDO} ${APT} install -y \
 export JAVA_HOME="/usr/lib/jvm/java-8-openjdk-amd64"
 export PATH="$JAVA_HOME/bin:$PATH"
 
-# Build Arrow C++ 12.0.0 static
-ARROW_SRC="${HOME}/apache-arrow-12.0.0"
-if [ ! -d "${ARROW_SRC}" ]; then
-  echo "[+] Fetching Arrow 12.0.0 sources"
-  ( cd "${HOME}" && \
-    curl -fsSLO https://downloads.apache.org/arrow/arrow-12.0.0/apache-arrow-12.0.0.tar.gz || \
-    curl -fsSLO https://archive.apache.org/dist/arrow/arrow-12.0.0/apache-arrow-12.0.0.tar.gz )
-  tar -C "${HOME}" -xzf "${HOME}/apache-arrow-12.0.0.tar.gz"
+# Build Arrow C++ ${ARROW_VERSION} static
+ARROW_TOP_PATTERN="*apache-arrow-${ARROW_VERSION}"
+ARROW_SRC=""
+if compgen -G "${HOME}/${ARROW_TOP_PATTERN}" > /dev/null; then
+  ARROW_SRC=$(echo ${HOME}/${ARROW_TOP_PATTERN} | awk '{print $1}')
+else
+  echo "[+] Fetching Arrow ${ARROW_VERSION} sources"
+  TARBALL="apache-arrow-${ARROW_VERSION}.tar.gz"
+  cd "${HOME}"
+  # Try official archive, then downloads mirror, then GitHub source tag
+  URLS=(
+    "https://archive.apache.org/dist/arrow/arrow-${ARROW_VERSION}/${TARBALL}"
+    "https://downloads.apache.org/arrow/arrow-${ARROW_VERSION}/${TARBALL}"
+    "https://github.com/apache/arrow/archive/refs/tags/apache-arrow-${ARROW_VERSION}.tar.gz"
+  )
+  SUCCESS=0
+  for u in "${URLS[@]}"; do
+    echo "[i] Trying ${u}"
+    if curl -fL --retry 3 --retry-delay 2 -o "${TARBALL}" "${u}"; then
+      SUCCESS=1
+      break
+    fi
+  done
+  if [ "${SUCCESS}" != "1" ]; then
+    echo "[!] Failed to download Arrow ${ARROW_VERSION}. Check network or version." >&2
+    exit 2
+  fi
+  tar -xzf "${TARBALL}"
+  # Find extracted directory matching version
+  if compgen -G "${HOME}/${ARROW_TOP_PATTERN}" > /dev/null; then
+    ARROW_SRC=$(echo ${HOME}/${ARROW_TOP_PATTERN} | awk '{print $1}')
+  else
+    echo "[!] Extracted Arrow tarball but could not locate top directory" >&2
+    exit 3
+  fi
 fi
 
-echo "[+] Building Arrow C++ (static) to ${ARROW_PREFIX}"
+echo "[+] Building Arrow C++ ${ARROW_VERSION} (static) to ${ARROW_PREFIX}"
 mkdir -p "${ARROW_SRC}/cpp/build"
 cmake -S "${ARROW_SRC}/cpp" -B "${ARROW_SRC}/cpp/build" -GNinja \
   -DCMAKE_BUILD_TYPE=Release \

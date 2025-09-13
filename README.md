@@ -16,6 +16,10 @@ created @Maui, Hawaii, U.S.A since 2021
   - `./scripts/build_install.sh`
   - Options:
     - `--no-sudo` to avoid sudo for apt
+    - `--arrow-prefix <DIR>` set Arrow install prefix (default: `$HOME/arrow-12-install`)
+    - `--arrow-version <X.Y.Z>` set Arrow version (default: `12.0.0`)
+  - Options:
+    - `--no-sudo` to avoid sudo for apt
     - `--arrow-prefix <DIR>` to set Arrow install prefix (default: `$HOME/arrow-12-install`)
 
 - Run tests:
