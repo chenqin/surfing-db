@@ -344,6 +344,16 @@ target_link_libraries(surfingkafkajni
     PRIVATE ${GLOG_LIBRARY})
 set_target_properties(surfingkafkajni PROPERTIES OUTPUT_NAME surfingkafkajni)
 
+# JNI library for processors
+add_library(surfingprocessorsjni SHARED ${MATCHA_SRC}/table/processors_jni.cpp)
+target_link_libraries(surfingprocessorsjni
+    PRIVATE ${META}
+    PRIVATE ${TABLE}
+    PRIVATE ${ARROW_LIBRARY}
+    PRIVATE ${PARQUET_LIBRARY}
+    PRIVATE ${GLOG_LIBRARY})
+set_target_properties(surfingprocessorsjni PROPERTIES OUTPUT_NAME surfingprocessorsjni)
+
 # -----------------------------
 # C++ Tests
 # -----------------------------
