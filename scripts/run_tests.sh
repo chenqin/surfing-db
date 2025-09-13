@@ -35,6 +35,8 @@ fi
 popd >/dev/null
 
 echo "[+] Running Java tests"
+# Ensure native JNI libs are discoverable for JNI tests
+export LD_LIBRARY_PATH="$(pwd)/build:${LD_LIBRARY_PATH:-}"
 mvn -q -f drsquirrel-java/pom.xml -Darrow.version=12.0.0 test
 
 echo "[✓] All tests passed"
