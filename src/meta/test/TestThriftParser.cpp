@@ -41,17 +41,17 @@ TEST(ThriftParserTest, ParseOuterWithMapAndList) {
   opt.default_map_pairs = 8;
   auto ms = ThriftSchemaParser::parseToMSchema(path, "Outer", opt);
   ASSERT_EQ(ms->fields.size(), 3);
-  EXPECT_EQ(ms->fields[0].name, "counts");
-  EXPECT_EQ(ms->fields[0].type, RowType::MAP);
-  EXPECT_EQ(ms->fields[0].map_key_type, RowType::STRING);
-  EXPECT_EQ(ms->fields[0].map_value_type, RowType::LONG);
+  auto& f_counts_ms = ms->getFieldByName("counts");
+  EXPECT_EQ(f_counts_ms.type, RowType::MAP);
+  EXPECT_EQ(f_counts_ms.map_key_type, RowType::STRING);
+  EXPECT_EQ(f_counts_ms.map_value_type, RowType::LONG);
 
-  EXPECT_EQ(ms->fields[1].name, "tags");
-  EXPECT_EQ(ms->fields[1].type, RowType::LIST);
-  EXPECT_EQ(ms->fields[1].list_type, RowType::STRING);
+  auto& f_tags_ms = ms->getFieldByName("tags");
+  EXPECT_EQ(f_tags_ms.type, RowType::LIST);
+  EXPECT_EQ(f_tags_ms.list_type, RowType::STRING);
 
-  EXPECT_EQ(ms->fields[2].name, "score");
-  EXPECT_EQ(ms->fields[2].type, RowType::DOUBLE);
+  auto& f_score_ms = ms->getFieldByName("score");
+  EXPECT_EQ(f_score_ms.type, RowType::DOUBLE);
 
   auto as = ThriftSchemaParser::parseToArrow(path, "Outer", opt);
   ASSERT_EQ(as->num_fields(), 3);
@@ -67,4 +67,3 @@ TEST(ThriftParserTest, ParseOuterWithMapAndList) {
   EXPECT_EQ(ltype->value_type()->id(), arrow::Type::STRING);
   EXPECT_EQ(f_score->type()->id(), arrow::Type::FLOAT);
 }
-

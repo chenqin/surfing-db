@@ -96,6 +96,17 @@ MPI Java JNI Runner (2 ranks)
 - Run under MPI:
   - `mpiexec -np 2 java -Djava.library.path=$PWD/build -cp drsquirrel-java/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar com.pinterest.drsquirrel.jni.JniFlinkJobWatcherRunner`
 
+## Fake Cogroup Example (Java + MPI)
+
+- Build and run the fake source/sink app that calls `NativeProcessors.cogroup` under MPI:
+  - Build native + Java + example and run (np=4):
+    - `bash scripts/run_fake_cogroup_example.sh --build --np 4 --mode one --rows 100000 --iters 1`
+  - Two-sided mode:
+    - `bash scripts/run_fake_cogroup_example.sh --np 2 --mode two --rows 50000 --iters 2`
+  - Secondary sort after cogroup (by a field present in each output, e.g. `la` or `rb`):
+    - `bash scripts/run_fake_cogroup_example.sh --np 2 --mode one --rows 50000 --iters 1 --sort-by la`
+  - Output samples per rank are written under `build/examples/fake-cogroup-out/`.
+
 
 ## Kafka test (Java-native, optional)
 
@@ -182,9 +193,24 @@ int main() {
   - Usage:
     - `./build/thrift2arrow path/to/file.thrift StructName` (nested structs preserved)
     - `./build/thrift2arrow path/to/file.thrift StructName --flatten` (flatten direct struct fields into top-level fields with `name_child`)
-  - Notes:
-    - Flatten only applies to direct struct fields; list<struct> and map<*,struct> remain unflattened and are emitted as collection-of-struct types.
-    - For mschema-like flatten (fully flat), use `ThriftSchemaParser::parseToMSchema`, which flattens struct fields recursively into primitives/list<prim>/map<prim,prim> with name prefixes.
+    - `./build/thrift2arrow path/to/file.thrift StructName --flatten --sep=__` (custom separator for flattened names)
+    - `./build/thrift2arrow path/to/file.thrift StructName --flatten --flatten-list-structs --flatten-map-structs` (also flatten list/map of struct into multiple fields)
+    - `./build/thrift2arrow path/to/file.thrift StructName --raw` (print Arrow `Schema::ToString()`)
+
+  - Examples (from this repo):
+    - `./build/thrift2arrow src/mabs.thrift MabsMetrics`
+      - Output (pretty):
+        - `timestamp: int64`
+        - `service_tags: utf8`
+        - `node_tags: utf8`
+        - `counters: map<utf8, int64>`
+        - `gauges: map<utf8, float32>`
+        - `histograms: map<utf8, utf8>`
+        - `service_name: utf8`
+        - `double_counters: map<utf8, float32>`
+
+    - `./build/thrift2arrow src/mabs.thrift MabsMetrics --raw`
+      - Raw Arrow schema string printed for tooling consumption.
 
 - Thrift type mapping (subset):
   - `bool` → Arrow `bool`
@@ -199,6 +225,21 @@ int main() {
 - Notes:
   - For variable-width/list/map fields, defaults are used for capacity sizing; override via `ThriftParseOptions`.
   - The parser is lightweight and handles common Thrift IDL patterns (structs with primitive/list/map fields, optional/required qualifiers, comments).
+  - When flattening, direct struct fields become top-level fields with a name prefix. With `--flatten-list-structs` and/or `--flatten-map-structs`, struct elements under list/map are expanded into multiple fields with the chosen separator.
+
+### Tests for Thrift Parser
+
+- Focused gtests validate nested structs, lists/maps, flattening behavior, error conditions, and real repo schemas:
+  - `src/meta/test/TestThriftParser.cpp`
+  - `src/meta/test/TestThriftParserNested.cpp`
+  - `src/meta/test/TestThriftParserFlatten.cpp`
+  - `src/meta/test/TestThriftParserFlattenAdvanced.cpp`
+  - `src/meta/test/TestThriftParserNestedComprehensive.cpp`
+  - `src/meta/test/TestThriftMabs.cpp` (parses `src/mabs.thrift`)
+
+- Build and run only these tests:
+  - `ninja -C build ThriftParserTests`
+  - `./build/ThriftParserTests --gtest_color=yes`
 
 mvn -f drsquirrel-java/pom.xml -Darrow.version=12.0.0 -DskipTests package
 mpiexec -np 2 java -Djava.library.path=$PWD/build \

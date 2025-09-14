@@ -109,29 +109,80 @@ parse_all_structs(const std::string& thrift_txt) {
   std::regex all_structs_re("struct\\s+([A-Za-z0-9_]+)\\s*\\{([\\s\\S]*?)\\}");
   auto begin = std::sregex_iterator(txt.begin(), txt.end(), all_structs_re);
   auto end = std::sregex_iterator();
+
+  auto parse_struct_fields = [&](const std::string& body) {
+    std::vector<std::pair<std::string, TFieldIR>> fields;
+    auto sanitize_ident = [&](const std::string& in) -> std::string {
+      auto is_ident = [](char c){ return std::isalnum(static_cast<unsigned char>(c)) || c == '_'; };
+      size_t b = 0, e = in.size();
+      while (b < e && !is_ident(in[b])) ++b;
+      while (e > b && !is_ident(in[e-1])) --e;
+      return trim(in.substr(b, e - b));
+    };
+    size_t i = 0, n = body.size();
+    while (i < n) {
+      // Skip whitespace and top-level delimiters
+      while (i < n && (std::isspace(static_cast<unsigned char>(body[i])) || body[i] == ',' || body[i] == ';')) ++i;
+      if (i >= n) break;
+      // Optional numeric id and colon
+      size_t id_start = i;
+      while (i < n && std::isdigit(static_cast<unsigned char>(body[i]))) ++i;
+      if (i > id_start && i < n && body[i] == ':') {
+        ++i;
+      } else {
+        // No id; continue
+        i = id_start;
+      }
+      // Skip spaces
+      while (i < n && std::isspace(static_cast<unsigned char>(body[i]))) ++i;
+      // Optional qualifiers
+      auto has_prefix = [&](const char* pfx) {
+        size_t len = std::strlen(pfx);
+        if (i + len <= n && to_lower(body.substr(i, len)) == std::string(pfx)) { i += len; return true; }
+        return false;
+      };
+      (void)(has_prefix("optional ") || has_prefix("required "));
+
+      // Parse type token with bracket depth
+      size_t type_start = i; int depth = 0;
+      while (i < n) {
+        char c = body[i];
+        if (c == '<') depth++;
+        else if (c == '>' && depth > 0) depth--;
+        else if (std::isspace(static_cast<unsigned char>(c)) && depth == 0) break;
+        ++i;
+      }
+      std::string type_tok = trim(body.substr(type_start, i - type_start));
+      // Name
+      while (i < n && std::isspace(static_cast<unsigned char>(body[i]))) ++i;
+      size_t name_start = i;
+      while (i < n) {
+        char c = body[i];
+        if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '_')) break;
+        ++i;
+      }
+      std::string name_tok = sanitize_ident(body.substr(name_start, i - name_start));
+      if (!type_tok.empty() && !name_tok.empty()) {
+        TFieldIR ir = parse_field_type(type_tok);
+        fields.emplace_back(name_tok, std::move(ir));
+      }
+      // Advance to next delimiter at top level
+      depth = 0;
+      while (i < n) {
+        char c = body[i];
+        if (c == '<') depth++;
+        else if (c == '>' && depth > 0) depth--;
+        if (depth == 0 && (c == ',' || c == ';' || c == '\n')) { ++i; break; }
+        ++i;
+      }
+    }
+    return fields;
+  };
+
   for (auto it = begin; it != end; ++it) {
     std::string sname = (*it)[1].str();
     std::string body = (*it)[2].str();
-    std::stringstream ss(body);
-    std::string line;
-    std::vector<std::pair<std::string, TFieldIR>> fields;
-    while (std::getline(ss, line)) {
-      line = trim(line);
-      if (line.empty()) continue;
-      auto colon = line.find(":");
-      if (colon != std::string::npos) line = trim(line.substr(colon + 1));
-      if (!line.empty() && (line.back() == ',' || line.back() == ';')) line.pop_back();
-      if (to_lower(line).rfind("optional ", 0) == 0) line = trim(line.substr(9));
-      if (to_lower(line).rfind("required ", 0) == 0) line = trim(line.substr(9));
-
-      std::stringstream ls(line);
-      std::string type_tok, name_tok;
-      ls >> type_tok >> name_tok;
-      if (type_tok.empty() || name_tok.empty()) continue;
-      // type token may be list<...> or map<...>
-      TFieldIR ir = parse_field_type(type_tok);
-      fields.emplace_back(name_tok, std::move(ir));
-    }
+    auto fields = parse_struct_fields(body);
     out.emplace(sname, std::move(fields));
   }
   return out;
@@ -297,12 +348,20 @@ std::shared_ptr<arrow::Schema> ThriftSchemaParser::parseToArrowFlattened(
 
   std::vector<std::shared_ptr<arrow::Field>> out_fields;
   std::function<void(const std::string&, const TFieldIR&)> emit;
+  auto sanitize_name = [&](const std::string& in) -> std::string {
+    auto is_ident = [](char c){ return std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-'; };
+    // allow dash just in case users prefer it for sep
+    size_t b = 0, e = in.size();
+    while (b < e && !is_ident(in[b])) ++b;
+    while (e > b && !is_ident(in[e-1])) --e;
+    return trim(in.substr(b, e - b));
+  };
   emit = [&](const std::string& name, const TFieldIR& ir){
     if (ir.kind == TFieldIR::STRUCT) {
       auto it = table.find(ir.struct_name);
       if (it == table.end()) throw std::runtime_error("Unknown struct type: " + ir.struct_name);
       for (auto& p : it->second) {
-        emit(name + sep + p.first, p.second);
+        emit(sanitize_name(name + sep + p.first), p.second);
       }
       return;
     }
@@ -310,7 +369,7 @@ std::shared_ptr<arrow::Schema> ThriftSchemaParser::parseToArrowFlattened(
       auto it = table.find(ir.list_elem->struct_name);
       if (it == table.end()) throw std::runtime_error("Unknown struct type: " + ir.list_elem->struct_name);
       for (auto& p : it->second) {
-        out_fields.push_back(arrow::field(name + sep + p.first, arrow::list(toArrowPrim(p.second))));
+        out_fields.push_back(arrow::field(sanitize_name(name + sep + p.first), arrow::list(toArrowPrim(p.second))));
       }
       return;
     }
@@ -319,15 +378,15 @@ std::shared_ptr<arrow::Schema> ThriftSchemaParser::parseToArrowFlattened(
       auto it = table.find(ir.map_val->struct_name);
       if (it == table.end()) throw std::runtime_error("Unknown struct type: " + ir.map_val->struct_name);
       for (auto& p : it->second) {
-        out_fields.push_back(arrow::field(name + sep + p.first, arrow::map(toArrowPrim(*ir.map_key), toArrowPrim(p.second))));
+        out_fields.push_back(arrow::field(sanitize_name(name + sep + p.first), arrow::map(toArrowPrim(*ir.map_key), toArrowPrim(p.second))));
       }
       return;
     }
     // For collections, do not flatten further even if element is struct
-    out_fields.push_back(arrow::field(name, toArrowPrim(ir)));
+    out_fields.push_back(arrow::field(sanitize_name(name), toArrowPrim(ir)));
   };
 
-  for (auto& p : table[struct_name]) emit(p.first, p.second);
+  for (auto& p : table[struct_name]) emit(sanitize_name(p.first), p.second);
   return arrow::schema(out_fields);
 }
 

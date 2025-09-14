@@ -408,7 +408,10 @@ endif()
 add_executable(ThriftParserTests
     ${MATCHA_SRC}/meta/test/TestThriftParser.cpp
     ${MATCHA_SRC}/meta/test/TestThriftParserNested.cpp
-    ${MATCHA_SRC}/meta/test/TestThriftParserFlatten.cpp)
+    ${MATCHA_SRC}/meta/test/TestThriftParserFlatten.cpp
+    ${MATCHA_SRC}/meta/test/TestThriftParserFlattenAdvanced.cpp
+    ${MATCHA_SRC}/meta/test/TestThriftMabs.cpp
+    ${MATCHA_SRC}/meta/test/TestThriftParserNestedComprehensive.cpp)
 add_dependencies(ThriftParserTests gtest thrift)
 target_link_libraries(ThriftParserTests
     PRIVATE ${META}
