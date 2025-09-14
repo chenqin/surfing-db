@@ -24,6 +24,7 @@
 #include <arrow/compute/api.h>
 
 #include <iostream>
+#include <utility>
 
 #include "mtable.h"
 #include "xgbop.h"
@@ -74,6 +75,29 @@ class processors {
   static std::shared_ptr<arrow::RecordBatch> shuffle(
       std::shared_ptr<arrow::RecordBatch>&, std::string,
       std::function<size_t(size_t, int, int)>, bool, int, int);
+  // Shuffle both left and right inputs by the same key to the same ranks and
+  // return the locally owned partitions. When singleside is true, uses the
+  // one-sided MPI window path; otherwise uses the two-sided send/recv path.
+  static std::pair<std::shared_ptr<arrow::RecordBatch>,
+                   std::shared_ptr<arrow::RecordBatch>>
+  cogroup(const arrow::RecordBatchVector& left,
+          const arrow::RecordBatchVector& right,
+          std::string field_name,
+          std::function<size_t(size_t, int, int)> partitioner,
+          bool singleside,
+          int rank,
+          int world);
+
+  // Convenience overload taking single batches
+  static std::pair<std::shared_ptr<arrow::RecordBatch>,
+                   std::shared_ptr<arrow::RecordBatch>>
+  cogroup(std::shared_ptr<arrow::RecordBatch>& left,
+          std::shared_ptr<arrow::RecordBatch>& right,
+          std::string field_name,
+          std::function<size_t(size_t, int, int)> partitioner,
+          bool singleside,
+          int rank,
+          int world);
   static arrow::RecordBatchVector jni(
       const arrow::RecordBatchVector&,
       std::string class_name, JNIEnv* env, int rank);
