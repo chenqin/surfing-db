@@ -15,6 +15,30 @@ using matcha::table::processors;
 static bool g_mpi_started = false;
 static bool g_mpi_finalized = false;
 
+static void ensure_mpi() {
+  int initialized = 0;
+  MPI_Initialized(&initialized);
+  if (!initialized) {
+    int provided = 0; int argc = 0; char** argv = nullptr;
+    MPI_Init_thread(&argc, &argv, MPI_THREAD_SINGLE, &provided);
+  }
+  g_mpi_started = true;
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_pinterest_drsquirrel_jni_NativeProcessors_mpiRank(JNIEnv* env, jclass) {
+  (void)env;
+  ensure_mpi();
+  int rank = 0; MPI_Comm_rank(MPI_COMM_WORLD, &rank); return rank;
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_pinterest_drsquirrel_jni_NativeProcessors_mpiWorld(JNIEnv* env, jclass) {
+  (void)env;
+  ensure_mpi();
+  int world = 1; MPI_Comm_size(MPI_COMM_WORLD, &world); return world;
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_pinterest_drsquirrel_jni_NativeProcessors_shuffle(
     JNIEnv* env, jclass,
@@ -23,15 +47,7 @@ Java_com_pinterest_drsquirrel_jni_NativeProcessors_shuffle(
     jint j_rank, jint j_world,
     jlong schema_out_addr, jlong array_out_addr) {
   (void)env; // unused
-
-  int initialized = 0;
-  MPI_Initialized(&initialized);
-  if (!initialized) {
-    int provided = 0;
-    int argc = 0; char** argv = nullptr;
-    MPI_Init_thread(&argc, &argv, MPI_THREAD_SINGLE, &provided);
-  }
-  g_mpi_started = true;
+  ensure_mpi();
   int rank = 0, world = 1;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &world);
@@ -76,14 +92,7 @@ Java_com_pinterest_drsquirrel_jni_NativeProcessors_cogroup(
     jlong schema_out_right_addr, jlong array_out_right_addr) {
   (void)env;
 
-  int initialized = 0;
-  MPI_Initialized(&initialized);
-  if (!initialized) {
-    int provided = 0;
-    int argc = 0; char** argv = nullptr;
-    MPI_Init_thread(&argc, &argv, MPI_THREAD_SINGLE, &provided);
-  }
-  g_mpi_started = true;
+  ensure_mpi();
   int rank = 0, world = 1;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &world);

@@ -190,13 +190,20 @@ int main(int argc, char** argv) {
     JavaVM* jvm;
     JNIEnv* env;
     JavaVMInitArgs vm_args;
-    JavaVMOption options[3];
+    JavaVMOption options[10];
     std::string s = "-Djava.class.path=" + jar;
-    options[0].optionString = (char*) s.c_str();
-    options[1].optionString = "-XX:+UseG1GC"; //user full gc to avoid memory leak
+    int opt = 0;
+    options[opt++].optionString = (char*) s.c_str();
+    options[opt++].optionString = (char*) "-XX:+UseG1GC"; // concurrent GC
+    options[opt++].optionString = (char*) "-XX:+ExplicitGCInvokesConcurrent";
+    options[opt++].optionString = (char*) "-XX:+UseStringDeduplication";
+    options[opt++].optionString = (char*) "-XX:MaxGCPauseMillis=200";
+    options[opt++].optionString = (char*) "-XX:InitiatingHeapOccupancyPercent=30";
+    options[opt++].optionString = (char*) "-XX:MaxTenuringThreshold=8";
+    options[opt++].optionString = (char*) "-XX:MaxDirectMemorySize=1024m";
     //options[1].optionString = "-verbose:jni";
     vm_args.version = JNI_VERSION_1_8;
-    vm_args.nOptions = 2;
+    vm_args.nOptions = opt;
     vm_args.options = options;
     vm_args.ignoreUnrecognized = JNI_TRUE;
     int status = JNI_CreateJavaVM(&jvm, (void**)&env, &vm_args);

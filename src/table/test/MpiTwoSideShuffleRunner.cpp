@@ -4,6 +4,7 @@
 #include <mpi.h>
 #include <arrow/api.h>
 #include <iostream>
+#include <algorithm>
 
 #include "table/processors.h"
 
@@ -61,7 +62,32 @@ int main(int argc, char** argv) {
     return 3;
   }
 
+  // Global verification: gather keys and compare to expected set
+  std::vector<int64_t> local_keys;
+  local_keys.reserve(shuffled->num_rows());
+  for (int64_t i = 0; i < shuffled->num_rows(); ++i) {
+    auto s = key_col->GetScalar(i).ValueOrDie();
+    int64_t k = std::static_pointer_cast<arrow::Int64Scalar>(s)->value;
+    local_keys.push_back(k);
+  }
+  int local_n = static_cast<int>(local_keys.size());
+  std::vector<int> counts(world, 0);
+  MPI_Gather(&local_n, 1, MPI_INT, counts.data(), 1, MPI_INT, 0, MPI_COMM_WORLD);
+  std::vector<int> displs; int total = 0;
+  if (rank == 0) { displs.resize(world, 0); for (int i = 0; i < world; ++i) { displs[i] = total; total += counts[i]; } }
+  std::vector<int64_t> all_keys; if (rank == 0) all_keys.resize(total);
+  MPI_Gatherv(local_keys.data(), local_n, MPI_LONG_LONG,
+              rank == 0 ? all_keys.data() : nullptr,
+              rank == 0 ? counts.data() : nullptr,
+              rank == 0 ? displs.data() : nullptr,
+              MPI_LONG_LONG, 0, MPI_COMM_WORLD);
+  if (rank == 0) {
+    std::vector<int64_t> expected; expected.reserve(4 * world);
+    for (int r = 0; r < world; ++r) { for (int i = 0; i < 4; ++i) expected.push_back(static_cast<int64_t>(r) * 100 + i * 7); }
+    std::sort(expected.begin(), expected.end()); std::sort(all_keys.begin(), all_keys.end());
+    if (expected != all_keys) { std::cerr << "Two-sided global key set mismatch after shuffle" << std::endl; MPI_Abort(MPI_COMM_WORLD, 4); return 4; }
+  }
+
   MPI_Finalize();
   return 0;
 }
-

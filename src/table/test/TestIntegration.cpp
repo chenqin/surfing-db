@@ -464,31 +464,6 @@ TEST(TableTest, TestUtils) {
   EXPECT_EQ(arrow_table_ptr_desr->num_rows(), arrow_table_ptr->num_rows());
 }
 
-TEST(TableTest, TestXGBOperator) {
-  RowSchema r;
-  Field f =
-      SchemaUtils::initField(r, "test", RowType::DOUBLE, sizeof(DOUBLE_TYPE));
-  XGBParameters parameters;
-  parameters.tree_method = "hist";
-  parameters.objective = "binary:logistic";
-  parameters.min_child_weight = 1;
-  parameters.gamma = 0.1;
-  parameters.max_depth = 1;
-  parameters.verbosity = true;
-  parameters.eval_metric = "error";
-  xgbop op(r.fields, f, parameters, 0, 1);
-  const float data1[] = {0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                         1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-                         0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0};
-  const float label1[] = {0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                          1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-                          0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0};
-  op.train(data1, label1, 50, 1);
-  const float label2[] = {0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                          1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-                          0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0};
-  op.predict(data1, label2, 50, 1);
-}
 
 TEST(TableTest, TestSketchFrequency) {
   typedef datasketches::frequent_items_sketch<std::string>

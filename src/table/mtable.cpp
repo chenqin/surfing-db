@@ -22,7 +22,6 @@
 #include "KMeanOperator.h"
 #include "arrow/io/file.h"
 #include "parquet/stream_writer.h"
-#include "xgbop.h"
 
 namespace matcha {
 namespace table {
@@ -392,8 +391,7 @@ void mtable::print() {
 }
 
 /**
- * for xgboost, we need to extract list of numerical fields and pass as array
- * map float
+ * Extract a list of numerical fields and write as contiguous float array.
  * @param fields features
  * @param data pointer to external float array
  */

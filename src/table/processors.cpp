@@ -18,10 +18,10 @@
 #include <arrow/c/bridge.h>
 #include <arrow/c/helpers.h>
 #include <omp.h>
+#include <cstdlib>
 
 #include "mtable.h"
 #include "utils.h"
-#include "xgbop.h"
 
 namespace matcha {
 namespace table {
@@ -103,32 +103,6 @@ void processors::reduce(
   }
 }
 
-void processors::xgb(std::shared_ptr<mtable> input, std::vector<Field> features,
-                     Field& label, const XGBParameters& parameters) {
-  xgbop op(features, label, parameters, input->getNodePtr()->rank,
-           input->getNodePtr()->world);
-  std::vector<float> features_matrix;
-  features_matrix.resize(op.features() *
-                         input->row_size());          // number of features
-  input->readFields(op.fields, &features_matrix[0]);  // read from temp table
-
-  std::vector<float> label_matrix;         // number of labels
-  label_matrix.resize(input->row_size());  // number of rows
-
-  if (op.parameters.isTraining) {
-    input->readField(op.labelField, &label_matrix[0]);
-    size_t total_row_count = input->row_size();
-    op.gather(&features_matrix[0], &label_matrix[0], total_row_count,
-              op.features());  // gather training dataset to root
-    op.train(&features_matrix[0], &label_matrix[0], total_row_count,
-             op.features());
-    op.syncModel();  // send model to all processes from root
-  } else {
-    op.predict(&features_matrix[0], &label_matrix[0], input->row_size(),
-               op.features());
-    input->writeField(op.labelField, &label_matrix[0]);
-  }
-}
 
 std::shared_ptr<arrow::RecordBatch> processors::shuffle_one_side(
     const arrow::RecordBatchVector& batches,
@@ -166,6 +140,19 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle_one_side(
   for (int j = 0; j < world; j++) {
     auto send_to_dest_table =
         utils::group_two(batches, filedname, partitioner, j, rank, world);
+    // Optional spill to disk for large partitions when configured
+    const char* spill_dir = std::getenv("MATCHA_SPILL_DIR");
+    const char* spill_rows_env = std::getenv("MATCHA_SPILL_MAX_ROWS");
+    if (spill_dir && send_to_dest_table->num_rows() > 0) {
+      int64_t max_rows = spill_rows_env ? std::strtoll(spill_rows_env, nullptr, 10) : 100000;
+      auto maybe_paths = utils::SpillRecordBatchToIpcFiles(send_to_dest_table, spill_dir, max_rows);
+      if (maybe_paths.ok()) {
+        auto& paths = maybe_paths.ValueUnsafe();
+        if (!paths.empty()) {
+          LOG(INFO) << "Spilled partition to " << paths.size() << " file(s) under " << spill_dir;
+        }
+      }
+    }
     auto buffer = utils::serialize(send_to_dest_table);
     // store data get pulled from rank j to send_buffers[j]
     send_buffers[j] = buffer;
@@ -243,7 +230,25 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle_one_side(
   for (auto& batch : arrow_tables) {
     total_rows += batch->num_rows();
   }
-  return utils::merge(arrow_tables, schema);
+  auto out_batch = utils::merge(arrow_tables, schema);
+  // Optional post-shuffle spill based on row threshold
+  const char* post_spill_dir = std::getenv("MATCHA_POST_SHUFFLE_SPILL_DIR");
+  const char* post_spill_min_rows_env = std::getenv("MATCHA_POST_SHUFFLE_SPILL_MIN_ROWS");
+  const char* post_spill_max_rows_env = std::getenv("MATCHA_POST_SHUFFLE_SPILL_MAX_ROWS");
+  if (post_spill_dir) {
+    int64_t min_rows = post_spill_min_rows_env ? std::strtoll(post_spill_min_rows_env, nullptr, 10) : LLONG_MAX;
+    int64_t max_rows = post_spill_max_rows_env ? std::strtoll(post_spill_max_rows_env, nullptr, 10) : 100000;
+    if (out_batch->num_rows() >= min_rows) {
+      auto maybe_paths = utils::SpillRecordBatchToIpcFiles(out_batch, post_spill_dir, max_rows);
+      if (maybe_paths.ok()) {
+        auto& paths = maybe_paths.ValueUnsafe();
+        if (!paths.empty()) {
+          LOG(INFO) << "Post-shuffle spill: wrote " << paths.size() << " file(s) to " << post_spill_dir;
+        }
+      }
+    }
+  }
+  return out_batch;
 
 /*
   start = MPI_Wtime();
@@ -367,7 +372,27 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle_two_side(
                 MPI_COMM_WORLD);
   // check before and after shuffle total row count equal
   CHECK_EQ(shuffle_row_sum, orgin_row_sum);
-  return utils::merge(arrow_tables, schema);
+  auto out_batch2 = utils::merge(arrow_tables, schema);
+  // Optional post-shuffle spill based on row threshold
+  {
+    const char* post_spill_dir = std::getenv("MATCHA_POST_SHUFFLE_SPILL_DIR");
+    const char* post_spill_min_rows_env = std::getenv("MATCHA_POST_SHUFFLE_SPILL_MIN_ROWS");
+    const char* post_spill_max_rows_env = std::getenv("MATCHA_POST_SHUFFLE_SPILL_MAX_ROWS");
+    if (post_spill_dir) {
+      int64_t min_rows = post_spill_min_rows_env ? std::strtoll(post_spill_min_rows_env, nullptr, 10) : LLONG_MAX;
+      int64_t max_rows = post_spill_max_rows_env ? std::strtoll(post_spill_max_rows_env, nullptr, 10) : 100000;
+      if (out_batch2->num_rows() >= min_rows) {
+        auto maybe_paths = utils::SpillRecordBatchToIpcFiles(out_batch2, post_spill_dir, max_rows);
+        if (maybe_paths.ok()) {
+          auto& paths = maybe_paths.ValueUnsafe();
+          if (!paths.empty()) {
+            LOG(INFO) << "Post-shuffle spill: wrote " << paths.size() << " file(s) to " << post_spill_dir;
+          }
+        }
+      }
+    }
+  }
+  return out_batch2;
 }
 
 std::shared_ptr<arrow::RecordBatch> processors::shuffle(

@@ -32,6 +32,8 @@ public final class NativeProcessors {
                                        long schemaRightOut, long arrayRightOut);
 
     private static native void finalizeMPI();
+    private static native int mpiRank();
+    private static native int mpiWorld();
 
     /**
      * Shuffle the input RecordBatch by <fieldName>, using hash-based partitioning.
@@ -90,4 +92,9 @@ public final class NativeProcessors {
             return new VectorSchemaRoot[]{ leftOut, rightOut };
         }
     }
+
+    /** Return the rank (0..world-1) of this JVM in the native MPI world. */
+    public static int getMpiRank() { return mpiRank(); }
+    /** Return the native MPI world size. */
+    public static int getMpiWorld() { return mpiWorld(); }
 }

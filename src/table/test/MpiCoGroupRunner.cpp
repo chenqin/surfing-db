@@ -4,6 +4,7 @@
 #include <mpi.h>
 #include <arrow/api.h>
 #include <iostream>
+#include <algorithm>
 
 #include "table/processors.h"
 
@@ -85,6 +86,43 @@ int main(int argc, char** argv) {
               << " R=" << global_rows_R << std::endl;
     MPI_Abort(MPI_COMM_WORLD, 2);
     return 2;
+  }
+
+  // Global verification: gather and compare left keys
+  auto gather_keys = [&](std::shared_ptr<arrow::RecordBatch> b) {
+    std::vector<int64_t> local;
+    if (b) {
+      auto kc = b->GetColumnByName("key");
+      for (int64_t i = 0; i < b->num_rows(); ++i) {
+        auto s = kc->GetScalar(i).ValueOrDie();
+        local.push_back(std::static_pointer_cast<arrow::Int64Scalar>(s)->value);
+      }
+    }
+    int n = static_cast<int>(local.size());
+    std::vector<int> counts(world, 0);
+    MPI_Gather(&n, 1, MPI_INT, counts.data(), 1, MPI_INT, 0, MPI_COMM_WORLD);
+    std::vector<int> displs; int total = 0;
+    if (rank == 0) { displs.resize(world, 0); for (int i = 0; i < world; ++i) { displs[i] = total; total += counts[i]; } }
+    std::vector<int64_t> all; if (rank == 0) all.resize(total);
+    MPI_Gatherv(local.data(), n, MPI_LONG_LONG,
+                rank == 0 ? all.data() : nullptr,
+                rank == 0 ? counts.data() : nullptr,
+                rank == 0 ? displs.data() : nullptr,
+                MPI_LONG_LONG, 0, MPI_COMM_WORLD);
+    return all;
+  };
+
+  auto all_L = gather_keys(Lp);
+  auto all_R = gather_keys(Rp);
+  if (rank == 0) {
+    std::vector<int64_t> expL, expR;
+    expL.reserve(2 * world); expR.reserve(2 * world);
+    for (int r = 0; r < world; ++r) { expL.push_back(r); expL.push_back(r + 2); }
+    for (int r = 0; r < world; ++r) { expR.push_back(r); expR.push_back(r + 3); }
+    std::sort(expL.begin(), expL.end()); std::sort(expR.begin(), expR.end());
+    std::sort(all_L.begin(), all_L.end()); std::sort(all_R.begin(), all_R.end());
+    if (expL != all_L) { std::cerr << "Global key set mismatch (left) after cogroup" << std::endl; MPI_Abort(MPI_COMM_WORLD, 5); return 5; }
+    if (expR != all_R) { std::cerr << "Global key set mismatch (right) after cogroup" << std::endl; MPI_Abort(MPI_COMM_WORLD, 6); return 6; }
   }
 
   // Check schemas contain all expected fields on each side

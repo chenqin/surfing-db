@@ -4,81 +4,92 @@ on:
   push:
     branches: [ main, master ]
   pull_request:
-    branches: [ "**" ]
-
-permissions:
-  contents: read
+    branches: [ main, master ]
 
 jobs:
-  build-and-test-quick:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 120
+  build-unit:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java 8
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '8'
-
-      - name: Cache Arrow build/install
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/apache-arrow-12.0.0
-            ~/arrow-12-install
-          key: arrow-12-${{ runner.os }}-v1
-          restore-keys: |
-            arrow-12-${{ runner.os }}-
-
-      - name: Build and install (no MPI tests)
+      - name: Install base dependencies
         run: |
-          chmod +x scripts/build_install.sh
-          ./scripts/build_install.sh
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            build-essential cmake ninja-build pkg-config git curl ca-certificates \
+            libomp-dev libopenmpi-dev openmpi-bin \
+            libssl-dev libboost-dev libgoogle-glog-dev \
+            libcurl4-openssl-dev zlib1g-dev libzstd-dev liblz4-dev libsnappy-dev libbrotli-dev \
+            libthrift-dev
 
-      - name: Run tests
+      - name: Install Apache Arrow dev packages
+        run: |
+          set -euxo pipefail
+          sudo apt-get install -y lsb-release wget gnupg
+          CODENAME=$(lsb_release --codename --short)
+          DEB_URL="https://apache.jfrog.io/artifactory/arrow/ubuntu/apache-arrow-apt-source-latest-${CODENAME}.deb"
+          ALT_URL="https://packages.apache.org/artifactory/arrow/ubuntu/apache-arrow-apt-source-latest-noble.deb"
+          TMP_DEB=/tmp/apache-arrow-apt-source.deb
+          if ! wget -q -O "$TMP_DEB" "$DEB_URL"; then wget -q -O "$TMP_DEB" "$ALT_URL"; fi
+          sudo apt-get install -y "$TMP_DEB"
+          sudo apt-get update -y
+          sudo apt-get install -y libarrow-dev libparquet-dev libarrow-compute-dev libarrow-dataset-dev
+
+      - name: Configure
+        run: cmake -S . -B build -GNinja
+
+      - name: Build unit tests
+        run: ninja -C build SurfingDbTests
+
+      - name: Run unit tests
         env:
-          CTEST_OUTPUT_ON_FAILURE: '1'
-        run: |
-          chmod +x scripts/run_tests.sh
-          ./scripts/run_tests.sh --no-mpi
+          CTEST_OUTPUT_ON_FAILURE: 1
+        run: ctest --test-dir build -R SurfingDbTests -j2
 
-  mpi-tests:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 180
+  mpi-nested:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        np: [2, 4]
+        mode: [one, two]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java 8
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '8'
-
-      - name: Cache Arrow build/install
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/apache-arrow-12.0.0
-            ~/arrow-12-install
-          key: arrow-12-${{ runner.os }}-v1
-          restore-keys: |
-            arrow-12-${{ runner.os }}-
-
-      - name: Build and install (MPI tests enabled)
-        env:
-          CMAKE_EXTRA_FLAGS: -DENABLE_MPI_TESTS=ON
+      - name: Install build + MPI deps
         run: |
-          chmod +x scripts/build_install.sh
-          ./scripts/build_install.sh
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            build-essential cmake ninja-build pkg-config git curl ca-certificates \
+            libomp-dev libopenmpi-dev openmpi-bin \
+            libssl-dev libboost-dev libgoogle-glog-dev \
+            libcurl4-openssl-dev zlib1g-dev libzstd-dev liblz4-dev libsnappy-dev libbrotli-dev \
+            libthrift-dev
 
-      - name: Run tests (including MPI)
-        env:
-          CTEST_OUTPUT_ON_FAILURE: '1'
-          SHUFFLE_TEST_SEED: '12345'
+      - name: Install Apache Arrow dev packages
         run: |
-          chmod +x scripts/run_tests.sh
-          ./scripts/run_tests.sh
+          set -euxo pipefail
+          sudo apt-get install -y lsb-release wget gnupg
+          CODENAME=$(lsb_release --codename --short)
+          DEB_URL="https://apache.jfrog.io/artifactory/arrow/ubuntu/apache-arrow-apt-source-latest-${CODENAME}.deb"
+          ALT_URL="https://packages.apache.org/artifactory/arrow/ubuntu/apache-arrow-apt-source-latest-noble.deb"
+          TMP_DEB=/tmp/apache-arrow-apt-source.deb
+          if ! wget -q -O "$TMP_DEB" "$DEB_URL"; then wget -q -O "$TMP_DEB" "$ALT_URL"; fi
+          sudo apt-get install -y "$TMP_DEB"
+          sudo apt-get update -y
+          sudo apt-get install -y libarrow-dev libparquet-dev libarrow-compute-dev libarrow-dataset-dev
+
+      - name: Configure (MPI tests enabled)
+        run: cmake -S . -B build -GNinja -DENABLE_MPI_TESTS=ON
+
+      - name: Build nested MPI tests
+        run: ninja -C build MpiNestedShuffleTest MpiNestedCoGroupTest
+
+      - name: Run nested MPI tests (${{ matrix.mode }}, np=${{ matrix.np }})
+        env:
+          CTEST_OUTPUT_ON_FAILURE: 1
+        run: |
+          ctest --test-dir build -R "MpiNested(Shuffle|CoGroup)_${{ matrix.mode }}_np${{ matrix.np }}" -V
+
