@@ -21,6 +21,7 @@ created @Maui, Hawaii, U.S.A since 2021
     - `--build-arrow` to build Arrow from source
     - `--arrow-prefix <DIR>` Arrow install prefix for source build (default: `$HOME/arrow-12-install`)
     - `--arrow-version <X.Y.Z>` Arrow version for source build (default: `12.0.0`)
+    - `--install-cuda` install CUDA toolkit via Ubuntu/Debian package `nvidia-cuda-toolkit` (nvcc)
   - Options:
     - `--no-sudo` to avoid sudo for apt
     - `--arrow-prefix <DIR>` to set Arrow install prefix (default: `$HOME/arrow-12-install`)
@@ -29,6 +30,10 @@ created @Maui, Hawaii, U.S.A since 2021
   - `./scripts/run_tests.sh`
   - Runs C++ unit tests, MPI shuffle tests (np=2,4), and Java tests.
   - For randomized MPI tests you can set `SHUFFLE_TEST_SEED=<uint64>` to make runs deterministic.
+  - Nested MPI tests (shuffle + cogroup):
+    - Quick: `./scripts/run_nested_mpi_tests.sh --np 2`
+    - Full: `./scripts/run_nested_mpi_tests.sh --np all` (np=2 and np=4)
+    - Rebuild targets: add `--build`
 
 ## How To Run Locally (Quick Guide)
 
@@ -42,12 +47,17 @@ Build
   - `./scripts/build_install.sh`
 - Enable MPI tests at configure time:
   - `CMAKE_EXTRA_FLAGS=-DENABLE_MPI_TESTS=ON ./scripts/build_install.sh`
+- Enable CUDA support in the C++ build (optional):
+  - Install CUDA toolkit: `./scripts/build_install.sh --install-cuda`
+  - Configure with CUDA enabled: `CMAKE_EXTRA_FLAGS=-DENABLE_CUDA=ON ./scripts/build_install.sh`
 
 Run all tests
 - Full suite (includes MPI if enabled):
   - `./scripts/run_tests.sh`
 - Quick (skip MPI):
   - `./scripts/run_tests.sh --no-mpi`
+ - Nested-only:
+   - `./scripts/run_nested_mpi_tests.sh --np all`
 
 Run MPI tests manually
 - From `build/`:
@@ -71,6 +81,14 @@ Run Java tests (JNI included)
   - `export LD_LIBRARY_PATH=$PWD/build:$LD_LIBRARY_PATH`
 - Run:
   - `mvn -f drsquirrel-java/pom.xml -Darrow.version=12.0.0 test`
+
+Run nested JNI under MPI (4 ranks)
+- Build shaded jar first:
+  - `mvn -f drsquirrel-java/pom.xml -Darrow.version=12.0.0 -DskipTests package`
+- Then run nested shuffle + cogroup via mpiexec (profile helper):
+  - `mvn -f drsquirrel-java/pom.xml -P jni-nested -Dnp=4 -Dmode=all -DskipTests verify`
+  - Or directly:
+    - `mpiexec -np 4 java -Djava.library.path=$PWD/build -cp drsquirrel-java/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar com.pinterest.drsquirrel.jni.JniNestedRunner all`
 
 MPI Java JNI Runner (2 ranks)
 - Build shaded jar:

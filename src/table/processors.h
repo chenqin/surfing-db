@@ -27,7 +27,6 @@
 #include <utility>
 
 #include "mtable.h"
-#include "xgbop.h"
 // #include <torch/csrc/distributed/c10d/ProcessGroupMPI.hpp>
 // #include <torch/csrc/distributed/c10d/Work.hpp>
 // #include <torch/torch.h>
@@ -69,8 +68,6 @@ class processors {
       std::shared_ptr<mschema> result_schema_ptr,
       std::function<void(Value&, std::vector<std::unique_ptr<mrow>>&,
                          std::shared_ptr<mrow>&)>);
-  static void xgb(std::shared_ptr<mtable>, std::vector<Field>, Field&,
-                  const XGBParameters&);
 
   static std::shared_ptr<arrow::RecordBatch> shuffle(
       std::shared_ptr<arrow::RecordBatch>&, std::string,

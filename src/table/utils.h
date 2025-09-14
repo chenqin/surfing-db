@@ -19,11 +19,16 @@
 #pragma once
 
 #include <arrow/api.h>
+#include <jni.h>
 #include <arrow/compute/api.h>
 #include <arrow/json/api.h>
 #include <cstdarg>
 #include <fcntl.h>
 #include <future>
+#include <filesystem>
+#include <chrono>
+#include <sstream>
+#include <unistd.h>
 #include <math.h>
 #include <mpi.h>
 #include <stdio.h>
@@ -40,11 +45,12 @@
 #include "KMeanOperator.h"
 #include "frequent_items_sketch.hpp"
 #include "mrow.h"
-#include "xgbop.h"
+#include "mtable.h"
 
 #pragma once
 
 namespace matcha {
+namespace meta { class node; }
 namespace table {
 using namespace matcha::meta;
 
@@ -743,6 +749,68 @@ public:
       arrays.push_back(_array);
     }
     return arrow::RecordBatch::Make(toArrow(table->getSchema()), table->row_count, arrays);
+  }
+
+  // Split a RecordBatch into row chunks and spill each chunk to an Arrow IPC file on disk.
+  // Returns a vector of file paths written.
+  static arrow::Result<std::vector<std::string>> SpillRecordBatchToIpcFiles(
+      const std::shared_ptr<arrow::RecordBatch>& batch,
+      const std::string& out_dir,
+      int64_t max_rows_per_file) {
+    std::vector<std::string> paths;
+    if (!batch || batch->num_rows() == 0) return paths;
+    if (max_rows_per_file <= 0) max_rows_per_file = batch->num_rows();
+
+    namespace fs = std::filesystem;
+    fs::create_directories(out_dir);
+
+    int64_t rows = batch->num_rows();
+    int64_t written = 0;
+    int chunk_idx = 0;
+    auto schema = batch->schema();
+    while (written < rows) {
+      int64_t chunk_rows = std::min<int64_t>(max_rows_per_file, rows - written);
+      std::vector<std::shared_ptr<arrow::Array>> cols;
+      cols.reserve(batch->num_columns());
+      for (int i = 0; i < batch->num_columns(); ++i) {
+        cols.push_back(batch->column(i)->Slice(written, chunk_rows));
+      }
+      auto chunk = arrow::RecordBatch::Make(schema, chunk_rows, cols);
+
+      // Build a unique file path
+      auto now = std::chrono::steady_clock::now().time_since_epoch();
+      auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(now).count();
+      std::ostringstream oss;
+      oss << "spill_" << ::getpid() << "_" << ns << "_" << chunk_idx << ".arrow";
+      fs::path p = fs::path(out_dir) / oss.str();
+
+      ARROW_ASSIGN_OR_RAISE(auto sink, arrow::io::FileOutputStream::Open(p.string()));
+      ARROW_ASSIGN_OR_RAISE(auto writer, arrow::ipc::MakeFileWriter(sink, schema));
+      ARROW_RETURN_NOT_OK(writer->WriteRecordBatch(*chunk));
+      ARROW_RETURN_NOT_OK(writer->Close());
+      ARROW_RETURN_NOT_OK(sink->Close());
+      paths.push_back(p.string());
+
+      written += chunk_rows;
+      ++chunk_idx;
+    }
+    return paths;
+  }
+
+  // Load all first record batches from a list of Arrow IPC files.
+  static arrow::Result<arrow::RecordBatchVector> LoadRecordBatchesFromIpcFiles(
+      const std::vector<std::string>& paths) {
+    arrow::RecordBatchVector out;
+    for (const auto& path : paths) {
+      ARROW_ASSIGN_OR_RAISE(auto infile, arrow::io::ReadableFile::Open(path));
+      ARROW_ASSIGN_OR_RAISE(auto reader, arrow::ipc::RecordBatchFileReader::Open(infile));
+      if (reader->num_record_batches() > 0) {
+        ARROW_ASSIGN_OR_RAISE(auto rb, reader->ReadRecordBatch(0));
+        out.push_back(rb);
+      }
+      ARROW_RETURN_NOT_OK(infile->Close());
+    }
+    return out;
   }
 };
 

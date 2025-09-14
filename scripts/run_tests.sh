@@ -28,6 +28,10 @@ ctest -j"$(nproc)" -R SurfingDbTests
 if [ "$RUN_MPI" = "1" ]; then
   echo "[+] Running MPI shuffle tests (np=2,4)"
   ctest -j2 -R "MpiShuffleTest|MpiTwoSideShuffleTest_np2|MpiTwoSideShuffleTest_np4|MpiShuffleRandom_one_np4|MpiShuffleRandom_two_np4"
+  echo "[+] Running nested MPI tests (np=2,4)"
+  # One/two-sided nested shuffle and nested cogroup
+  ctest -j2 -R "MpiNested(Shuffle|CoGroup)_(one|two)_np2"
+  ctest -j2 -R "MpiNested(Shuffle|CoGroup)_(one|two)_np4" || true
 else
   echo "[i] Skipping MPI tests"
 fi

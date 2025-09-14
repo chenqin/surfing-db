@@ -53,7 +53,7 @@ int main(int argc, char* argv[]) {
   const auto node = std::make_shared<matcha::meta::node>(&argc, &argv);
   std::signal(SIGTERM | SIGINT, signal_handler);
 
-  JavaVMOption options[10];
+  JavaVMOption options[16];
 
   options[0].optionString = const_cast<char*>("-XX:+UseG1GC");
   options[1].optionString = const_cast<char*>("-Xmx536870902");
@@ -65,10 +65,17 @@ int main(int argc, char* argv[]) {
   options[7].optionString = const_cast<char*>("-Dlog4j.configurationFile=file:/home/chen/flink/flink-dist/target/flink-1.18-SNAPSHOT-bin/flink-1.18-SNAPSHOT/conf/log4j.properties");
   options[8].optionString = const_cast<char*>("-Dlogback.configurationFile=file:/home/chen/flink/flink-dist/target/flink-1.18-SNAPSHOT-bin/flink-1.18-SNAPSHOT/conf/logback.xml");
   options[9].optionString = const_cast<char*>("-Djava.class.path=/home/chen/flink/flink-dist/target/flink-1.18-SNAPSHOT-bin/flink-1.18-SNAPSHOT/lib/flink-cep-1.18-SNAPSHOT.jar:/home/chen/flink/flink-dist/target/flink-1.18-SNAPSHOT-bin/flink-1.18-SNAPSHOT/lib/flink-connector-files-1.18-SNAPSHOT.jar:/home/chen/flink/flink-dist/target/flink-1.18-SNAPSHOT-bin/flink-1.18-SNAPSHOT/lib/flink-csv-1.18-SNAPSHOT.jar:/home/chen/flink/flink-dist/target/flink-1.18-SNAPSHOT-bin/flink-1.18-SNAPSHOT/lib/flink-json-1.18-SNAPSHOT.jar:/home/chen/flink/flink-dist/target/flink-1.18-SNAPSHOT-bin/flink-1.18-SNAPSHOT/lib/flink-scala_2.12-1.18-SNAPSHOT.jar:/home/chen/flink/flink-dist/target/flink-1.18-SNAPSHOT-bin/flink-1.18-SNAPSHOT/lib/flink-table-api-java-uber-1.18-SNAPSHOT.jar:/home/chen/flink/flink-dist/target/flink-1.18-SNAPSHOT-bin/flink-1.18-SNAPSHOT/lib/flink-table-planner-loader-1.18-SNAPSHOT.jar:/home/chen/flink/flink-dist/target/flink-1.18-SNAPSHOT-bin/flink-1.18-SNAPSHOT/lib/flink-table-runtime-1.18-SNAPSHOT.jar:/home/chen/flink/flink-dist/target/flink-1.18-SNAPSHOT-bin/flink-1.18-SNAPSHOT/lib/log4j-1.2-api-2.17.1.jar:/home/chen/flink/flink-dist/target/flink-1.18-SNAPSHOT-bin/flink-1.18-SNAPSHOT/lib/log4j-api-2.17.1.jar:/home/chen/flink/flink-dist/target/flink-1.18-SNAPSHOT-bin/flink-1.18-SNAPSHOT/lib/log4j-core-2.17.1.jar:/home/chen/flink/flink-dist/target/flink-1.18-SNAPSHOT-bin/flink-1.18-SNAPSHOT/lib/log4j-slf4j-impl-2.17.1.jar:/home/chen/flink/flink-dist/target/flink-1.18-SNAPSHOT-bin/flink-1.18-SNAPSHOT/lib/flink-dist-1.18-SNAPSHOT.jar::::");
+  // GC finetune
+  options[10].optionString = const_cast<char*>("-XX:+ExplicitGCInvokesConcurrent");
+  options[11].optionString = const_cast<char*>("-XX:+UseStringDeduplication");
+  options[12].optionString = const_cast<char*>("-XX:MaxGCPauseMillis=200");
+  options[13].optionString = const_cast<char*>("-XX:InitiatingHeapOccupancyPercent=30");
+  options[14].optionString = const_cast<char*>("-XX:MaxTenuringThreshold=8");
+  options[15].optionString = const_cast<char*>("-XX:MaxDirectMemorySize=1024m");
 
   JavaVMInitArgs vm_args;
   vm_args.version = JNI_VERSION_1_8;
-  vm_args.nOptions = 10;
+  vm_args.nOptions = 16;
   vm_args.options = options;
   vm_args.ignoreUnrecognized = JNI_TRUE;
 

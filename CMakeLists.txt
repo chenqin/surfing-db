@@ -1,7 +1,9 @@
 # Require CMake 3.16+ on Mac OSX, as previous versions of CMake had trouble locating
-# OpenMP on Mac. See https://github.com/dmlc/xgboost/pull/5146#issuecomment-568312706
+# OpenMP on some environments
 cmake_minimum_required(VERSION 3.10)
 project(matcha LANGUAGES CXX VERSION 0.1)
+
+option(ENABLE_CUDA "Enable CUDA support" OFF)
 
 option(ENABLE_MPI_TESTS "Enable MPI-based shuffle tests" OFF)
 
@@ -23,12 +25,16 @@ find_package(CURL REQUIRED)
 find_package(JNI REQUIRED)
 include_directories(${JNI_INCLUDE_DIRS})
 
-SET(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc")
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
-#list(APPEND CMAKE_PREFIX_PATH "~/libtorch")
-#find_package(CUDA REQUIRED 11.8)
-#find_package(CUDAToolkit REQUIRED 11.8)
-#enable_language(CUDA)
+if(ENABLE_CUDA)
+    if(NOT DEFINED CMAKE_CUDA_COMPILER)
+        # Allow override via environment; default to common install path
+        set(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc" CACHE FILEPATH "CUDA compiler")
+    endif()
+    enable_language(CUDA)
+    set(CMAKE_CUDA_STANDARD 14)
+    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+    find_package(CUDAToolkit REQUIRED)
+endif()
 
 #find_package(Torch REQUIRED)
 #find_package(ArrowCUDA REQUIRED)
@@ -266,7 +272,6 @@ find_package(Python3 COMPONENTS Interpreter Development)
 
 # include ML libs
 include(ext/Sketches_Ext.cmake)
-include(ext/XGBoost_Ext.cmake)
 #find_package(lz4)
 ## Removed C++ Kafka connector; Java-native consumer is used instead
 
@@ -291,7 +296,7 @@ endif()
 option(BUILD_CPP_KAFKA "Build C++ Kafka-based executables" OFF)
 if(BUILD_CPP_KAFKA)
   add_executable(FlinkJobWatcher src/FlinkJobWatcher.cpp)
-  add_dependencies(FlinkJobWatcher thrift xgboost)
+  add_dependencies(FlinkJobWatcher thrift)
 endif()
 
 add_executable(LocalCluster ${MATCHA_SRC}/LocalCluster.cpp)
@@ -307,7 +312,6 @@ endif()
 # workaround make issue for now
 if(BUILD_CPP_KAFKA)
   add_custom_command(TARGET FlinkJobWatcher PRE_BUILD
-          COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target xgboost
           COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target thrift)
 
   add_custom_command(TARGET FlinkJobWatcher PRE_BUILD
@@ -361,8 +365,9 @@ include(GoogleTest)
 
 # Full test binary (integration + others)
 add_executable(SurfingDbTests
-    ${MATCHA_SRC}/table/test/TestIntegration.cpp)
-add_dependencies(SurfingDbTests gtest thrift xgboost)
+    ${MATCHA_SRC}/table/test/TestIntegration.cpp
+    ${MATCHA_SRC}/table/test/TestArrowSpill.cpp)
+add_dependencies(SurfingDbTests gtest thrift)
 target_link_libraries(SurfingDbTests
     PRIVATE ${META}
     PRIVATE ${TABLE}
@@ -373,6 +378,31 @@ target_link_libraries(SurfingDbTests
 gtest_discover_tests(SurfingDbTests
   DISCOVERY_MODE PRE_TEST
 )
+
+# Convenience wrapper to run only the Arrow spill test via CTest
+add_test(NAME ArrowSpillTest
+  COMMAND SurfingDbTests --gtest_filter=ArrowSpillTest.*)
+set_tests_properties(ArrowSpillTest PROPERTIES LABELS "unit;arrow;spill")
+
+# -----------------------------
+# CUDA (optional)
+# -----------------------------
+if(ENABLE_CUDA)
+  # Minimal CUDA utils library
+  add_library(surfingcuda STATIC ${MATCHA_SRC}/cuda/cuda_utils.cu)
+  target_include_directories(surfingcuda PUBLIC ${MATCHA_SRC})
+  target_link_libraries(surfingcuda PRIVATE CUDA::cudart)
+
+  # CUDA tests
+  add_executable(CudaTests ${MATCHA_SRC}/cuda/test/TestCuda.cpp)
+  add_dependencies(CudaTests gtest)
+  target_link_libraries(CudaTests
+      PRIVATE surfingcuda
+      PRIVATE ${GTEST_MAIN_LIBRARY}
+      PRIVATE ${GTEST_LIBRARY})
+  gtest_discover_tests(CudaTests
+    DISCOVERY_MODE PRE_TEST)
+endif()
 
 # Focused thrift parser tests (no table/connector deps)
 add_executable(ThriftParserTests
@@ -397,7 +427,7 @@ include(CTest)
 if(ENABLE_MPI_TESTS)
   find_package(MPI REQUIRED)
   add_executable(MpiShuffleTest ${MATCHA_SRC}/table/test/MpiShuffleRunner.cpp)
-  add_dependencies(MpiShuffleTest thrift xgboost)
+  add_dependencies(MpiShuffleTest thrift)
   target_link_libraries(MpiShuffleTest
       PRIVATE ${TABLE}
       PRIVATE ${META}
@@ -411,7 +441,7 @@ if(ENABLE_MPI_TESTS)
   endif()
 
   add_executable(MpiTwoSideShuffleTest ${MATCHA_SRC}/table/test/MpiTwoSideShuffleRunner.cpp)
-  add_dependencies(MpiTwoSideShuffleTest thrift xgboost)
+  add_dependencies(MpiTwoSideShuffleTest thrift)
   target_link_libraries(MpiTwoSideShuffleTest
       PRIVATE ${TABLE}
       PRIVATE ${META}
@@ -467,5 +497,48 @@ if(ENABLE_MPI_TESTS)
       COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 $<TARGET_FILE:MpiCoGroupTest>)
     add_test(NAME MpiCoGroup_two_np2
       COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 $<TARGET_FILE:MpiCoGroupTest> two)
+  endif()
+
+  # Nested CoGroup tests (one-sided and two-sided)
+  add_executable(MpiNestedCoGroupTest ${MATCHA_SRC}/table/test/MpiNestedCoGroupRunner.cpp)
+  target_link_libraries(MpiNestedCoGroupTest
+      PRIVATE ${TABLE}
+      PRIVATE ${META}
+      PRIVATE ${ARROW_LIBRARY}
+      PRIVATE ${PARQUET_LIBRARY})
+  if(MPI_CXX_FOUND)
+    add_test(NAME MpiNestedCoGroup_one_np2
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 $<TARGET_FILE:MpiNestedCoGroupTest>)
+    add_test(NAME MpiNestedCoGroup_two_np2
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 $<TARGET_FILE:MpiNestedCoGroupTest> two)
+    add_test(NAME MpiNestedCoGroup_one_np4
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 $<TARGET_FILE:MpiNestedCoGroupTest>)
+    add_test(NAME MpiNestedCoGroup_two_np4
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 $<TARGET_FILE:MpiNestedCoGroupTest> two)
+    set_tests_properties(MpiNestedCoGroup_one_np2 PROPERTIES LABELS "mpi;nested")
+    set_tests_properties(MpiNestedCoGroup_two_np2 PROPERTIES LABELS "mpi;nested")
+    set_tests_properties(MpiNestedCoGroup_one_np4 PROPERTIES LABELS "mpi;nested;np4")
+    set_tests_properties(MpiNestedCoGroup_two_np4 PROPERTIES LABELS "mpi;nested;np4")
+  endif()
+  # Nested schema shuffle tests (one-sided and two-sided)
+  add_executable(MpiNestedShuffleTest ${MATCHA_SRC}/table/test/MpiNestedShuffleRunner.cpp)
+  target_link_libraries(MpiNestedShuffleTest
+      PRIVATE ${TABLE}
+      PRIVATE ${META}
+      PRIVATE ${ARROW_LIBRARY}
+      PRIVATE ${PARQUET_LIBRARY})
+  if(MPI_CXX_FOUND)
+    add_test(NAME MpiNestedShuffle_one_np2
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 $<TARGET_FILE:MpiNestedShuffleTest>)
+    add_test(NAME MpiNestedShuffle_two_np2
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 $<TARGET_FILE:MpiNestedShuffleTest> two)
+    add_test(NAME MpiNestedShuffle_one_np4
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 $<TARGET_FILE:MpiNestedShuffleTest>)
+    add_test(NAME MpiNestedShuffle_two_np4
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 $<TARGET_FILE:MpiNestedShuffleTest> two)
+    set_tests_properties(MpiNestedShuffle_one_np2 PROPERTIES LABELS "mpi;nested")
+    set_tests_properties(MpiNestedShuffle_two_np2 PROPERTIES LABELS "mpi;nested")
+    set_tests_properties(MpiNestedShuffle_one_np4 PROPERTIES LABELS "mpi;nested;np4")
+    set_tests_properties(MpiNestedShuffle_two_np4 PROPERTIES LABELS "mpi;nested;np4")
   endif()
 endif()
