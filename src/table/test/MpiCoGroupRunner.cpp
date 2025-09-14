@@ -87,7 +87,26 @@ int main(int argc, char** argv) {
     return 2;
   }
 
+  // Check schemas contain all expected fields on each side
+  if (Lp) {
+    if (Lp->num_columns() != 2 ||
+        !Lp->schema()->GetFieldByName("key") ||
+        !Lp->schema()->GetFieldByName("la")) {
+      std::cerr << "Left partition schema missing expected fields on rank " << rank << std::endl;
+      MPI_Abort(MPI_COMM_WORLD, 3);
+      return 3;
+    }
+  }
+  if (Rp) {
+    if (Rp->num_columns() != 2 ||
+        !Rp->schema()->GetFieldByName("key") ||
+        !Rp->schema()->GetFieldByName("rb")) {
+      std::cerr << "Right partition schema missing expected fields on rank " << rank << std::endl;
+      MPI_Abort(MPI_COMM_WORLD, 4);
+      return 4;
+    }
+  }
+
   MPI_Finalize();
   return 0;
 }
-
