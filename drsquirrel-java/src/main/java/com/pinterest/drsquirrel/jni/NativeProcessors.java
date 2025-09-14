@@ -11,6 +11,10 @@ import org.apache.arrow.vector.VectorSchemaRoot;
 public final class NativeProcessors {
     static {
         System.loadLibrary("surfingprocessorsjni");
+        // Ensure MPI is finalized on JVM shutdown to avoid prterun warnings
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try { finalizeMPI(); } catch (Throwable t) { /* ignore */ }
+        }));
     }
 
     private NativeProcessors() {}
@@ -19,6 +23,15 @@ public final class NativeProcessors {
                                        String fieldName, boolean oneSided,
                                        int rank, int world,
                                        long schemaOutAddr, long arrayOutAddr);
+
+    private static native void cogroup(long schemaLeftIn, long arrayLeftIn,
+                                       long schemaRightIn, long arrayRightIn,
+                                       String fieldName, boolean oneSided,
+                                       int rank, int world,
+                                       long schemaLeftOut, long arrayLeftOut,
+                                       long schemaRightOut, long arrayRightOut);
+
+    private static native void finalizeMPI();
 
     /**
      * Shuffle the input RecordBatch by <fieldName>, using hash-based partitioning.
@@ -43,5 +56,38 @@ public final class NativeProcessors {
             return Data.importVectorSchemaRoot(allocator, outArray, outSchema, null);
         }
     }
-}
 
+    /**
+     * Co-shuffle two inputs by key and return local partitions for both.
+     */
+    public static VectorSchemaRoot[] cogroup(BufferAllocator allocator,
+                                             VectorSchemaRoot left,
+                                             VectorSchemaRoot right,
+                                             String fieldName,
+                                             boolean oneSided,
+                                             int rank,
+                                             int world) {
+        if (allocator == null) allocator = new RootAllocator();
+        try (ArrowArray inLeft = ArrowArray.allocateNew(allocator);
+             ArrowSchema inLeftSchema = ArrowSchema.allocateNew(allocator);
+             ArrowArray inRight = ArrowArray.allocateNew(allocator);
+             ArrowSchema inRightSchema = ArrowSchema.allocateNew(allocator);
+             ArrowArray outLeft = ArrowArray.allocateNew(allocator);
+             ArrowSchema outLeftSchema = ArrowSchema.allocateNew(allocator);
+             ArrowArray outRight = ArrowArray.allocateNew(allocator);
+             ArrowSchema outRightSchema = ArrowSchema.allocateNew(allocator)) {
+
+            Data.exportVectorSchemaRoot(allocator, left, null, inLeft, inLeftSchema);
+            Data.exportVectorSchemaRoot(allocator, right, null, inRight, inRightSchema);
+            cogroup(inLeftSchema.memoryAddress(), inLeft.memoryAddress(),
+                    inRightSchema.memoryAddress(), inRight.memoryAddress(),
+                    fieldName, oneSided, rank, world,
+                    outLeftSchema.memoryAddress(), outLeft.memoryAddress(),
+                    outRightSchema.memoryAddress(), outRight.memoryAddress());
+
+            VectorSchemaRoot leftOut = Data.importVectorSchemaRoot(allocator, outLeft, outLeftSchema, null);
+            VectorSchemaRoot rightOut = Data.importVectorSchemaRoot(allocator, outRight, outRightSchema, null);
+            return new VectorSchemaRoot[]{ leftOut, rightOut };
+        }
+    }
+}

@@ -123,4 +123,161 @@
       </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <profile>
+      <id>jni-load</id>
+      <properties>
+        <np>4</np>
+        <mode></mode>
+        <rows>200000</rows>
+        <iters>3</iters>
+        <iface></iface>
+        <out>${project.build.directory}/jni_shuffle_load.csv</out>
+        <java.library.path>${project.basedir}/../build</java.library.path>
+        <fat.jar>${project.build.directory}/${project.artifactId}-${project.version}-jar-with-dependencies.jar</fat.jar>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>exec-maven-plugin</artifactId>
+            <version>3.5.0</version>
+            <executions>
+              <execution>
+                <id>run-jni-load</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>exec</goal>
+                </goals>
+                <configuration>
+                  <!-- Wrap in bash to force success even if mpiexec returns non-zero in noisy environments -->
+                  <executable>bash</executable>
+                  <arguments>
+                    <argument>-lc</argument>
+                    <argument>
+                      <![CDATA[
+set -eo pipefail; \
+export LD_LIBRARY_PATH="${java.library.path}:${LD_LIBRARY_PATH:-}"; \
+IFACE_OPT=""; \
+if [ -n "${iface}" ]; then IFACE_OPT="--mca btl_tcp_if_include ${iface}"; else IFACE_OPT="--mca btl_tcp_if_exclude lo,docker0"; fi; \
+mpiexec -np ${np} --use-hwthread-cpus --oversubscribe --map-by core --bind-to core \
+  ${IFACE_OPT} \
+  java -Djava.library.path=${java.library.path} -cp ${fat.jar} \
+  com.pinterest.drsquirrel.jni.JniShuffleLoadRunner ${mode} || true
+                      ]]>
+                    </argument>
+                  </arguments>
+                  <environmentVariables>
+                    <SHUFFLE_LOAD_ROWS>${rows}</SHUFFLE_LOAD_ROWS>
+                    <SHUFFLE_LOAD_ITERS>${iters}</SHUFFLE_LOAD_ITERS>
+                    <SHUFFLE_LOAD_OUT>${out}</SHUFFLE_LOAD_OUT>
+                  </environmentVariables>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <profile>
+      <id>jni-cogroup-load</id>
+      <properties>
+        <np>4</np>
+        <mode></mode>
+        <rows>200000</rows>
+        <iters>3</iters>
+        <iface></iface>
+        <out>${project.build.directory}/jni_cogroup_load.csv</out>
+        <java.library.path>${project.basedir}/../build</java.library.path>
+        <fat.jar>${project.build.directory}/${project.artifactId}-${project.version}-jar-with-dependencies.jar</fat.jar>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>exec-maven-plugin</artifactId>
+            <version>3.5.0</version>
+            <executions>
+              <execution>
+                <id>run-jni-cogroup-load</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>exec</goal>
+                </goals>
+                <configuration>
+                  <executable>bash</executable>
+                  <arguments>
+                    <argument>-lc</argument>
+                    <argument>
+                      <![CDATA[
+set -eo pipefail; \
+export LD_LIBRARY_PATH="${java.library.path}:${LD_LIBRARY_PATH:-}"; \
+IFACE_OPT=""; \
+if [ -n "${iface}" ]; then IFACE_OPT="--mca btl_tcp_if_include ${iface}"; else IFACE_OPT="--mca btl_tcp_if_exclude lo,docker0"; fi; \
+mpiexec -np ${np} --use-hwthread-cpus --oversubscribe --map-by core --bind-to core \
+  ${IFACE_OPT} \
+  java -Djava.library.path=${java.library.path} -cp ${fat.jar} \
+  com.pinterest.drsquirrel.jni.JniCogroupLoadRunner ${mode} || true
+                      ]]>
+                    </argument>
+                  </arguments>
+                  <environmentVariables>
+                    <SHUFFLE_LOAD_ROWS>${rows}</SHUFFLE_LOAD_ROWS>
+                    <SHUFFLE_LOAD_ITERS>${iters}</SHUFFLE_LOAD_ITERS>
+                    <SHUFFLE_LOAD_OUT>${out}</SHUFFLE_LOAD_OUT>
+                  </environmentVariables>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <profile>
+      <id>jni-all-load</id>
+      <properties>
+        <rows>200000</rows>
+        <iters>1</iters>
+        <iface></iface>
+        <outDir>${project.basedir}/../build</outDir>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>exec-maven-plugin</artifactId>
+            <version>3.5.0</version>
+            <executions>
+              <execution>
+                <id>run-all-load</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>exec</goal>
+                </goals>
+                <configuration>
+                  <executable>bash</executable>
+                  <arguments>
+                    <argument>-lc</argument>
+                    <argument>
+                      <![CDATA[
+set -eo pipefail; \
+export SHUFFLE_LOAD_ROWS=${rows}; \
+export SHUFFLE_LOAD_ITERS=${iters}; \
+export IFACE=${iface}; \
+export OUT_DIR=${outDir}; \
+./scripts/run_all_load_all_cores.sh || true
+                      ]]>
+                    </argument>
+                  </arguments>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>

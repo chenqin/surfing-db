@@ -75,7 +75,7 @@ if [ "$USE_SYSTEM_ARROW" = "1" ] && [ "$BUILD_ARROW" = "0" ]; then
     rm -f "$TMP_DEB"
   fi
   ${SUDO} ${APT} update -y || true
-  ${SUDO} ${APT} install -y libarrow-dev libparquet-dev libarrow-dataset-dev || {
+  ${SUDO} ${APT} install -y libarrow-dev libparquet-dev libarrow-compute-dev libarrow-dataset-dev || {
     echo "[!] Failed to install Arrow from APT. You can retry with --build-arrow to build from source." >&2
     exit 4
   }
@@ -114,7 +114,7 @@ if [ "$BUILD_ARROW" = "1" ]; then
   mkdir -p "${ARROW_SRC}/cpp/build"
   cmake -S "${ARROW_SRC}/cpp" -B "${ARROW_SRC}/cpp/build" -GNinja \
     -DCMAKE_BUILD_TYPE=Release \
-    -DARROW_PARQUET=ON -DARROW_DATASET=ON -DARROW_JSON=ON -DARROW_FILESYSTEM=ON \
+    -DARROW_COMPUTE=ON -DARROW_PARQUET=ON -DARROW_DATASET=ON -DARROW_JSON=ON -DARROW_FILESYSTEM=ON \
     -DARROW_BUILD_STATIC=ON -DARROW_BUILD_SHARED=OFF \
     -DARROW_WITH_ZSTD=ON -DARROW_WITH_LZ4=ON -DARROW_WITH_SNAPPY=ON -DARROW_WITH_BZ2=ON \
     -DCMAKE_INSTALL_PREFIX="${ARROW_PREFIX}"

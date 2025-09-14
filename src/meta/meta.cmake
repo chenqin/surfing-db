@@ -10,7 +10,8 @@ set(META surfmeta)
 add_library(${META} STATIC
         ${MATCHA_SRC}/meta/gen-cpp
         ${MATCHA_SRC}/meta/node.cpp
-        ${MATCHA_SRC}/meta/schema.cpp)
+        ${MATCHA_SRC}/meta/schema.cpp
+        ${MATCHA_SRC}/meta/thrift_parser.cpp)
 
 set_target_properties(${META} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
@@ -27,3 +28,9 @@ target_link_libraries(${META}
 
 # discover all gtests in this module
 include(GoogleTest)
+
+# CLI tool: thrift2arrow
+add_executable(thrift2arrow ${MATCHA_SRC}/meta/tools/thrift2arrow.cpp)
+target_link_libraries(thrift2arrow
+        PRIVATE ${META}
+        PRIVATE ${ARROW_LIBRARY})

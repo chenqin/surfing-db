@@ -387,6 +387,84 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle(
 }
 
 
+std::pair<std::shared_ptr<arrow::RecordBatch>, std::shared_ptr<arrow::RecordBatch>>
+processors::cogroup(
+    const arrow::RecordBatchVector& left,
+    const arrow::RecordBatchVector& right,
+    std::string field_name,
+    std::function<size_t(size_t, int, int)> partitioner,
+    bool singleside,
+    int rank,
+    int world) {
+  CHECK(world >= 1);
+  CHECK(rank >= 0 && rank < world);
+  // Both sides are allowed to be non-empty; if any side is empty, return an
+  // empty batch with that side's schema if derivable, otherwise an empty batch
+  // matching the other side's schema if keys are the same. For simplicity,
+  // require at least one batch present on each side globally.
+  int local_left = left.size();
+  int local_right = right.size();
+  int total_left = 0, total_right = 0;
+  MPI_Allreduce(&local_left, &total_left, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local_right, &total_right, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  CHECK(total_left >= 0);
+  CHECK(total_right >= 0);
+
+  std::shared_ptr<arrow::RecordBatch> left_out;
+  std::shared_ptr<arrow::RecordBatch> right_out;
+
+  if (total_left > 0) {
+    if (singleside) {
+      left_out = processors::shuffle_one_side(left, field_name, partitioner, rank, world);
+    } else {
+      left_out = processors::shuffle_two_side(left, field_name, partitioner, rank, world);
+    }
+  } else {
+    // If no left globally, synthesize empty with right schema if available.
+    if (total_right > 0) {
+      auto schema = right[0]->schema();
+      left_out = arrow::RecordBatch::MakeEmpty(schema).ValueOrDie();
+    } else {
+      // both empty; return trivially empty using a dummy schema
+      auto schema = arrow::schema({});
+      left_out = arrow::RecordBatch::MakeEmpty(schema).ValueOrDie();
+    }
+  }
+
+  if (total_right > 0) {
+    if (singleside) {
+      right_out = processors::shuffle_one_side(right, field_name, partitioner, rank, world);
+    } else {
+      right_out = processors::shuffle_two_side(right, field_name, partitioner, rank, world);
+    }
+  } else {
+    if (total_left > 0) {
+      auto schema = left[0]->schema();
+      right_out = arrow::RecordBatch::MakeEmpty(schema).ValueOrDie();
+    } else {
+      auto schema = arrow::schema({});
+      right_out = arrow::RecordBatch::MakeEmpty(schema).ValueOrDie();
+    }
+  }
+
+  return {left_out, right_out};
+}
+
+std::pair<std::shared_ptr<arrow::RecordBatch>, std::shared_ptr<arrow::RecordBatch>>
+processors::cogroup(std::shared_ptr<arrow::RecordBatch>& left,
+                    std::shared_ptr<arrow::RecordBatch>& right,
+                    std::string field_name,
+                    std::function<size_t(size_t, int, int)> partitioner,
+                    bool singleside,
+                    int rank,
+                    int world) {
+  arrow::RecordBatchVector lv, rv;
+  if (left) lv.push_back(left);
+  if (right) rv.push_back(right);
+  return processors::cogroup(lv, rv, field_name, partitioner, singleside, rank, world);
+}
+
+
 std::map<std::string, jobject> java_instances;
 
 std::shared_ptr<arrow::RecordBatch> processors::java(

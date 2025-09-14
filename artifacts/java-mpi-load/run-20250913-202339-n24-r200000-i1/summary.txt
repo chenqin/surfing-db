@@ -1,0 +1,5 @@
+Groups by ['mode', 'world'] -> 2 groups
+- ('one-sided', '24'): runs=4 world=24 rows_per_rank=200000 rows=4800000
+  best_s=3.258657 avg_s=6.242702 peak_rps=1475708 avg_rps=1371012
+- ('two-sided', '24'): runs=4 world=24 rows_per_rank=200000 rows=4800000
+  best_s=3.345224 avg_s=6.131895 peak_rps=1487725 avg_rps=1387818

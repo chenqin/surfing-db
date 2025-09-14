@@ -1,0 +1,6 @@
+run_id,ts_epoch,mode,world,rows_per_rank,iter,rows,time_s,rows_per_sec
+1757799729,1757799729,one-sided,24,200000,0,9600000,8.084624117,1187439.2502446133
+run_id,ts_epoch,mode,world,rows_per_rank,iter,rows,time_s,rows_per_sec
+1757799959,1757799959,one-sided,24,200000,0,9600000,7.122172057,1347903.4096859084
+run_id,ts_epoch,mode,world,rows_per_rank,iter,rows,time_s,rows_per_sec
+1757819997,1757819997,one-sided,24,200000,0,9600000,6.505352998,1475707.7752662178

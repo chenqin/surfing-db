@@ -282,8 +282,10 @@ include(src/table/table.cmake)
 
 #include(ext/PyTorch_Ext.cmake)
 
-# build table representation
-include(src/connector/connector.cmake)
+# build connector (Kafka) only when enabled
+if(BUILD_CPP_KAFKA)
+  include(src/connector/connector.cmake)
+endif()
 
 # build test binary
 option(BUILD_CPP_KAFKA "Build C++ Kafka-based executables" OFF)
@@ -340,16 +342,7 @@ target_link_libraries(LocalCluster
     PRIVATE ${CONNECTOR}
     PRIVATE ${ARROW_LIBRARY})
 
-# JNI library to expose KafkaConnector to Java
-add_library(surfingkafkajni SHARED ${MATCHA_SRC}/connector/kafka_jni.cpp)
-target_link_libraries(surfingkafkajni
-    PRIVATE ${META}
-    PRIVATE ${TABLE}
-    PRIVATE ${CONNECTOR}
-    PRIVATE ${ARROW_LIBRARY}
-    PRIVATE ${PARQUET_LIBRARY}
-    PRIVATE ${GLOG_LIBRARY})
-set_target_properties(surfingkafkajni PROPERTIES OUTPUT_NAME surfingkafkajni)
+## Kafka JNI bridge removed; Java-native Kafka consumer is used instead
 
 # JNI library for processors
 add_library(surfingprocessorsjni SHARED ${MATCHA_SRC}/table/processors_jni.cpp)
@@ -364,21 +357,38 @@ set_target_properties(surfingprocessorsjni PROPERTIES OUTPUT_NAME surfingprocess
 # -----------------------------
 # C++ Tests
 # -----------------------------
+include(GoogleTest)
+
+# Full test binary (integration + others)
 add_executable(SurfingDbTests
     ${MATCHA_SRC}/table/test/TestIntegration.cpp)
-
 add_dependencies(SurfingDbTests gtest thrift xgboost)
-
 target_link_libraries(SurfingDbTests
     PRIVATE ${META}
     PRIVATE ${TABLE}
-    PRIVATE ${CONNECTOR}
     PRIVATE ${ARROW_LIBRARY}
     PRIVATE ${PARQUET_LIBRARY}
     PRIVATE ${GTEST_MAIN_LIBRARY}
     PRIVATE ${GTEST_LIBRARY})
+gtest_discover_tests(SurfingDbTests
+  DISCOVERY_MODE PRE_TEST
+)
 
-add_test(NAME SurfingDbTests COMMAND SurfingDbTests)
+# Focused thrift parser tests (no table/connector deps)
+add_executable(ThriftParserTests
+    ${MATCHA_SRC}/meta/test/TestThriftParser.cpp
+    ${MATCHA_SRC}/meta/test/TestThriftParserNested.cpp
+    ${MATCHA_SRC}/meta/test/TestThriftParserFlatten.cpp)
+add_dependencies(ThriftParserTests gtest thrift)
+target_link_libraries(ThriftParserTests
+    PRIVATE ${META}
+    PRIVATE ${ARROW_LIBRARY}
+    PRIVATE ${PARQUET_LIBRARY}
+    PRIVATE ${GTEST_MAIN_LIBRARY}
+    PRIVATE ${GTEST_LIBRARY})
+# Workaround: register the tests explicitly so CTest always finds them
+add_test(NAME ThriftParserTests_list COMMAND ThriftParserTests --gtest_list_tests)
+add_test(NAME ThriftParserTests_run COMMAND ThriftParserTests)
 
 # -----------------------------
 # MPI Tests (optional)
@@ -426,5 +436,36 @@ if(ENABLE_MPI_TESTS)
       COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 $<TARGET_FILE:MpiShuffleRandomTest>)
     add_test(NAME MpiShuffleRandom_two_np4
       COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4 $<TARGET_FILE:MpiShuffleRandomTest> two)
+  endif()
+
+  # Load test (disabled by default in CTest): configurable via env
+  add_executable(MpiShuffleLoadTest ${MATCHA_SRC}/table/test/MpiShuffleLoadRunner.cpp)
+  target_link_libraries(MpiShuffleLoadTest
+      PRIVATE ${TABLE}
+      PRIVATE ${META}
+      PRIVATE ${ARROW_LIBRARY}
+      PRIVATE ${PARQUET_LIBRARY})
+  if(MPI_CXX_FOUND)
+    # Default to modest rows to avoid OOM in constrained runners; can override via env
+    add_test(NAME DISABLED_MpiShuffleLoad_one_np2
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 $<TARGET_FILE:MpiShuffleLoadTest>)
+    add_test(NAME DISABLED_MpiShuffleLoad_two_np2
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 $<TARGET_FILE:MpiShuffleLoadTest> two)
+    set_tests_properties(DISABLED_MpiShuffleLoad_one_np2 PROPERTIES LABELS "load")
+    set_tests_properties(DISABLED_MpiShuffleLoad_two_np2 PROPERTIES LABELS "load")
+  endif()
+
+  # CoGroup tests (one-sided and two-sided)
+  add_executable(MpiCoGroupTest ${MATCHA_SRC}/table/test/MpiCoGroupRunner.cpp)
+  target_link_libraries(MpiCoGroupTest
+      PRIVATE ${TABLE}
+      PRIVATE ${META}
+      PRIVATE ${ARROW_LIBRARY}
+      PRIVATE ${PARQUET_LIBRARY})
+  if(MPI_CXX_FOUND)
+    add_test(NAME MpiCoGroup_one_np2
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 $<TARGET_FILE:MpiCoGroupTest>)
+    add_test(NAME MpiCoGroup_two_np2
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2 $<TARGET_FILE:MpiCoGroupTest> two)
   endif()
 endif()

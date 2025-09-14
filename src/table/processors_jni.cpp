@@ -12,6 +12,9 @@
 
 using matcha::table::processors;
 
+static bool g_mpi_started = false;
+static bool g_mpi_finalized = false;
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_pinterest_drsquirrel_jni_NativeProcessors_shuffle(
     JNIEnv* env, jclass,
@@ -28,6 +31,7 @@ Java_com_pinterest_drsquirrel_jni_NativeProcessors_shuffle(
     int argc = 0; char** argv = nullptr;
     MPI_Init_thread(&argc, &argv, MPI_THREAD_SINGLE, &provided);
   }
+  g_mpi_started = true;
   int rank = 0, world = 1;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &world);
@@ -61,3 +65,85 @@ Java_com_pinterest_drsquirrel_jni_NativeProcessors_shuffle(
   arrow::ExportRecordBatch(*out.get(), array_out, schema_out);
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_com_pinterest_drsquirrel_jni_NativeProcessors_cogroup(
+    JNIEnv* env, jclass,
+    jlong schema_in_left_addr, jlong array_in_left_addr,
+    jlong schema_in_right_addr, jlong array_in_right_addr,
+    jstring jfield_name, jboolean j_one_sided,
+    jint j_rank, jint j_world,
+    jlong schema_out_left_addr, jlong array_out_left_addr,
+    jlong schema_out_right_addr, jlong array_out_right_addr) {
+  (void)env;
+
+  int initialized = 0;
+  MPI_Initialized(&initialized);
+  if (!initialized) {
+    int provided = 0;
+    int argc = 0; char** argv = nullptr;
+    MPI_Init_thread(&argc, &argv, MPI_THREAD_SINGLE, &provided);
+  }
+  g_mpi_started = true;
+  int rank = 0, world = 1;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &world);
+  (void)j_rank; (void)j_world;
+
+  auto* schema_left_in = reinterpret_cast<ArrowSchema*>(schema_in_left_addr);
+  auto* array_left_in  = reinterpret_cast<ArrowArray*>(array_in_left_addr);
+  auto* schema_right_in = reinterpret_cast<ArrowSchema*>(schema_in_right_addr);
+  auto* array_right_in  = reinterpret_cast<ArrowArray*>(array_in_right_addr);
+
+  std::shared_ptr<arrow::RecordBatch> left_rb;
+  std::shared_ptr<arrow::RecordBatch> right_rb;
+  if (schema_left_in && array_left_in) {
+    auto maybe_left = arrow::ImportRecordBatch(array_left_in, schema_left_in);
+    if (maybe_left.ok()) left_rb = maybe_left.MoveValueUnsafe();
+  }
+  if (schema_right_in && array_right_in) {
+    auto maybe_right = arrow::ImportRecordBatch(array_right_in, schema_right_in);
+    if (maybe_right.ok()) right_rb = maybe_right.MoveValueUnsafe();
+  }
+
+  const char* c_field = env->GetStringUTFChars(jfield_name, nullptr);
+  std::string field_name(c_field ? c_field : "");
+  if (c_field) env->ReleaseStringUTFChars(jfield_name, c_field);
+
+  auto partitioner = [](size_t key_hash, int r, int w) { (void)r; return key_hash % w; };
+  bool one_sided = (j_one_sided == JNI_TRUE);
+
+  auto result = processors::cogroup(left_rb, right_rb, field_name, partitioner, one_sided, rank, world);
+
+  // export left
+  if (result.first) {
+    auto* schema_out_left = reinterpret_cast<ArrowSchema*>(schema_out_left_addr);
+    auto* array_out_left  = reinterpret_cast<ArrowArray*>(array_out_left_addr);
+    arrow::ExportSchema(*result.first->schema().get(), schema_out_left);
+    arrow::ExportRecordBatch(*result.first.get(), array_out_left, schema_out_left);
+  }
+  // export right
+  if (result.second) {
+    auto* schema_out_right = reinterpret_cast<ArrowSchema*>(schema_out_right_addr);
+    auto* array_out_right  = reinterpret_cast<ArrowArray*>(array_out_right_addr);
+    arrow::ExportSchema(*result.second->schema().get(), schema_out_right);
+    arrow::ExportRecordBatch(*result.second.get(), array_out_right, schema_out_right);
+  }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_pinterest_drsquirrel_jni_NativeProcessors_finalizeMPI(JNIEnv* env, jclass) {
+  (void)env;
+  if (!g_mpi_started || g_mpi_finalized) return;
+  int initialized = 0;
+  MPI_Initialized(&initialized);
+  if (initialized) {
+    // Ensure all ranks reach here
+    MPI_Barrier(MPI_COMM_WORLD);
+    int finalized = 0;
+    MPI_Finalized(&finalized);
+    if (!finalized) {
+      MPI_Finalize();
+    }
+    g_mpi_finalized = true;
+  }
+}
