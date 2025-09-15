@@ -10,6 +10,10 @@ import java.util.List;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.thrift.TBase;
+
+import com.pinterest.drsquirrel.bench.MabsLite;
+import com.pinterest.drsquirrel.thrift.GenericThriftToArrowConverter;
 
 public final class JniDecodeBench {
   public static void main(String[] args) throws Exception {
@@ -41,10 +45,8 @@ public final class JniDecodeBench {
     System.out.println("Loaded payloads: " + payloads.size());
 
     BufferAllocator alloc = new RootAllocator();
-    // Warmup
-    try (VectorSchemaRoot root = NativeThriftDecoder.convert(alloc, payloads.toArray(new byte[0][]), thriftPath, structName)) {
-      // noop
-    }
+    // Warmup JNI
+    try (VectorSchemaRoot root = NativeThriftDecoder.convert(alloc, payloads.toArray(new byte[0][]), thriftPath, structName)) { }
 
     long best = Long.MAX_VALUE, sum = 0;
     long totalBytes = payloads.stream().mapToLong(p -> p.length).sum();
@@ -61,12 +63,36 @@ public final class JniDecodeBench {
       double secs = dt / 1e9;
       double rps = payloads.size() / secs;
       double mbps = (totalBytes / (1024.0 * 1024.0)) / secs;
-      System.out.printf("Iter %d: %.2f ms, %.1f rows/s, %.1f MB/s\n", i+1, dt/1e6, rps, mbps);
+      System.out.printf("JNI Iter %d: %.2f ms, %.1f rows/s, %.1f MB/s\n", i+1, dt/1e6, rps, mbps);
     }
     double bestSecs = best / 1e9;
     double rps = payloads.size() / bestSecs;
     double mbps = (totalBytes / (1024.0 * 1024.0)) / bestSecs;
-    System.out.printf("Best: %.2f ms, %.1f rows/s, %.1f MB/s\n", best/1e6, rps, mbps);
+    System.out.printf("JNI Best: %.2f ms, %.1f rows/s, %.1f MB/s\n", best/1e6, rps, mbps);
+
+    // Java baseline using GenericThriftToArrowConverter and MabsLite class
+    GenericThriftToArrowConverter conv = new GenericThriftToArrowConverter();
+    // Warmup Java path
+    try (VectorSchemaRoot root = conv.convert(payloads, (Class<? extends TBase<?, ?>>) (Class<?>) MabsLite.class, alloc)) { }
+    long jbest = Long.MAX_VALUE;
+    for (int i = 0; i < iters; i++) {
+      long t0 = System.nanoTime();
+      try (VectorSchemaRoot root = conv.convert(payloads, (Class<? extends TBase<?, ?>>) (Class<?>) MabsLite.class, alloc)) {
+        int rows = root.getRowCount();
+        if (rows != payloads.size()) throw new RuntimeException("row mismatch (java)");
+      }
+      long t1 = System.nanoTime();
+      long dt = t1 - t0;
+      jbest = Math.min(jbest, dt);
+      double secs = dt / 1e9;
+      double rps2 = payloads.size() / secs;
+      double mbps2 = (totalBytes / (1024.0 * 1024.0)) / secs;
+      System.out.printf("Java Iter %d: %.2f ms, %.1f rows/s, %.1f MB/s\n", i+1, dt/1e6, rps2, mbps2);
+    }
+    double jbestSecs = jbest / 1e9;
+    double jrps = payloads.size() / jbestSecs;
+    double jmbps = (totalBytes / (1024.0 * 1024.0)) / jbestSecs;
+    System.out.printf("Java Best: %.2f ms, %.1f rows/s, %.1f MB/s\n", jbest/1e6, jrps, jmbps);
     alloc.close();
   }
 }
