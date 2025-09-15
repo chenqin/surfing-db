@@ -435,6 +435,16 @@ add_test(NAME ThriftParserTests_run COMMAND ThriftParserTests)
 set_tests_properties(ThriftParserTests_run PROPERTIES WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 # -----------------------------
+# Tools: payload generator for JNI decode benchmark
+# -----------------------------
+add_executable(GenMabsPayloads 
+    ${MATCHA_SRC}/meta/tools/gen_mabs_payloads.cpp
+    ${MATCHA_SRC}/mabs/mabs_types.cpp
+    ${MATCHA_SRC}/mabs/mabs_constants.cpp)
+add_dependencies(GenMabsPayloads thrift)
+target_link_libraries(GenMabsPayloads PRIVATE ${THRIFT_LIBRARY})
+
+# -----------------------------
 # MPI Tests (optional)
 # -----------------------------
 include(CTest)
