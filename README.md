@@ -288,6 +288,28 @@ int main() {
   - `list<T>`/`set<T>` → Arrow `list<T>`
   - `map<K,V>` → Arrow `map<K,V>` (as List<Struct<key,value>>)
 
+### JNI Variant (Native C++)
+
+- For higher throughput, a JNI bridge decodes Thrift (Binary protocol) in C++ and returns Arrow batches via the C Data interface.
+  - Native lib: `libsurfingthriftjni.so` (target `surfingthriftjni`)
+  - Java: `com.pinterest.drsquirrel.jni.NativeThriftDecoder`
+  - Build: `ninja -C build surfingthriftjni` then Maven build as above.
+
+- Java usage:
+  ```java
+  import org.apache.arrow.memory.RootAllocator;
+  import org.apache.arrow.vector.VectorSchemaRoot;
+  import com.pinterest.drsquirrel.jni.NativeThriftDecoder;
+
+  var alloc = new RootAllocator();
+  VectorSchemaRoot root = NativeThriftDecoder.convert(alloc, payloads, 
+      "path/to/schema.thrift", "MyStruct");
+  ```
+
+- Notes:
+  - Current native path creates schema from `.thrift` and decodes primitive and string fields; complex collections are parsed in schema and left null until extended (follow-ups planned).
+  - SIMD considerations: decoding loops are structured to allow vectorization; future work includes batch-reading of numeric fields and bulk string writes (leveraging Arrow’s optimized builders and CPU intrinsics).
+
 mvn -f drsquirrel-java/pom.xml -Darrow.version=12.0.0 -DskipTests package
 mpiexec -np 2 java -Djava.library.path=$PWD/build \
   -cp drsquirrel-java/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar \

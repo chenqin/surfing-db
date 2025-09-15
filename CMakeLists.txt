@@ -358,6 +358,15 @@ target_link_libraries(surfingprocessorsjni
     PRIVATE ${GLOG_LIBRARY})
 set_target_properties(surfingprocessorsjni PROPERTIES OUTPUT_NAME surfingprocessorsjni)
 
+# JNI library for Thrift -> Arrow decoding
+add_library(surfingthriftjni SHARED ${MATCHA_SRC}/meta/thrift_decode_jni.cpp)
+add_dependencies(surfingthriftjni thrift)
+target_link_libraries(surfingthriftjni
+    PRIVATE ${ARROW_LIBRARY}
+    PRIVATE ${PARQUET_LIBRARY}
+    PRIVATE ${GLOG_LIBRARY})
+set_target_properties(surfingthriftjni PROPERTIES OUTPUT_NAME surfingthriftjni)
+
 # -----------------------------
 # C++ Tests
 # -----------------------------

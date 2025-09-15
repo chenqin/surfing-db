@@ -143,7 +143,7 @@ public final class GenericThriftToArrowConverter implements ThriftToArrowConvert
       List<FieldVector> vectors = root.getFieldVectors();
       for (int i = 0; i < ordered.size(); i++) {
         FieldMetaData fmd = ordered.get(i).getValue();
-        Object val = obj.getFieldValue((org.apache.thrift.TFieldIdEnum) ordered.get(i).getKey());
+        Object val = ((TBase) obj).getFieldValue((org.apache.thrift.TFieldIdEnum) ordered.get(i).getKey());
         writeValue(vectors.get(i), fmd.valueMetaData, val, row);
       }
     }
@@ -269,7 +269,7 @@ public final class GenericThriftToArrowConverter implements ThriftToArrowConvert
         ordered.sort(Comparator.comparingInt(e -> ((org.apache.thrift.TFieldIdEnum) e.getKey()).getThriftFieldId()));
         for (Map.Entry<?, FieldMetaData> e : ordered) {
           FieldVector child = sv.getChild(e.getValue().fieldName);
-          Object childVal = nested.getFieldValue((org.apache.thrift.TFieldIdEnum) e.getKey());
+          Object childVal = ((TBase) nested).getFieldValue((org.apache.thrift.TFieldIdEnum) e.getKey());
           writeValue(child, e.getValue().valueMetaData, childVal, row);
         }
         break;
@@ -312,7 +312,7 @@ public final class GenericThriftToArrowConverter implements ThriftToArrowConvert
         ordered.sort(Comparator.comparingInt(e -> ((org.apache.thrift.TFieldIdEnum) e.getKey()).getThriftFieldId()));
         for (Map.Entry<?, FieldMetaData> e : ordered) {
           FieldVector child = sv.getChild(e.getValue().fieldName);
-          Object childVal = nested.getFieldValue((org.apache.thrift.TFieldIdEnum) e.getKey());
+          Object childVal = ((TBase) nested).getFieldValue((org.apache.thrift.TFieldIdEnum) e.getKey());
           writeElement(child, e.getValue().valueMetaData, childVal, index);
         }
         break;
