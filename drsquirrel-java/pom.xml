@@ -101,6 +101,12 @@
       <artifactId>kafka-clients</artifactId>
       <version>3.6.1</version>
     </dependency>
+    <!-- Apache Thrift for Java deserialization -->
+    <dependency>
+      <groupId>org.apache.thrift</groupId>
+      <artifactId>libthrift</artifactId>
+      <version>0.13.0</version>
+    </dependency>
   </dependencies>
   <build>
     <plugins>
@@ -154,11 +160,23 @@
       </properties>
       <build>
         <plugins>
-          <plugin>
-            <groupId>org.codehaus.mojo</groupId>
-            <artifactId>exec-maven-plugin</artifactId>
-            <version>3.5.0</version>
-            <executions>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.5.0</version>
+        <executions>
+          <execution>
+            <id>deep-gen</id>
+            <phase>verify</phase>
+            <goals><goal>java</goal></goals>
+            <configuration>
+              <mainClass>com.pinterest.drsquirrel.bench.DeepEventGenerator</mainClass>
+              <arguments>
+                <argument>${project.build.directory}/deep_payloads.bin</argument>
+                <argument>20000</argument>
+              </arguments>
+            </configuration>
+          </execution>
               <execution>
                 <id>run-jni-load</id>
                 <phase>verify</phase>

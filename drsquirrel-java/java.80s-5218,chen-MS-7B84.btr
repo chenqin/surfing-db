@@ -1,0 +1,11 @@
+
+java:5218 terminated with signal 11 at PC=75336762e96c SP=7533493fd280.  Backtrace:
+/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/amd64/server/libjvm.so(+0x42e96c) [0x75336762e96c]
+/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/amd64/server/libjvm.so(+0x4aa6aa) [0x7533676aa6aa]
+/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/amd64/server/libjvm.so(+0x3f1146) [0x7533675f1146]
+/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/amd64/server/libjvm.so(+0x4b4b08) [0x7533676b4b08]
+/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/amd64/server/libjvm.so(+0x4b62e8) [0x7533676b62e8]
+/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/amd64/server/libjvm.so(+0xb40f98) [0x753367d40f98]
+/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/amd64/server/libjvm.so(+0x9cc752) [0x753367bcc752]
+/lib/x86_64-linux-gnu/libc.so.6(+0xa2ef1) [0x7533682a2ef1]
+/lib/x86_64-linux-gnu/libc.so.6(+0x13445c) [0x75336833445c]

@@ -358,6 +358,15 @@ target_link_libraries(surfingprocessorsjni
     PRIVATE ${GLOG_LIBRARY})
 set_target_properties(surfingprocessorsjni PROPERTIES OUTPUT_NAME surfingprocessorsjni)
 
+# JNI library for Thrift -> Arrow decoding
+add_library(surfingthriftjni SHARED ${MATCHA_SRC}/meta/thrift_decode_jni.cpp)
+add_dependencies(surfingthriftjni thrift)
+target_link_libraries(surfingthriftjni
+    PRIVATE ${ARROW_LIBRARY}
+    PRIVATE ${PARQUET_LIBRARY}
+    PRIVATE ${GLOG_LIBRARY})
+set_target_properties(surfingthriftjni PROPERTIES OUTPUT_NAME surfingthriftjni)
+
 # -----------------------------
 # C++ Tests
 # -----------------------------
@@ -408,7 +417,11 @@ endif()
 add_executable(ThriftParserTests
     ${MATCHA_SRC}/meta/test/TestThriftParser.cpp
     ${MATCHA_SRC}/meta/test/TestThriftParserNested.cpp
-    ${MATCHA_SRC}/meta/test/TestThriftParserFlatten.cpp)
+    ${MATCHA_SRC}/meta/test/TestThriftParserFlatten.cpp
+    ${MATCHA_SRC}/meta/test/TestThriftParserFlattenAdvanced.cpp
+    ${MATCHA_SRC}/meta/test/TestThriftParserMore.cpp
+    ${MATCHA_SRC}/meta/test/TestThriftMabs.cpp
+    ${MATCHA_SRC}/meta/test/TestThriftParserNestedComprehensive.cpp)
 add_dependencies(ThriftParserTests gtest thrift)
 target_link_libraries(ThriftParserTests
     PRIVATE ${META}
@@ -419,6 +432,25 @@ target_link_libraries(ThriftParserTests
 # Workaround: register the tests explicitly so CTest always finds them
 add_test(NAME ThriftParserTests_list COMMAND ThriftParserTests --gtest_list_tests)
 add_test(NAME ThriftParserTests_run COMMAND ThriftParserTests)
+set_tests_properties(ThriftParserTests_run PROPERTIES WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+
+# -----------------------------
+# Tools: payload generator for JNI decode benchmark
+# -----------------------------
+add_executable(GenMabsPayloads 
+    ${MATCHA_SRC}/meta/tools/gen_mabs_payloads.cpp
+    ${MATCHA_SRC}/mabs/mabs_types.cpp
+    ${MATCHA_SRC}/mabs/mabs_constants.cpp)
+add_dependencies(GenMabsPayloads thrift)
+target_link_libraries(GenMabsPayloads PRIVATE ${THRIFT_LIBRARY})
+
+# Large payloads generator
+add_executable(GenMabsPayloadsLarge 
+    ${MATCHA_SRC}/meta/tools/gen_mabs_payloads_large.cpp
+    ${MATCHA_SRC}/mabs/mabs_types.cpp
+    ${MATCHA_SRC}/mabs/mabs_constants.cpp)
+add_dependencies(GenMabsPayloadsLarge thrift)
+target_link_libraries(GenMabsPayloadsLarge PRIVATE ${THRIFT_LIBRARY})
 
 # -----------------------------
 # MPI Tests (optional)
@@ -542,3 +574,8 @@ if(ENABLE_MPI_TESTS)
     set_tests_properties(MpiNestedShuffle_two_np4 PROPERTIES LABELS "mpi;nested;np4")
   endif()
 endif()
+# Convenience target to run Thrift->Arrow JNI benchmarks
+add_custom_target(thrift_bench
+  COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/run_thrift_arrow_bench.sh
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  COMMENT "Run Thrift->Arrow JNI benchmarks (array, bb, bbp)" VERBATIM)
