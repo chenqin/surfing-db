@@ -216,17 +216,23 @@ Java_com_pinterest_drsquirrel_jni_NativeThriftDecoder_decode(
   for (auto& f : fvec) fields.push_back(arrow::field(f.name, to_arrow_dt(f.ir, table)));
   auto schema = arrow::schema(fields);
 
+  // Compute number of rows (payloads)
+  jsize n = env->GetArrayLength(jpayloads);
+
   // Prepare builders per field
   std::vector<std::unique_ptr<arrow::ArrayBuilder>> builders;
   builders.reserve(schema->num_fields());
   for (int i = 0; i < schema->num_fields(); ++i) {
     std::unique_ptr<arrow::ArrayBuilder> b;
     arrow::MakeBuilder(arrow::default_memory_pool(), schema->field(i)->type(), &b);
+    // Reserve space for all rows to avoid repeated reallocations
+    if (b) {
+      b->Reserve(static_cast<int64_t>(n));
+    }
     builders.push_back(std::move(b));
   }
 
   // Iterate payloads
-  jsize n = env->GetArrayLength(jpayloads);
   for (jsize r = 0; r < n; ++r) {
     jbyteArray arr = (jbyteArray) env->GetObjectArrayElement(jpayloads, r);
     if (!arr) continue;
@@ -255,7 +261,7 @@ Java_com_pinterest_drsquirrel_jni_NativeThriftDecoder_decode(
       // Decode primitives and string; skip others with null
       switch (schema->field(idx)->type()->id()) {
         case arrow::Type::NA:
-          prot.skip(ftype); b->AppendNull(); break;
+          prot.skip(ftype); b->AppendNull(); present[idx] = true; break;
         case arrow::Type::BOOL:
         case arrow::Type::INT8:
         case arrow::Type::INT16:
@@ -267,7 +273,8 @@ Java_com_pinterest_drsquirrel_jni_NativeThriftDecoder_decode(
           DecodeAndAppend(&prot, ftype, b.get()); present[idx] = true; break;
         }
         default:
-          prot.skip(ftype); b->AppendNull(); break;
+          // Complex types currently unsupported in native decode; append null placeholder
+          prot.skip(ftype); b->AppendNull(); present[idx] = true; break;
       }
       prot.readFieldEnd();
     }
