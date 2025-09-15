@@ -219,6 +219,44 @@ Java_com_pinterest_drsquirrel_jni_NativeThriftDecoder_decode(
   // Compute number of rows (payloads)
   jsize n = env->GetArrayLength(jpayloads);
 
+  // Identify numeric columns to enable columnar AppendValues fast path
+  enum ColKind { CK_NONE, CK_I8, CK_I32, CK_I64, CK_F32, CK_BOOL };
+  struct ColBuffers {
+    ColKind kind{CK_NONE};
+    std::vector<int8_t>  i8;
+    std::vector<int32_t> i32;
+    std::vector<int64_t> i64;
+    std::vector<float>   f32;
+    std::vector<uint8_t> b8;   // boolean values as 0/1
+    std::vector<uint8_t> valid; // 0/1 validity per row
+  };
+  std::vector<ColBuffers> colbufs(schema->num_fields());
+  for (int i = 0; i < schema->num_fields(); ++i) {
+    auto tid = schema->field(i)->type()->id();
+    ColKind k = CK_NONE;
+    switch (tid) {
+      case arrow::Type::INT8:   k = CK_I8; break;
+      case arrow::Type::INT16:  k = CK_I32; break; // int16 maps to int32 storage
+      case arrow::Type::INT32:  k = CK_I32; break;
+      case arrow::Type::INT64:  k = CK_I64; break;
+      case arrow::Type::FLOAT:  k = CK_F32; break;
+      case arrow::Type::BOOL:   k = CK_BOOL; break;
+      default:                  k = CK_NONE; break;
+    }
+    colbufs[i].kind = k;
+    if (k != CK_NONE) {
+      colbufs[i].valid.reserve(n);
+      switch (k) {
+        case CK_I8:  colbufs[i].i8.reserve(n);  break;
+        case CK_I32: colbufs[i].i32.reserve(n); break;
+        case CK_I64: colbufs[i].i64.reserve(n); break;
+        case CK_F32: colbufs[i].f32.reserve(n); break;
+        case CK_BOOL: colbufs[i].b8.reserve(n); break;
+        default: break;
+      }
+    }
+  }
+
   // Prepare builders per field
   std::vector<std::unique_ptr<arrow::ArrayBuilder>> builders;
   builders.reserve(schema->num_fields());
@@ -259,30 +297,100 @@ Java_com_pinterest_drsquirrel_jni_NativeThriftDecoder_decode(
       int idx = it->second;
       auto& b = builders[idx];
       // Decode primitives and string; skip others with null
+      auto colk = colbufs[idx].kind;
       switch (schema->field(idx)->type()->id()) {
-        case arrow::Type::NA:
+        case arrow::Type::NA: {
           prot.skip(ftype); b->AppendNull(); present[idx] = true; break;
-        case arrow::Type::BOOL:
-        case arrow::Type::INT8:
-        case arrow::Type::INT16:
-        case arrow::Type::INT32:
-        case arrow::Type::INT64:
+        }
+        case arrow::Type::BOOL: {
+          if (colk == CK_BOOL && ftype == TType::T_BOOL) {
+            bool v; prot.readBool(v);
+            colbufs[idx].b8.push_back(v ? 1 : 0);
+            colbufs[idx].valid.push_back(1);
+            present[idx] = true;
+          } else {
+            DecodeAndAppend(&prot, ftype, b.get()); present[idx] = true;
+          }
+          break;
+        }
+        case arrow::Type::INT8: {
+          if (colk == CK_I8 && ftype == TType::T_BYTE) {
+            int8_t v; prot.readByte(v);
+            colbufs[idx].i8.push_back(v);
+            colbufs[idx].valid.push_back(1);
+            present[idx] = true;
+          } else {
+            DecodeAndAppend(&prot, ftype, b.get()); present[idx] = true;
+          }
+          break;
+        }
+        case arrow::Type::INT16: // stored as int32
+        case arrow::Type::INT32: {
+          if (colk == CK_I32 && (ftype == TType::T_I16 || ftype == TType::T_I32)) {
+            int32_t outv = 0;
+            if (ftype == TType::T_I16) { int16_t t; prot.readI16(t); outv = static_cast<int32_t>(t); }
+            else { int32_t t; prot.readI32(t); outv = t; }
+            colbufs[idx].i32.push_back(outv);
+            colbufs[idx].valid.push_back(1);
+            present[idx] = true;
+          } else {
+            DecodeAndAppend(&prot, ftype, b.get()); present[idx] = true;
+          }
+          break;
+        }
+        case arrow::Type::INT64: {
+          if (colk == CK_I64 && ftype == TType::T_I64) {
+            int64_t v; prot.readI64(v);
+            colbufs[idx].i64.push_back(v);
+            colbufs[idx].valid.push_back(1);
+            present[idx] = true;
+          } else {
+            DecodeAndAppend(&prot, ftype, b.get()); present[idx] = true;
+          }
+          break;
+        }
         case arrow::Type::FLOAT:
-        case arrow::Type::DOUBLE: // not used; mapping uses float32
+        case arrow::Type::DOUBLE: { // float32 builder; thrift uses T_DOUBLE
+          if (colk == CK_F32 && ftype == TType::T_DOUBLE) {
+            double dv; prot.readDouble(dv);
+            colbufs[idx].f32.push_back(static_cast<float>(dv));
+            colbufs[idx].valid.push_back(1);
+            present[idx] = true;
+          } else {
+            DecodeAndAppend(&prot, ftype, b.get()); present[idx] = true;
+          }
+          break;
+        }
         case arrow::Type::STRING: {
           DecodeAndAppend(&prot, ftype, b.get()); present[idx] = true; break;
         }
-        default:
+        default: {
           // Complex types currently unsupported in native decode; append null placeholder
           prot.skip(ftype); b->AppendNull(); present[idx] = true; break;
+        }
       }
       prot.readFieldEnd();
     }
     prot.readStructEnd();
 
-    // Append nulls for fields not present
+    // Append placeholders for fields not present
     for (int i = 0; i < schema->num_fields(); ++i) {
-      if (!present[i]) builders[i]->AppendNull();
+      if (!present[i]) {
+        if (colbufs[i].kind != CK_NONE) {
+          // Columnar path: add default 0 value and mark invalid
+          colbufs[i].valid.push_back(0);
+          switch (colbufs[i].kind) {
+            case CK_I8:   colbufs[i].i8.push_back(0); break;
+            case CK_I32:  colbufs[i].i32.push_back(0); break;
+            case CK_I64:  colbufs[i].i64.push_back(0); break;
+            case CK_F32:  colbufs[i].f32.push_back(0.0f); break;
+            case CK_BOOL: colbufs[i].b8.push_back(0); break;
+            default: break;
+          }
+        } else {
+          builders[i]->AppendNull();
+        }
+      }
     }
 
     env->ReleaseByteArrayElements(arr, bytes, JNI_ABORT);
@@ -292,7 +400,40 @@ Java_com_pinterest_drsquirrel_jni_NativeThriftDecoder_decode(
   // Finish arrays
   std::vector<std::shared_ptr<arrow::Array>> arrays;
   arrays.reserve(schema->num_fields());
-  for (auto& b : builders) {
+  for (int i = 0; i < schema->num_fields(); ++i) {
+    auto& b = builders[i];
+    // Flush columnar numeric buffers in bulk
+    switch (colbufs[i].kind) {
+      case CK_I8: {
+        auto* nb = static_cast<arrow::Int8Builder*>(b.get());
+        nb->AppendValues(colbufs[i].i8.data(), static_cast<int64_t>(colbufs[i].i8.size()), colbufs[i].valid.data());
+        break;
+      }
+      case CK_I32: {
+        auto* nb = static_cast<arrow::Int32Builder*>(b.get());
+        nb->AppendValues(colbufs[i].i32.data(), static_cast<int64_t>(colbufs[i].i32.size()), colbufs[i].valid.data());
+        break;
+      }
+      case CK_I64: {
+        auto* nb = static_cast<arrow::Int64Builder*>(b.get());
+        nb->AppendValues(colbufs[i].i64.data(), static_cast<int64_t>(colbufs[i].i64.size()), colbufs[i].valid.data());
+        break;
+      }
+      case CK_F32: {
+        auto* nb = static_cast<arrow::FloatBuilder*>(b.get());
+        nb->AppendValues(colbufs[i].f32.data(), static_cast<int64_t>(colbufs[i].f32.size()), colbufs[i].valid.data());
+        break;
+      }
+      case CK_BOOL: {
+        auto* nb = static_cast<arrow::BooleanBuilder*>(b.get());
+        nb->AppendValues(colbufs[i].b8.data(), static_cast<int64_t>(colbufs[i].b8.size()), colbufs[i].valid.data());
+        break;
+      }
+      case CK_NONE: {
+        // already appended row-wise
+        break;
+      }
+    }
     std::shared_ptr<arrow::Array> a; b->Finish(&a); arrays.push_back(std::move(a));
   }
   auto batch = arrow::RecordBatch::Make(schema, static_cast<int64_t>(n), arrays);
