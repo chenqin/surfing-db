@@ -220,7 +220,7 @@ Java_com_pinterest_drsquirrel_jni_NativeThriftDecoder_decode(
   jsize n = env->GetArrayLength(jpayloads);
 
   // Identify numeric columns to enable columnar AppendValues fast path
-  enum ColKind { CK_NONE, CK_I8, CK_I32, CK_I64, CK_F32, CK_BOOL };
+  enum ColKind { CK_NONE, CK_I8, CK_I32, CK_I64, CK_F32, CK_BOOL, CK_STR };
   struct ColBuffers {
     ColKind kind{CK_NONE};
     std::vector<int8_t>  i8;
@@ -229,6 +229,9 @@ Java_com_pinterest_drsquirrel_jni_NativeThriftDecoder_decode(
     std::vector<float>   f32;
     std::vector<uint8_t> b8;   // boolean values as 0/1
     std::vector<uint8_t> valid; // 0/1 validity per row
+    // strings
+    std::vector<uint8_t> sdata;   // concatenated utf8 bytes
+    std::vector<int32_t> soff;    // offsets length n+1
   };
   std::vector<ColBuffers> colbufs(schema->num_fields());
   for (int i = 0; i < schema->num_fields(); ++i) {
@@ -241,6 +244,7 @@ Java_com_pinterest_drsquirrel_jni_NativeThriftDecoder_decode(
       case arrow::Type::INT64:  k = CK_I64; break;
       case arrow::Type::FLOAT:  k = CK_F32; break;
       case arrow::Type::BOOL:   k = CK_BOOL; break;
+      case arrow::Type::STRING: k = CK_STR; break;
       default:                  k = CK_NONE; break;
     }
     colbufs[i].kind = k;
@@ -252,6 +256,11 @@ Java_com_pinterest_drsquirrel_jni_NativeThriftDecoder_decode(
         case CK_I64: colbufs[i].i64.reserve(n); break;
         case CK_F32: colbufs[i].f32.reserve(n); break;
         case CK_BOOL: colbufs[i].b8.reserve(n); break;
+        case CK_STR:
+          colbufs[i].sdata.reserve(n * 8); // rough guess, grow as needed
+          colbufs[i].soff.reserve(n + 1);
+          colbufs[i].soff.push_back(0);
+          break;
         default: break;
       }
     }
@@ -362,7 +371,18 @@ Java_com_pinterest_drsquirrel_jni_NativeThriftDecoder_decode(
           break;
         }
         case arrow::Type::STRING: {
-          DecodeAndAppend(&prot, ftype, b.get()); present[idx] = true; break;
+          if (colk == CK_STR && (ftype == TType::T_STRING)) {
+            std::string s; prot.readBinary(s);
+            auto& cb = colbufs[idx];
+            cb.sdata.insert(cb.sdata.end(), reinterpret_cast<const uint8_t*>(s.data()), reinterpret_cast<const uint8_t*>(s.data()) + s.size());
+            int32_t next = cb.soff.back() + static_cast<int32_t>(s.size());
+            cb.soff.push_back(next);
+            cb.valid.push_back(1);
+            present[idx] = true;
+          } else {
+            DecodeAndAppend(&prot, ftype, b.get()); present[idx] = true;
+          }
+          break;
         }
         default: {
           // Complex types currently unsupported in native decode; append null placeholder
@@ -385,6 +405,12 @@ Java_com_pinterest_drsquirrel_jni_NativeThriftDecoder_decode(
             case CK_I64:  colbufs[i].i64.push_back(0); break;
             case CK_F32:  colbufs[i].f32.push_back(0.0f); break;
             case CK_BOOL: colbufs[i].b8.push_back(0); break;
+            case CK_STR: {
+              // no data bytes; repeat last offset
+              auto& cb = colbufs[i];
+              cb.soff.push_back(cb.soff.back());
+              break;
+            }
             default: break;
           }
         } else {
@@ -427,6 +453,23 @@ Java_com_pinterest_drsquirrel_jni_NativeThriftDecoder_decode(
       case CK_BOOL: {
         auto* nb = static_cast<arrow::BooleanBuilder*>(b.get());
         nb->AppendValues(colbufs[i].b8.data(), static_cast<int64_t>(colbufs[i].b8.size()), colbufs[i].valid.data());
+        break;
+      }
+      case CK_STR: {
+        auto* sb = static_cast<arrow::StringBuilder*>(b.get());
+        int64_t rows = static_cast<int64_t>(colbufs[i].valid.size());
+        int64_t total_bytes = static_cast<int64_t>(colbufs[i].sdata.size());
+        sb->Reserve(rows);
+        sb->ReserveData(total_bytes);
+        for (int64_t r = 0; r < rows; ++r) {
+          if (colbufs[i].valid[r]) {
+            int32_t b0 = colbufs[i].soff[r];
+            int32_t b1 = colbufs[i].soff[r+1];
+            sb->Append(reinterpret_cast<const char*>(colbufs[i].sdata.data() + b0), b1 - b0);
+          } else {
+            sb->AppendNull();
+          }
+        }
         break;
       }
       case CK_NONE: {
