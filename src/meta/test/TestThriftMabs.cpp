@@ -19,4 +19,3 @@ TEST(ThriftParserMabs, ParseMabsMetricsArrow) {
   EXPECT_TRUE(schema->GetFieldByName("service_name"));
   EXPECT_TRUE(schema->GetFieldByName("double_counters"));
 }
-

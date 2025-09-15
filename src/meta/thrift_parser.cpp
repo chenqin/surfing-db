@@ -19,14 +19,54 @@ static std::string read_file(const std::string& path) {
 }
 
 static std::string strip_comments(const std::string& s) {
-  // Remove /* ... */ and // ... endline and # ... endline
-  std::string out = s;
-  // Block comments
-  out = std::regex_replace(out, std::regex("/\\*.*?\\*/", std::regex::extended), "");
-  // Line comments starting with //
-  out = std::regex_replace(out, std::regex("//.*?$", std::regex_constants::multiline), "");
-  // Line comments starting with #
-  out = std::regex_replace(out, std::regex("#.*?$", std::regex_constants::multiline), "");
+  // Remove /* ... */ (multi-line), then //... and #... to end of line
+  std::string out;
+  out.reserve(s.size());
+  enum State { NORMAL, SLASH, LINE_SLASH, LINE_HASH, BLOCK } state = NORMAL;
+  for (size_t i = 0; i < s.size(); ) {
+    char c = s[i];
+    switch (state) {
+      case NORMAL:
+        if (c == '/') {
+          state = SLASH; ++i; // peek next
+        } else if (c == '#') {
+          state = LINE_HASH; ++i;
+        } else {
+          out.push_back(c); ++i;
+        }
+        break;
+      case SLASH:
+        if (i < s.size() && s[i] == '*') {
+          state = BLOCK; ++i; // consume '*'
+        } else if (i < s.size() && s[i] == '/') {
+          state = LINE_SLASH; ++i; // consume second '/'
+        } else {
+          // Was just a single '/'
+          out.push_back('/');
+          // do not consume current s[i], loop will handle
+          state = NORMAL;
+        }
+        break;
+      case LINE_SLASH:
+        // Skip until end of line
+        if (c == '\n') { out.push_back('\n'); state = NORMAL; }
+        ++i;
+        break;
+      case LINE_HASH:
+        if (c == '\n') { out.push_back('\n'); state = NORMAL; }
+        ++i;
+        break;
+      case BLOCK:
+        // Skip until closing */
+        if (c == '*' && (i + 1) < s.size() && s[i + 1] == '/') {
+          i += 2; state = NORMAL;
+        } else {
+          ++i;
+        }
+        break;
+    }
+  }
+  // Done; no need for regex for line comments now, they were handled in the loop
   return out;
 }
 

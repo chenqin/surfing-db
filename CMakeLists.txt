@@ -419,6 +419,7 @@ add_executable(ThriftParserTests
     ${MATCHA_SRC}/meta/test/TestThriftParserNested.cpp
     ${MATCHA_SRC}/meta/test/TestThriftParserFlatten.cpp
     ${MATCHA_SRC}/meta/test/TestThriftParserFlattenAdvanced.cpp
+    ${MATCHA_SRC}/meta/test/TestThriftParserMore.cpp
     ${MATCHA_SRC}/meta/test/TestThriftMabs.cpp
     ${MATCHA_SRC}/meta/test/TestThriftParserNestedComprehensive.cpp)
 add_dependencies(ThriftParserTests gtest thrift)
@@ -431,6 +432,7 @@ target_link_libraries(ThriftParserTests
 # Workaround: register the tests explicitly so CTest always finds them
 add_test(NAME ThriftParserTests_list COMMAND ThriftParserTests --gtest_list_tests)
 add_test(NAME ThriftParserTests_run COMMAND ThriftParserTests)
+set_tests_properties(ThriftParserTests_run PROPERTIES WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 # -----------------------------
 # MPI Tests (optional)
