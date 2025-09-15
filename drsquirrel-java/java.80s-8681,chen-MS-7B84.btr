@@ -1,0 +1,8 @@
+
+java:8681 terminated with signal 11 at PC=736fb31cb17d SP=736f998f9a80.  Backtrace:
+/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/amd64/server/libjvm.so(+0x9cb17d) [0x736fb31cb17d]
+/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/amd64/server/libjvm.so(+0x9c58d5) [0x736fb31c58d5]
+/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/amd64/server/libjvm.so(+0xb40f98) [0x736fb3340f98]
+/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/amd64/server/libjvm.so(+0x9cc752) [0x736fb31cc752]
+/lib/x86_64-linux-gnu/libc.so.6(+0xa2ef1) [0x736fb38a2ef1]
+/lib/x86_64-linux-gnu/libc.so.6(+0x13445c) [0x736fb393445c]

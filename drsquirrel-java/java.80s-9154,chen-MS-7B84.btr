@@ -1,0 +1,9 @@
+
+java:9154 terminated with signal 11 at PC=71f6ec7840e0 SP=71f6d45f7950.  Backtrace:
+/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/amd64/server/libjvm.so(+0x9840e0) [0x71f6ec7840e0]
+/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/amd64/server/libjvm.so(+0x4b4951) [0x71f6ec2b4951]
+/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/amd64/server/libjvm.so(+0x4b62e8) [0x71f6ec2b62e8]
+/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/amd64/server/libjvm.so(+0xb40f98) [0x71f6ec940f98]
+/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/amd64/server/libjvm.so(+0x9cc752) [0x71f6ec7cc752]
+/lib/x86_64-linux-gnu/libc.so.6(+0xa2ef1) [0x71f6ecea2ef1]
+/lib/x86_64-linux-gnu/libc.so.6(+0x13445c) [0x71f6ecf3445c]
