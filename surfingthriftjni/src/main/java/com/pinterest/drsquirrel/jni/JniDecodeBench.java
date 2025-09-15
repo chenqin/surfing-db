@@ -42,7 +42,7 @@ public final class JniDecodeBench {
         java.nio.MappedByteBuffer mmap = ch.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, 0, size);
         if ("bb".equalsIgnoreCase(mode)) {
           // Iterate: [uint32 LE length][bytes] -> zero-copy slices
-          java.util.ArrayList<java.nio.ByteBuffer> list = new ArrayList<>();
+          java.util.ArrayList<java.nio.ByteBuffer> list = new java.util.ArrayList<>();
           while (mmap.remaining() >= 4) {
             int b0 = mmap.get() & 0xFF;
             int b1 = mmap.get() & 0xFF;
@@ -214,3 +214,4 @@ public final class JniDecodeBench {
     alloc.close();
   }
 }
+

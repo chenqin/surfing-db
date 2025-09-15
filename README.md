@@ -246,11 +246,12 @@ int main() {
 - The Java module provides a generic converter that takes Thrift-serialized payloads (`byte[]`) and a generated Thrift class, and returns an Apache Arrow `VectorSchemaRoot`.
 
 - Location:
-  - Interface: `drsquirrel-java/src/main/java/com/pinterest/drsquirrel/thrift/ThriftToArrowConverter.java`
-  - Impl: `drsquirrel-java/src/main/java/com/pinterest/drsquirrel/thrift/GenericThriftToArrowConverter.java`
+  - Interface: `surfingthriftjni/src/main/java/com/pinterest/drsquirrel/thrift/ThriftToArrowConverter.java`
+  - Impl: `surfingthriftjni/src/main/java/com/pinterest/drsquirrel/thrift/GenericThriftToArrowConverter.java`
 
 - Build the Java module:
-  - `mvn -q -f drsquirrel-java/pom.xml -Darrow.version=12.0.0 -DskipTests package`
+  - `mvn -q -f surfingthriftjni/pom.xml -Darrow.version=12.0.0 -DskipTests package`
+  - Or build all Java modules (aggregator): `mvn -q -DskipTests install`
 
 - Usage example:
   - Given a generated Thrift class `com.example.MyStruct` and a list of `byte[]` payloads (Binary protocol):
@@ -293,7 +294,9 @@ int main() {
 - For higher throughput, a JNI bridge decodes Thrift (Binary protocol) in C++ and returns Arrow batches via the C Data interface.
   - Native lib: `libsurfingthriftjni.so` (target `surfingthriftjni`)
   - Java: `com.pinterest.drsquirrel.jni.NativeThriftDecoder`
-  - Build: `ninja -C build surfingthriftjni` then Maven build as above.
+  - Java subproject: `surfingthriftjni/` (Maven module with the JNI API, benchmarks)
+  - Build: `ninja -C build surfingthriftjni` then Maven build as above (or `mvn -q -DskipTests install`).
+  - Benchmarks: `mvn -q -f surfingthriftjni/pom.xml -P jni-bench -Darrow.version=12.0.0 -DskipTests verify`
 
 - Java usage:
   ```java

@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
 BUILD_DIR="$ROOT_DIR/build"
-JAR="$ROOT_DIR/drsquirrel-java/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar"
+JAR="$ROOT_DIR/surfingthriftjni/target/surfingthriftjni-1.0-SNAPSHOT-jar-with-dependencies.jar"
 PAY_SMALL="/tmp/mabs_payloads.bin"
 PAY_LARGE20K="/tmp/mabs_payloads_large_20k.bin"
 
@@ -15,7 +15,7 @@ if [ ! -f "$BUILD_DIR/libsurfingthriftjni.so" ]; then
 fi
 
 if [ ! -f "$JAR" ]; then
-  (cd "$ROOT_DIR/drsquirrel-java" && mvn -q -DskipTests package)
+  (cd "$ROOT_DIR/surfingthriftjni" && mvn -q -DskipTests package)
 fi
 
 # Generate datasets

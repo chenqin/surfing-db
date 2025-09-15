@@ -14,8 +14,33 @@ import com.pinterest.drsquirrel.thrift.GenericThriftToArrowConverter;
 /** JNI wrapper for native Thrift->Arrow decoding (Binary protocol). */
 public final class NativeThriftDecoder {
   static {
-    // Ensure libsurfingthriftjni.so is discoverable via java.library.path
-    System.loadLibrary("surfingthriftjni");
+    // Try standard lookup first
+    boolean ok = false;
+    try {
+      System.loadLibrary("surfingthriftjni");
+      ok = true;
+    } catch (UnsatisfiedLinkError e) {
+      // Fallback: attempt explicit load from a configured folder
+      String[] candidates = new String[] {
+          System.getProperty("native.lib.dir"),
+          System.getProperty("java.library.path"),
+          new java.io.File("..", "build").getAbsolutePath()
+      };
+      String lib = System.mapLibraryName("surfingthriftjni");
+      for (String dir : candidates) {
+        if (dir == null || dir.isEmpty()) continue;
+        for (String path : dir.split(java.io.File.pathSeparator)) {
+          java.io.File f = new java.io.File(path, lib);
+          if (f.exists()) {
+            System.load(f.getAbsolutePath());
+            ok = true;
+            break;
+          }
+        }
+        if (ok) break;
+      }
+      if (!ok) throw e;
+    }
   }
 
   private NativeThriftDecoder() {}
