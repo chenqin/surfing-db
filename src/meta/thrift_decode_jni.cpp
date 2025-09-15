@@ -220,7 +220,15 @@ Java_com_pinterest_drsquirrel_jni_NativeThriftDecoder_decode(
   jsize n = env->GetArrayLength(jpayloads);
 
   // Identify numeric columns to enable columnar AppendValues fast path
-  enum ColKind { CK_NONE, CK_I8, CK_I32, CK_I64, CK_F32, CK_BOOL, CK_STR };
+  enum ColKind {
+    CK_NONE,
+    // scalar columns
+    CK_I8, CK_I32, CK_I64, CK_F32, CK_BOOL, CK_STR,
+    // list<primitive> columns
+    CK_LIST_I8, CK_LIST_I32, CK_LIST_I64, CK_LIST_F32, CK_LIST_BOOL,
+    // map<string, primitive>
+    CK_MAP_STR_I64, CK_MAP_STR_F32, CK_MAP_STR_STR
+  };
   struct ColBuffers {
     ColKind kind{CK_NONE};
     std::vector<int8_t>  i8;
@@ -232,6 +240,18 @@ Java_com_pinterest_drsquirrel_jni_NativeThriftDecoder_decode(
     // strings
     std::vector<uint8_t> sdata;   // concatenated utf8 bytes
     std::vector<int32_t> soff;    // offsets length n+1
+    // list<primitive>
+    std::vector<int32_t> l_off;   // list offsets length rows+1
+    std::vector<int8_t>  l_i8;
+    std::vector<int32_t> l_i32;
+    std::vector<int64_t> l_i64;
+    std::vector<float>   l_f32;
+    std::vector<uint8_t> l_b8;
+    // map<string, primitive>: entry offsets, keys string buffers, values
+    std::vector<int32_t> m_off;   // map entry offsets length rows+1
+    std::vector<uint8_t> mk_sdata; std::vector<int32_t> mk_soff;
+    std::vector<int64_t> mv_i64;  std::vector<float> mv_f32;
+    std::vector<uint8_t> mv_sdata; std::vector<int32_t> mv_soff; // string values
   };
   std::vector<ColBuffers> colbufs(schema->num_fields());
   for (int i = 0; i < schema->num_fields(); ++i) {
@@ -245,6 +265,31 @@ Java_com_pinterest_drsquirrel_jni_NativeThriftDecoder_decode(
       case arrow::Type::FLOAT:  k = CK_F32; break;
       case arrow::Type::BOOL:   k = CK_BOOL; break;
       case arrow::Type::STRING: k = CK_STR; break;
+      case arrow::Type::LIST: {
+        auto lt = std::static_pointer_cast<arrow::ListType>(schema->field(i)->type());
+        switch (lt->value_type()->id()) {
+          case arrow::Type::INT8:  k = CK_LIST_I8; break;
+          case arrow::Type::INT16: // widen to int32
+          case arrow::Type::INT32: k = CK_LIST_I32; break;
+          case arrow::Type::INT64: k = CK_LIST_I64; break;
+          case arrow::Type::FLOAT: k = CK_LIST_F32; break;
+          case arrow::Type::BOOL:  k = CK_LIST_BOOL; break;
+          default: k = CK_NONE; break; // unsupported (e.g., list<struct>, list<string> for now)
+        }
+        break;
+      }
+      case arrow::Type::MAP: {
+        auto mt = std::static_pointer_cast<arrow::MapType>(schema->field(i)->type());
+        if (mt->key_type()->id() == arrow::Type::STRING) {
+          switch (mt->item_type()->id()) {
+            case arrow::Type::INT64: k = CK_MAP_STR_I64; break;
+            case arrow::Type::FLOAT: k = CK_MAP_STR_F32; break;
+            case arrow::Type::STRING: k = CK_MAP_STR_STR; break;
+            default: k = CK_NONE; break;
+          }
+        }
+        break;
+      }
       default:                  k = CK_NONE; break;
     }
     colbufs[i].kind = k;
@@ -260,6 +305,21 @@ Java_com_pinterest_drsquirrel_jni_NativeThriftDecoder_decode(
           colbufs[i].sdata.reserve(n * 8); // rough guess, grow as needed
           colbufs[i].soff.reserve(n + 1);
           colbufs[i].soff.push_back(0);
+          break;
+        case CK_LIST_I8:
+        case CK_LIST_I32:
+        case CK_LIST_I64:
+        case CK_LIST_F32:
+        case CK_LIST_BOOL:
+          colbufs[i].l_off.reserve(n + 1); colbufs[i].l_off.push_back(0);
+          // reserve some space for values; exact growth happens as needed
+          break;
+        case CK_MAP_STR_I64:
+        case CK_MAP_STR_F32:
+        case CK_MAP_STR_STR:
+          colbufs[i].m_off.reserve(n + 1); colbufs[i].m_off.push_back(0);
+          colbufs[i].mk_soff.reserve(n + 1); colbufs[i].mk_soff.push_back(0);
+          if (k == CK_MAP_STR_STR) { colbufs[i].mv_soff.reserve(n + 1); colbufs[i].mv_soff.push_back(0); }
           break;
         default: break;
       }
@@ -407,11 +467,114 @@ Java_com_pinterest_drsquirrel_jni_NativeThriftDecoder_decode(
           }
           break;
         }
+        case arrow::Type::LIST: {
+          // list<primitive> columnar
+          switch (colk) {
+            case CK_LIST_I8:
+            case CK_LIST_I32:
+            case CK_LIST_I64:
+            case CK_LIST_F32:
+            case CK_LIST_BOOL: {
+              if (ftype == TType::T_LIST) {
+                apache::thrift::protocol::TType et; uint32_t sz;
+                prot.readListBegin(et, sz);
+                // accumulate values
+                auto& cb = colbufs[idx];
+                switch (colk) {
+                  case CK_LIST_I8: {
+                    if (et == TType::T_BYTE) {
+                      for (uint32_t j = 0; j < sz; ++j) { int8_t v; prot.readByte(v); cb.l_i8.push_back(v); }
+                      cb.valid.push_back(1);
+                      cb.l_off.push_back(cb.l_off.back() + static_cast<int32_t>(sz));
+                    } else { prot.skip(et); cb.valid.push_back(0); cb.l_off.push_back(cb.l_off.back()); }
+                    break;
+                  }
+                  case CK_LIST_I32: {
+                    if (et == TType::T_I16 || et == TType::T_I32) {
+                      for (uint32_t j = 0; j < sz; ++j) { if (et==TType::T_I16){ int16_t v; prot.readI16(v); cb.l_i32.push_back(static_cast<int32_t>(v)); } else { int32_t v; prot.readI32(v); cb.l_i32.push_back(v);} }
+                      cb.valid.push_back(1); cb.l_off.push_back(cb.l_off.back() + static_cast<int32_t>(sz));
+                    } else { prot.skip(et); cb.valid.push_back(0); cb.l_off.push_back(cb.l_off.back()); }
+                    break;
+                  }
+                  case CK_LIST_I64: {
+                    if (et == TType::T_I64) {
+                      for (uint32_t j = 0; j < sz; ++j) { int64_t v; prot.readI64(v); cb.l_i64.push_back(v); }
+                      cb.valid.push_back(1); cb.l_off.push_back(cb.l_off.back() + static_cast<int32_t>(sz));
+                    } else { prot.skip(et); cb.valid.push_back(0); cb.l_off.push_back(cb.l_off.back()); }
+                    break;
+                  }
+                  case CK_LIST_F32: {
+                    if (et == TType::T_DOUBLE) {
+                      for (uint32_t j = 0; j < sz; ++j) { double dv; prot.readDouble(dv); cb.l_f32.push_back(static_cast<float>(dv)); }
+                      cb.valid.push_back(1); cb.l_off.push_back(cb.l_off.back() + static_cast<int32_t>(sz));
+                    } else { prot.skip(et); cb.valid.push_back(0); cb.l_off.push_back(cb.l_off.back()); }
+                    break;
+                  }
+                  case CK_LIST_BOOL: {
+                    if (et == TType::T_BOOL) {
+                      for (uint32_t j = 0; j < sz; ++j) { bool v; prot.readBool(v); cb.l_b8.push_back(v ? 1 : 0); }
+                      cb.valid.push_back(1); cb.l_off.push_back(cb.l_off.back() + static_cast<int32_t>(sz));
+                    } else { prot.skip(et); cb.valid.push_back(0); cb.l_off.push_back(cb.l_off.back()); }
+                    break;
+                  }
+                  default: break;
+                }
+                prot.readListEnd(); present[idx] = true;
+              } else {
+                present[idx] = true; // treat as present but invalid type; we'll add placeholder below
+              }
+              break;
+            }
+            default: {
+              // unsupported list schema element
+              prot.skip(ftype); b->AppendNull(); present[idx] = true; break;
+            }
+          }
+          break;
+        }
+        case arrow::Type::MAP: {
+          switch (colk) {
+            case CK_MAP_STR_I64:
+            case CK_MAP_STR_F32:
+            case CK_MAP_STR_STR: {
+              if (ftype == TType::T_MAP) {
+                apache::thrift::protocol::TType kt, vt; uint32_t sz;
+                prot.readMapBegin(kt, vt, sz);
+                auto& cb = colbufs[idx];
+                if (kt == TType::T_STRING) {
+                  for (uint32_t j = 0; j < sz; ++j) {
+                    std::string k; prot.readBinary(k);
+                    cb.mk_sdata.insert(cb.mk_sdata.end(), reinterpret_cast<const uint8_t*>(k.data()), reinterpret_cast<const uint8_t*>(k.data()) + k.size());
+                    cb.mk_soff.push_back(cb.mk_soff.back() + static_cast<int32_t>(k.size()));
+                    switch (colk) {
+                      case CK_MAP_STR_I64: { int64_t v; prot.readI64(v); cb.mv_i64.push_back(v); break; }
+                      case CK_MAP_STR_F32: { double dv; prot.readDouble(dv); cb.mv_f32.push_back(static_cast<float>(dv)); break; }
+                      case CK_MAP_STR_STR: { std::string vs; prot.readBinary(vs); cb.mv_sdata.insert(cb.mv_sdata.end(), reinterpret_cast<const uint8_t*>(vs.data()), reinterpret_cast<const uint8_t*>(vs.data()) + vs.size()); cb.mv_soff.push_back(cb.mv_soff.back() + static_cast<int32_t>(vs.size())); break; }
+                      default: break;
+                    }
+                  }
+                  cb.valid.push_back(1); cb.m_off.push_back(cb.m_off.back() + static_cast<int32_t>(sz));
+                } else {
+                  // skip unsupported key type
+                  prot.skip(vt); cb.valid.push_back(0); cb.m_off.push_back(cb.m_off.back());
+                }
+                prot.readMapEnd(); present[idx] = true;
+              } else {
+                present[idx] = true; // treat as present but invalid type (placeholder below)
+              }
+              break;
+            }
+            default: {
+              prot.skip(ftype); b->AppendNull(); present[idx] = true; break;
+            }
+          }
+          break;
+        }
         default: {
           // Complex types currently unsupported in native decode; append null placeholder
           prot.skip(ftype); b->AppendNull(); present[idx] = true; break;
         }
-        }
+      }
         prot.readFieldEnd();
       }
       prot.readStructEnd();
@@ -489,6 +652,125 @@ Java_com_pinterest_drsquirrel_jni_NativeThriftDecoder_decode(
             } else {
               sb->AppendNull();
             }
+          }
+          break;
+        }
+        case CK_LIST_I8:
+        case CK_LIST_I32:
+        case CK_LIST_I64:
+        case CK_LIST_F32:
+        case CK_LIST_BOOL: {
+          auto* lb = static_cast<arrow::ListBuilder*>(b.get());
+          int64_t rows = static_cast<int64_t>(colbufs[i].valid.size());
+          // get child builder
+          switch (colbufs[i].kind) {
+            case CK_LIST_I8: {
+              auto* vb = static_cast<arrow::Int8Builder*>(lb->value_builder());
+              for (int64_t r = 0; r < rows; ++r) {
+                int32_t b0 = colbufs[i].l_off[r]; int32_t b1 = colbufs[i].l_off[r+1];
+                if (!colbufs[i].valid[r]) { lb->AppendNull(); continue; }
+                lb->Append(true);
+                vb->AppendValues(colbufs[i].l_i8.data() + b0, b1 - b0);
+              }
+              break;
+            }
+            case CK_LIST_I32: {
+              auto* vb = static_cast<arrow::Int32Builder*>(lb->value_builder());
+              for (int64_t r = 0; r < rows; ++r) {
+                int32_t b0 = colbufs[i].l_off[r]; int32_t b1 = colbufs[i].l_off[r+1];
+                if (!colbufs[i].valid[r]) { lb->AppendNull(); continue; }
+                lb->Append(true);
+                vb->AppendValues(colbufs[i].l_i32.data() + b0, b1 - b0);
+              }
+              break;
+            }
+            case CK_LIST_I64: {
+              auto* vb = static_cast<arrow::Int64Builder*>(lb->value_builder());
+              for (int64_t r = 0; r < rows; ++r) {
+                int32_t b0 = colbufs[i].l_off[r]; int32_t b1 = colbufs[i].l_off[r+1];
+                if (!colbufs[i].valid[r]) { lb->AppendNull(); continue; }
+                lb->Append(true);
+                vb->AppendValues(colbufs[i].l_i64.data() + b0, b1 - b0);
+              }
+              break;
+            }
+            case CK_LIST_F32: {
+              auto* vb = static_cast<arrow::FloatBuilder*>(lb->value_builder());
+              for (int64_t r = 0; r < rows; ++r) {
+                int32_t b0 = colbufs[i].l_off[r]; int32_t b1 = colbufs[i].l_off[r+1];
+                if (!colbufs[i].valid[r]) { lb->AppendNull(); continue; }
+                lb->Append(true);
+                vb->AppendValues(colbufs[i].l_f32.data() + b0, b1 - b0);
+              }
+              break;
+            }
+            case CK_LIST_BOOL: {
+              auto* vb = static_cast<arrow::BooleanBuilder*>(lb->value_builder());
+              for (int64_t r = 0; r < rows; ++r) {
+                int32_t b0 = colbufs[i].l_off[r]; int32_t b1 = colbufs[i].l_off[r+1];
+                if (!colbufs[i].valid[r]) { lb->AppendNull(); continue; }
+                lb->Append(true);
+                vb->AppendValues(colbufs[i].l_b8.data() + b0, b1 - b0);
+              }
+              break;
+            }
+            default: break;
+          }
+          break;
+        }
+        case CK_MAP_STR_I64:
+        case CK_MAP_STR_F32:
+        case CK_MAP_STR_STR: {
+          auto* mb = static_cast<arrow::MapBuilder*>(b.get());
+          int64_t rows = static_cast<int64_t>(colbufs[i].valid.size());
+          auto* kb = static_cast<arrow::StringBuilder*>(mb->key_builder());
+          switch (colbufs[i].kind) {
+            case CK_MAP_STR_I64: {
+              auto* vb = static_cast<arrow::Int64Builder*>(mb->item_builder());
+              for (int64_t r = 0; r < rows; ++r) {
+                int32_t b0 = colbufs[i].m_off[r]; int32_t b1 = colbufs[i].m_off[r+1];
+                if (!colbufs[i].valid[r]) { mb->AppendNull(); continue; }
+                mb->Append();
+                // keys
+                for (int32_t e = b0; e < b1; ++e) {
+                  int32_t k0 = colbufs[i].mk_soff[e]; int32_t k1 = colbufs[i].mk_soff[e+1];
+                  kb->Append(reinterpret_cast<const char*>(colbufs[i].mk_sdata.data() + k0), k1 - k0);
+                }
+                // values
+                vb->AppendValues(colbufs[i].mv_i64.data() + b0, b1 - b0);
+              }
+              break;
+            }
+            case CK_MAP_STR_F32: {
+              auto* vb = static_cast<arrow::FloatBuilder*>(mb->item_builder());
+              for (int64_t r = 0; r < rows; ++r) {
+                int32_t b0 = colbufs[i].m_off[r]; int32_t b1 = colbufs[i].m_off[r+1];
+                if (!colbufs[i].valid[r]) { mb->AppendNull(); continue; }
+                mb->Append();
+                for (int32_t e = b0; e < b1; ++e) {
+                  int32_t k0 = colbufs[i].mk_soff[e]; int32_t k1 = colbufs[i].mk_soff[e+1];
+                  kb->Append(reinterpret_cast<const char*>(colbufs[i].mk_sdata.data() + k0), k1 - k0);
+                }
+                vb->AppendValues(colbufs[i].mv_f32.data() + b0, b1 - b0);
+              }
+              break;
+            }
+            case CK_MAP_STR_STR: {
+              auto* vb = static_cast<arrow::StringBuilder*>(mb->item_builder());
+              for (int64_t r = 0; r < rows; ++r) {
+                int32_t b0 = colbufs[i].m_off[r]; int32_t b1 = colbufs[i].m_off[r+1];
+                if (!colbufs[i].valid[r]) { mb->AppendNull(); continue; }
+                mb->Append();
+                for (int32_t e = b0; e < b1; ++e) {
+                  int32_t k0 = colbufs[i].mk_soff[e]; int32_t k1 = colbufs[i].mk_soff[e+1];
+                  kb->Append(reinterpret_cast<const char*>(colbufs[i].mk_sdata.data() + k0), k1 - k0);
+                  int32_t v0 = colbufs[i].mv_soff[e]; int32_t v1 = colbufs[i].mv_soff[e+1];
+                  vb->Append(reinterpret_cast<const char*>(colbufs[i].mv_sdata.data() + v0), v1 - v0);
+                }
+              }
+              break;
+            }
+            default: break;
           }
           break;
         }
