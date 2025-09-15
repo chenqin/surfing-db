@@ -444,6 +444,14 @@ add_executable(GenMabsPayloads
 add_dependencies(GenMabsPayloads thrift)
 target_link_libraries(GenMabsPayloads PRIVATE ${THRIFT_LIBRARY})
 
+# Large payloads generator
+add_executable(GenMabsPayloadsLarge 
+    ${MATCHA_SRC}/meta/tools/gen_mabs_payloads_large.cpp
+    ${MATCHA_SRC}/mabs/mabs_types.cpp
+    ${MATCHA_SRC}/mabs/mabs_constants.cpp)
+add_dependencies(GenMabsPayloadsLarge thrift)
+target_link_libraries(GenMabsPayloadsLarge PRIVATE ${THRIFT_LIBRARY})
+
 # -----------------------------
 # MPI Tests (optional)
 # -----------------------------
@@ -566,3 +574,8 @@ if(ENABLE_MPI_TESTS)
     set_tests_properties(MpiNestedShuffle_two_np4 PROPERTIES LABELS "mpi;nested;np4")
   endif()
 endif()
+# Convenience target to run Thrift->Arrow JNI benchmarks
+add_custom_target(thrift_bench
+  COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/run_thrift_arrow_bench.sh
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  COMMENT "Run Thrift->Arrow JNI benchmarks (array, bb, bbp)" VERBATIM)

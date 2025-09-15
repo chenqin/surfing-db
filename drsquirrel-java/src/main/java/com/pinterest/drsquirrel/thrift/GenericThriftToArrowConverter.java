@@ -62,11 +62,13 @@ public final class GenericThriftToArrowConverter implements ThriftToArrowConvert
       }
       case org.apache.thrift.protocol.TType.MAP: {
         MapMetaData mmd = (MapMetaData) vmd;
-        Field key = toField("key", mmd.keyMetaData);
-        Field val = toField("value", mmd.valueMetaData);
-        // Arrow Map is List<Struct<key, value>> with map metadata
-        java.util.List<Field> children = java.util.Arrays.asList(key, val);
-        Field entry = new Field("entries", FieldType.nullable(new ArrowType.Struct()), children);
+        // Build key/value fields with Arrow constraints: entry struct must be non-nullable, key non-nullable.
+        ArrowType keyType = toArrowType(mmd.keyMetaData);
+        ArrowType valType = toArrowType(mmd.valueMetaData);
+        Field key = new Field("key", new FieldType(false, keyType, null), null);
+        Field val = new Field("value", new FieldType(true, valType, null), null);
+        java.util.List<Field> kv = java.util.Arrays.asList(key, val);
+        Field entry = new Field("entries", new FieldType(false, new ArrowType.Struct(), null), kv);
         return new Field(name, new FieldType(true, new ArrowType.Map(false), null), java.util.Arrays.asList(entry));
       }
       case org.apache.thrift.protocol.TType.STRUCT: {
