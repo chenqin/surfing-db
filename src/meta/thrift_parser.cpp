@@ -1,4 +1,5 @@
 #include "thrift_parser.h"
+#include "meta/schema.h"
 
 #include <algorithm>
 #include <cctype>
@@ -75,7 +76,7 @@ static std::string to_lower(std::string s) {
   return s;
 }
 
-RowType::type ThriftSchemaParser::baseTypeFromToken(const std::string& tok_in) {
+static RowType::type baseTypeFromToken(const std::string& tok_in) {
   auto tok = to_lower(tok_in);
   if (tok == "bool") return RowType::BOOL;
   if (tok == "byte" || tok == "i8") return RowType::CHAR;
@@ -105,7 +106,7 @@ struct TFieldIR {
 };
 
 static bool is_primitive_token(const std::string& tok) {
-  return ThriftSchemaParser::baseTypeFromToken(tok) != RowType::VOID;
+  return baseTypeFromToken(tok) != RowType::VOID;
 }
 
 static TFieldIR parse_field_type(const std::string& token) {
@@ -130,7 +131,7 @@ static TFieldIR parse_field_type(const std::string& token) {
     ir.map_val = std::make_unique<TFieldIR>(parse_field_type(v));
     return ir;
   }
-  auto bt = ThriftSchemaParser::baseTypeFromToken(t);
+  auto bt = baseTypeFromToken(t);
   if (bt != RowType::VOID) {
     ir.kind = TFieldIR::PRIM;
     ir.prim = bt;
@@ -343,6 +344,123 @@ std::shared_ptr<arrow::Schema> ThriftSchemaParser::parseToArrow(const std::strin
     fields.push_back(arrow::field(p.first, toArrow(p.second)));
   }
   return arrow::schema(fields);
+}
+
+// With-id parse helper: returns name + IR + numeric id per field when present
+namespace {
+struct FieldIRWithId {
+  int id{-1};
+  std::string name;
+  TFieldIR ir;
+};
+
+static std::unordered_map<std::string, std::vector<FieldIRWithId>>
+parse_all_structs_with_ids(const std::string& thrift_txt) {
+  std::unordered_map<std::string, std::vector<FieldIRWithId>> out;
+  std::string txt = strip_comments(thrift_txt);
+  std::regex all_structs_re("struct\\s+([A-Za-z0-9_]+)\\s*\\{([\\s\\S]*?)\\}");
+  auto begin = std::sregex_iterator(txt.begin(), txt.end(), all_structs_re);
+  auto end = std::sregex_iterator();
+
+  auto parse_struct_fields = [&](const std::string& body) {
+    std::vector<FieldIRWithId> fields;
+    auto sanitize_ident = [&](const std::string& in) -> std::string {
+      auto is_ident = [](char c){ return std::isalnum(static_cast<unsigned char>(c)) || c == '_'; };
+      size_t b = 0, e = in.size();
+      while (b < e && !is_ident(in[b])) ++b;
+      while (e > b && !is_ident(in[e-1])) --e;
+      return trim(in.substr(b, e - b));
+    };
+    size_t i = 0, n = body.size();
+    while (i < n) {
+      while (i < n && (std::isspace(static_cast<unsigned char>(body[i])) || body[i] == ',' || body[i] == ';')) ++i;
+      if (i >= n) break;
+      int id = -1;
+      size_t id_start = i;
+      while (i < n && std::isdigit(static_cast<unsigned char>(body[i]))) ++i;
+      if (i > id_start && i < n && body[i] == ':') {
+        id = std::atoi(body.substr(id_start, i - id_start).c_str());
+        ++i;
+      } else {
+        i = id_start;
+      }
+      while (i < n && std::isspace(static_cast<unsigned char>(body[i]))) ++i;
+      auto has_prefix = [&](const char* pfx) {
+        size_t len = std::strlen(pfx);
+        if (i + len <= n && to_lower(body.substr(i, len)) == std::string(pfx)) { i += len; return true; }
+        return false;
+      };
+      (void)(has_prefix("optional ") || has_prefix("required "));
+
+      size_t type_start = i; int depth = 0;
+      while (i < n) {
+        char c = body[i];
+        if (c == '<') depth++;
+        else if (c == '>' && depth > 0) depth--;
+        else if (std::isspace(static_cast<unsigned char>(c)) && depth == 0) break;
+        ++i;
+      }
+      std::string type_tok = trim(body.substr(type_start, i - type_start));
+      while (i < n && std::isspace(static_cast<unsigned char>(body[i]))) ++i;
+      size_t name_start = i;
+      while (i < n) {
+        char c = body[i];
+        if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '_')) break;
+        ++i;
+      }
+      std::string name_tok = sanitize_ident(body.substr(name_start, i - name_start));
+      if (!type_tok.empty() && !name_tok.empty()) {
+        TFieldIR ir = parse_field_type(type_tok);
+        fields.push_back({id, name_tok, std::move(ir)});
+      }
+      depth = 0;
+      while (i < n) {
+        char c = body[i];
+        if (c == '<') depth++;
+        else if (c == '>' && depth > 0) depth--;
+        if (depth == 0 && (c == ',' || c == ';' || c == '\n')) { ++i; break; }
+        ++i;
+      }
+    }
+    return fields;
+  };
+
+  for (auto it = begin; it != end; ++it) {
+    std::string sname = (*it)[1].str();
+    std::string body = (*it)[2].str();
+    auto fields = parse_struct_fields(body);
+    out.emplace(sname, std::move(fields));
+  }
+  return out;
+}
+} // namespace
+
+ThriftSchemaParser::ArrowSchemaWithIdMap ThriftSchemaParser::parseToArrowWithIdMap(
+    const std::string& thrift_path,
+    const std::string& struct_name,
+    const ThriftParseOptions& opt) {
+  (void)opt;
+  ArrowSchemaWithIdMap out;
+  auto txt = read_file(thrift_path);
+  // Build Arrow schema using existing logic
+  out.schema = parseToArrow(thrift_path, struct_name, opt);
+  // Build id->index mapping from the with-ids pass
+  auto with_ids = parse_all_structs_with_ids(txt);
+  auto it = with_ids.find(struct_name);
+  if (it == with_ids.end()) {
+    throw std::runtime_error("Struct not found in thrift: " + struct_name);
+  }
+  std::unordered_map<std::string, int> name_to_index;
+  for (int i = 0; i < out.schema->num_fields(); ++i) {
+    name_to_index[out.schema->field(i)->name()] = i;
+  }
+  for (auto& f : it->second) {
+    if (f.id >= 0) {
+      auto itr = name_to_index.find(f.name);
+      if (itr != name_to_index.end()) out.id_to_index[f.id] = itr->second;
+    }
+  }
+  return out;
 }
 
 std::shared_ptr<arrow::Schema> ThriftSchemaParser::parseToArrowFlattened(

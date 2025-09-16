@@ -6,6 +6,7 @@
 #include <vector>
 
 #include <arrow/api.h>
+#include <unordered_map>
 #include "meta/schema.h"
 
 namespace matcha {
@@ -40,8 +41,15 @@ class ThriftSchemaParser {
                                                               const std::string& sep = "_",
                                                               bool flatten_list_structs = false,
                                                               bool flatten_map_structs = false);
-  // Expose base type mapper for reuse/tests
-  static RowType::type baseTypeFromToken(const std::string& tok);
+  // Return Arrow schema plus a map: thrift field id -> top-level field index
+  // Fields without an explicit numeric id are omitted from the map.
+  struct ArrowSchemaWithIdMap {
+    std::shared_ptr<arrow::Schema> schema;
+    std::unordered_map<int, int> id_to_index;
+  };
+  static ArrowSchemaWithIdMap parseToArrowWithIdMap(const std::string& thrift_path,
+                                                    const std::string& struct_name,
+                                                    const ThriftParseOptions& opt = {});
 };
 
 } // namespace meta

@@ -1,0 +1,388 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.pinterest.surfing</groupId>
+  <artifactId>surfingthriftjni</artifactId>
+  <version>1.0-SNAPSHOT</version>
+  <name>surfingthriftjni</name>
+  <packaging>jar</packaging>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.source>8</maven.compiler.source>
+    <maven.compiler.target>8</maven.compiler.target>
+    <arrow.version>12.0.0</arrow.version>
+    <!-- Build native lib within this module -->
+    <native.lib.dir>${project.build.directory}/nativebuild</native.lib.dir>
+    <!-- OS/arch detection for natives jar (provided by os-maven-plugin) -->
+    <nat.classifier>${os.detected.name}-${os.detected.arch}</nat.classifier>
+    <!-- Mapped library name pieces -->
+    <lib.base>surfingthriftjni</lib.base>
+    <lib.prefix>lib</lib.prefix>
+    <lib.ext>so</lib.ext>
+    <mapped.lib>${lib.prefix}${lib.base}.${lib.ext}</mapped.lib>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.apache.arrow</groupId>
+      <artifactId>arrow-c-data</artifactId>
+      <version>${arrow.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.arrow</groupId>
+      <artifactId>arrow-vector</artifactId>
+      <version>${arrow.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.arrow</groupId>
+      <artifactId>arrow-memory-core</artifactId>
+      <version>${arrow.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.arrow</groupId>
+      <artifactId>arrow-memory-netty</artifactId>
+      <version>${arrow.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.arrow</groupId>
+      <artifactId>arrow-format</artifactId>
+      <version>${arrow.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.thrift</groupId>
+      <artifactId>libthrift</artifactId>
+      <version>0.6.1</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-log4j12</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <!-- Test dependencies -->
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>4.13.2</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-nop</artifactId>
+      <version>1.7.25</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- Detect OS/arch to name native artifacts per platform -->
+      <plugin>
+        <groupId>kr.motd.maven</groupId>
+        <artifactId>os-maven-plugin</artifactId>
+        <version>1.7.0</version>
+        <executions>
+          <execution>
+            <goals><goal>detect</goal></goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Build the native library (via repo-root CMake) if missing -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.5.0</version>
+        <executions>
+          <execution>
+            <id>build-native-lib</id>
+            <phase>prepare-package</phase>
+            <goals><goal>exec</goal></goals>
+            <configuration>
+              <executable>bash</executable>
+              <arguments>
+                <argument>-lc</argument>
+                <argument><![CDATA[
+set -euo pipefail; \
+MOD_DIR="${project.basedir}"; \
+BUILD_DIR="${native.lib.dir}"; \
+case "${os.detected.name}" in \
+  osx) EXT=dylib;; \
+  *)   EXT=so;; \
+esac; \
+LIB_NAME="lib${lib.base}.""$EXT"; \
+# Discover Arrow_DIR if not provided
+ARROW_DIR_ENV="${Arrow_DIR:-${ARROW_DIR:-}}"; \
+if [ -z "${ARROW_DIR_ENV}" ]; then \
+  if [ -n "${ARROW_HOME:-}" ] && [ -d "${ARROW_HOME}/lib/cmake/Arrow" ]; then \
+    ARROW_DIR_ENV="${ARROW_HOME}/lib/cmake/Arrow"; \
+  elif [ -d "$HOME/arrow-12-install/lib/cmake/Arrow" ]; then \
+    ARROW_DIR_ENV="$HOME/arrow-12-install/lib/cmake/Arrow"; \
+  elif [ -d "${project.basedir}/../arrow-12-install/lib/cmake/Arrow" ]; then \
+    ARROW_DIR_ENV="${project.basedir}/../arrow-12-install/lib/cmake/Arrow"; \
+  fi; \
+fi; \
+if [ "${SURF_SIMD:-}" = "1" ] || [ "${SURF_SIMD:-}" = "ON" ]; then SIMD_FLAG="-DSURF_SIMD=ON"; else SIMD_FLAG=""; fi; \
+cmake -S "$MOD_DIR/native" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release -DArrow_DIR="${ARROW_DIR_ENV}" $SIMD_FLAG; \
+cmake --build "$BUILD_DIR" --target surfingthriftjni -j; \
+true
+                ]]></argument>
+              </arguments>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>2.22.2</version>
+        <configuration>
+          <!-- Allow tests/examples to locate the native .so when run under Maven -->
+          <argLine>-Djava.library.path=${native.lib.dir}</argLine>
+        </configuration>
+      </plugin>
+
+      <!-- Optionally copy libsurfingthriftjni.so next to artifacts if it exists -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <version>3.3.1</version>
+        <executions>
+          <execution>
+            <id>copy-native</id>
+            <phase>prepare-package</phase>
+            <goals><goal>copy-resources</goal></goals>
+            <configuration>
+              <outputDirectory>${project.build.directory}/natives</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${native.lib.dir}</directory>
+                  <includes>
+                    <include>libsurfingthriftjni.so</include>
+                  </includes>
+                  <filtering>false</filtering>
+                </resource>
+              </resources>
+              <overwrite>true</overwrite>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Build a jar-with-dependencies for ease of use in quick tests -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-assembly-plugin</artifactId>
+        <version>3.6.0</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>single</goal>
+            </goals>
+            <configuration>
+              <descriptorRefs>
+                <descriptorRef>jar-with-dependencies</descriptorRef>
+              </descriptorRefs>
+              <finalName>${project.artifactId}-${project.version}</finalName>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Stage native .so/.dylib into META-INF/lib/<os>-<arch>/ for a natives jar -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <version>3.3.1</version>
+        <executions>
+          <execution>
+            <id>stage-natives-jar-root</id>
+            <phase>prepare-package</phase>
+            <goals><goal>copy-resources</goal></goals>
+            <configuration>
+              <outputDirectory>${project.build.directory}/natives-jar-root/META-INF/lib/${nat.classifier}</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${native.lib.dir}</directory>
+                  <includes>
+                    <include>${mapped.lib}</include>
+                  </includes>
+                </resource>
+              </resources>
+              <overwrite>true</overwrite>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Build and attach a platform-specific natives jar: surfingthriftjni-natives-<os>-<arch>.jar -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.3.0</version>
+        <executions>
+          <execution>
+            <id>attach-natives-jar</id>
+            <phase>package</phase>
+            <goals><goal>jar</goal></goals>
+            <configuration>
+              <classesDirectory>${project.build.directory}/natives-jar-root</classesDirectory>
+              <classifier>natives-${nat.classifier}</classifier>
+              <archive>
+                <manifestEntries>
+                  <Implementation-Title>${project.artifactId}-natives</Implementation-Title>
+                  <Implementation-Version>${project.version}</Implementation-Version>
+                  <Built-OS>${os.detected.name}</Built-OS>
+                  <Built-Arch>${os.detected.arch}</Built-Arch>
+                </manifestEntries>
+              </archive>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <!-- Adjust library extension per OS in one profiles block -->
+    <profile>
+      <id>natives-osx</id>
+      <activation>
+        <property>
+          <name>os.detected.name</name>
+          <value>osx</value>
+        </property>
+      </activation>
+      <properties>
+        <lib.ext>dylib</lib.ext>
+      </properties>
+    </profile>
+    <profile>
+      <id>natives-linux</id>
+      <activation>
+        <property>
+          <name>os.detected.name</name>
+          <value>linux</value>
+        </property>
+      </activation>
+      <properties>
+        <lib.ext>so</lib.ext>
+      </properties>
+    </profile>
+    <profile>
+      <id>jni-bench</id>
+      <properties>
+        <bench.small>${project.build.directory}/bench_small_array.txt</bench.small>
+        <bench.large.bb>${project.build.directory}/bench_large_bb.txt</bench.large.bb>
+        <bench.large.bbp>${project.build.directory}/bench_large_bbp.txt</bench.large.bbp>
+        <payload.small>/tmp/mabs_payloads.bin</payload.small>
+        <payload.large>/tmp/mabs_payloads_large_20k.bin</payload.large>
+        <thrift.path>${project.basedir}/../src/mabs.thrift</thrift.path>
+        <!-- Parameterize dataset sizes -->
+        <small.count>200000</small.count>
+        <large.count>20000</large.count>
+        <large.payload.size>256</large.payload.size>
+        <large.k>16</large.k>
+        <large.v>512</large.v>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>exec-maven-plugin</artifactId>
+            <version>3.5.0</version>
+            <executions>
+              <execution>
+                <id>build-native-and-datasets</id>
+                <phase>prepare-package</phase>
+                <goals><goal>exec</goal></goals>
+                <configuration>
+                  <executable>bash</executable>
+                  <arguments>
+                    <argument>-lc</argument>
+                  <argument>
+                  <![CDATA[
+set -euo pipefail; \
+ROOT_DIR="${project.basedir}/.."; \
+DATA_BUILD_DIR="${project.basedir}/../build"; \
+export LD_LIBRARY_PATH="${native.lib.dir}:${LD_LIBRARY_PATH:-}"; \
+if [ ! -f "$DATA_BUILD_DIR/GenMabsPayloads" ]; then \
+  cmake -S "$ROOT_DIR" -B "$DATA_BUILD_DIR" -DCMAKE_BUILD_TYPE=Release; \
+  cmake --build "$DATA_BUILD_DIR" --target GenMabsPayloads -j; \
+fi; \
+if [ ! -f "$DATA_BUILD_DIR/GenMabsPayloadsLarge" ]; then \
+  cmake --build "$DATA_BUILD_DIR" --target GenMabsPayloadsLarge -j; \
+fi; \
+if [ ! -f "${payload.small}" ]; then "$DATA_BUILD_DIR/GenMabsPayloads" "${payload.small}" "${small.count}"; fi; \
+if [ ! -f "${payload.large}" ]; then "$DATA_BUILD_DIR/GenMabsPayloadsLarge" "${payload.large}" "${large.count}" "${large.payload.size}" "${large.k}" "${large.v}"; fi; \
+true
+                  ]]>
+                </argument>
+              </arguments>
+            </configuration>
+          </execution>
+              <execution>
+                <id>run-benches</id>
+                <phase>verify</phase>
+                <goals><goal>exec</goal></goals>
+                <configuration>
+                  <executable>bash</executable>
+                  <arguments>
+                    <argument>-lc</argument>
+                    <argument>
+                      <![CDATA[
+set -euo pipefail; \
+JAR="${project.build.directory}/${project.artifactId}-${project.version}-jar-with-dependencies.jar"; \
+export LD_LIBRARY_PATH="${native.lib.dir}:${LD_LIBRARY_PATH:-}"; \
+echo "== Small payloads (array mode) =="; \
+java -Djava.library.path="${native.lib.dir}" -cp "$JAR" com.pinterest.drsquirrel.jni.JniDecodeBench "${payload.small}" "${thrift.path}" MabsMetrics 7 | tee "${bench.small}"; \
+echo "\n== Large payloads (ByteBuffer mmap) =="; \
+java -Xmx3g -Djava.library.path="${native.lib.dir}" -cp "$JAR" com.pinterest.drsquirrel.jni.JniDecodeBench "${payload.large}" "${thrift.path}" MabsMetrics 5 bb | tee "${bench.large.bb}"; \
+echo "\n== Large payloads (ByteBuffer pooled) =="; \
+java -Xmx3g -Djava.library.path="${native.lib.dir}" -cp "$JAR" com.pinterest.drsquirrel.jni.JniDecodeBench "${payload.large}" "${thrift.path}" MabsMetrics 5 bbp | tee "${bench.large.bbp}"; \
+small_jni=$(grep -m1 "^JNI Best:" "${bench.small}" | sed 's/^JNI Best: //'); \
+small_java=$(grep -m1 "^Java Best:" "${bench.small}" | sed 's/^Java Best: //'); \
+bb_jni=$(grep -m1 "^JNI Best:" "${bench.large.bb}" | sed 's/^JNI Best: //'); \
+bbp_jni=$(grep -m1 "^JNI Best:" "${bench.large.bbp}" | sed 's/^JNI Best: //'); \
+printf "\n== Summary ==\n"; \
+printf "Small array — JNI: %s\n" "$small_jni"; \
+printf "Small array — Java: %s\n" "$small_java"; \
+printf "Large mmap — JNI: %s\n" "$bb_jni"; \
+printf "Large pooled — JNI: %s\n" "$bbp_jni"; \
+true
+                      ]]>
+                    </argument>
+                  </arguments>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <!-- Provide SLF4J binding for benches to avoid warnings -->
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>build-helper-maven-plugin</artifactId>
+            <version>3.5.0</version>
+            <executions>
+              <execution>
+                <id>attach-jni-bench-deps</id>
+                <phase>validate</phase>
+                <goals><goal>parse-version</goal></goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+      <dependencies>
+        <dependency>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-simple</artifactId>
+          <version>1.7.25</version>
+        </dependency>
+      </dependencies>
+    </profile>
+  </profiles>
+</project>
