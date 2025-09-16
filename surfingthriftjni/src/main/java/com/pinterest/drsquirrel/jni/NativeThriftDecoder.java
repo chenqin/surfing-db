@@ -39,6 +39,35 @@ public final class NativeThriftDecoder {
         }
         if (ok) break;
       }
+      // Final fallback: attempt to load from a natives jar under META-INF/lib/<os>-<arch>/
+      if (!ok) {
+        try {
+          String os = System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT);
+          String arch = System.getProperty("os.arch").toLowerCase(java.util.Locale.ROOT);
+          String osNorm;
+          if (os.contains("mac") || os.contains("darwin")) osNorm = "osx";
+          else if (os.contains("linux")) osNorm = "linux";
+          else if (os.contains("win")) osNorm = "windows";
+          else osNorm = os;
+          String archNorm = arch;
+          if ("amd64".equals(archNorm)) archNorm = "x86_64";
+          if ("x86-64".equals(archNorm)) archNorm = "x86_64";
+          if ("aarch64".equals(archNorm)) archNorm = "aarch_64";
+          String mapped = System.mapLibraryName("surfingthriftjni");
+          String resPath = String.format("/META-INF/lib/%s-%s/%s", osNorm, archNorm, mapped);
+          try (java.io.InputStream in = NativeThriftDecoder.class.getResourceAsStream(resPath)) {
+            if (in != null) {
+              java.nio.file.Path tmp = java.nio.file.Files.createTempFile("surfingthriftjni-", mapped);
+              tmp.toFile().deleteOnExit();
+              java.nio.file.Files.copy(in, tmp, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+              System.load(tmp.toAbsolutePath().toString());
+              ok = true;
+            }
+          }
+        } catch (Throwable t) {
+          // ignore, fall through to throw original error
+        }
+      }
       if (!ok) throw e;
     }
   }

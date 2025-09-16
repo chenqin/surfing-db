@@ -15,6 +15,13 @@
     <arrow.version>12.0.0</arrow.version>
     <!-- Default to CMake build dir at repo root -->
     <native.lib.dir>${project.basedir}/../build</native.lib.dir>
+    <!-- OS/arch detection for natives jar (provided by os-maven-plugin) -->
+    <nat.classifier>${os.detected.name}-${os.detected.arch}</nat.classifier>
+    <!-- Mapped library name pieces -->
+    <lib.base>surfingthriftjni</lib.base>
+    <lib.prefix>lib</lib.prefix>
+    <lib.ext>so</lib.ext>
+    <mapped.lib>${lib.prefix}${lib.base}.${lib.ext}</mapped.lib>
   </properties>
 
   <dependencies>
@@ -72,6 +79,52 @@
 
   <build>
     <plugins>
+      <!-- Detect OS/arch to name native artifacts per platform -->
+      <plugin>
+        <groupId>kr.motd.maven</groupId>
+        <artifactId>os-maven-plugin</artifactId>
+        <version>1.7.0</version>
+        <executions>
+          <execution>
+            <goals><goal>detect</goal></goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Build the native library (via repo-root CMake) if missing -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.5.0</version>
+        <executions>
+          <execution>
+            <id>build-native-lib</id>
+            <phase>prepare-package</phase>
+            <goals><goal>exec</goal></goals>
+            <configuration>
+              <executable>bash</executable>
+              <arguments>
+                <argument>-lc</argument>
+                <argument><![CDATA[
+set -euo pipefail; \
+ROOT_DIR="${project.basedir}/.."; \
+BUILD_DIR="${native.lib.dir}"; \
+case "${os.detected.name}" in \
+  osx) EXT=dylib;; \
+  *)   EXT=so;; \
+esac; \
+ LIB_NAME="lib${lib.base}.""$EXT"; \
+ if [ ! -f "$BUILD_DIR/$LIB_NAME" ]; then \
+  cmake -S "$ROOT_DIR" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release; \
+  cmake --build "$BUILD_DIR" --target surfingthriftjni -j; \
+ fi; \
+ true
+                ]]></argument>
+              </arguments>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
@@ -129,10 +182,87 @@
           </execution>
         </executions>
       </plugin>
+
+      <!-- Stage native .so/.dylib into META-INF/lib/<os>-<arch>/ for a natives jar -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <version>3.3.1</version>
+        <executions>
+          <execution>
+            <id>stage-natives-jar-root</id>
+            <phase>prepare-package</phase>
+            <goals><goal>copy-resources</goal></goals>
+            <configuration>
+              <outputDirectory>${project.build.directory}/natives-jar-root/META-INF/lib/${nat.classifier}</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${native.lib.dir}</directory>
+                  <includes>
+                    <include>${mapped.lib}</include>
+                  </includes>
+                </resource>
+              </resources>
+              <overwrite>true</overwrite>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Build and attach a platform-specific natives jar: surfingthriftjni-natives-<os>-<arch>.jar -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.3.0</version>
+        <executions>
+          <execution>
+            <id>attach-natives-jar</id>
+            <phase>package</phase>
+            <goals><goal>jar</goal></goals>
+            <configuration>
+              <classesDirectory>${project.build.directory}/natives-jar-root</classesDirectory>
+              <classifier>natives-${nat.classifier}</classifier>
+              <archive>
+                <manifestEntries>
+                  <Implementation-Title>${project.artifactId}-natives</Implementation-Title>
+                  <Implementation-Version>${project.version}</Implementation-Version>
+                  <Built-OS>${os.detected.name}</Built-OS>
+                  <Built-Arch>${os.detected.arch}</Built-Arch>
+                </manifestEntries>
+              </archive>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
     </plugins>
   </build>
 
   <profiles>
+    <!-- Adjust library extension per OS in one profiles block -->
+    <profile>
+      <id>natives-osx</id>
+      <activation>
+        <property>
+          <name>os.detected.name</name>
+          <value>osx</value>
+        </property>
+      </activation>
+      <properties>
+        <lib.ext>dylib</lib.ext>
+      </properties>
+    </profile>
+    <profile>
+      <id>natives-linux</id>
+      <activation>
+        <property>
+          <name>os.detected.name</name>
+          <value>linux</value>
+        </property>
+      </activation>
+      <properties>
+        <lib.ext>so</lib.ext>
+      </properties>
+    </profile>
     <profile>
       <id>jni-bench</id>
       <properties>
@@ -164,24 +294,21 @@
                   <executable>bash</executable>
                   <arguments>
                     <argument>-lc</argument>
-                    <argument>
+                  <argument>
                   <![CDATA[
 set -euo pipefail; \
 ROOT_DIR="${project.basedir}/.."; \
-BUILD_DIR="${project.basedir}/../build"; \
+DATA_BUILD_DIR="${project.basedir}/../build"; \
 export LD_LIBRARY_PATH="${native.lib.dir}:${LD_LIBRARY_PATH:-}"; \
-if [ ! -f "$BUILD_DIR/libsurfingthriftjni.so" ]; then \
-  cmake -S "$ROOT_DIR" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release; \
-  cmake --build "$BUILD_DIR" -j; \
+if [ ! -f "$DATA_BUILD_DIR/GenMabsPayloads" ]; then \
+  cmake -S "$ROOT_DIR" -B "$DATA_BUILD_DIR" -DCMAKE_BUILD_TYPE=Release; \
+  cmake --build "$DATA_BUILD_DIR" --target GenMabsPayloads -j; \
 fi; \
-if [ ! -f "$BUILD_DIR/GenMabsPayloads" ]; then \
-  cmake --build "$BUILD_DIR" --target GenMabsPayloads -j; \
+if [ ! -f "$DATA_BUILD_DIR/GenMabsPayloadsLarge" ]; then \
+  cmake --build "$DATA_BUILD_DIR" --target GenMabsPayloadsLarge -j; \
 fi; \
-if [ ! -f "$BUILD_DIR/GenMabsPayloadsLarge" ]; then \
-  cmake --build "$BUILD_DIR" --target GenMabsPayloadsLarge -j; \
-fi; \
-if [ ! -f "${payload.small}" ]; then "$BUILD_DIR/GenMabsPayloads" "${payload.small}" "${small.count}"; fi; \
-if [ ! -f "${payload.large}" ]; then "$BUILD_DIR/GenMabsPayloadsLarge" "${payload.large}" "${large.count}" "${large.payload.size}" "${large.k}" "${large.v}"; fi; \
+if [ ! -f "${payload.small}" ]; then "$DATA_BUILD_DIR/GenMabsPayloads" "${payload.small}" "${small.count}"; fi; \
+if [ ! -f "${payload.large}" ]; then "$DATA_BUILD_DIR/GenMabsPayloadsLarge" "${payload.large}" "${large.count}" "${large.payload.size}" "${large.k}" "${large.v}"; fi; \
 true
                   ]]>
                 </argument>
