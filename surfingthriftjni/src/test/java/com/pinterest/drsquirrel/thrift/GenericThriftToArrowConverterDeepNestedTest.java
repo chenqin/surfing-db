@@ -21,6 +21,7 @@ import org.apache.thrift.protocol.TMap;
 import org.apache.thrift.protocol.TStruct;
 import org.apache.thrift.protocol.TType;
 import org.apache.thrift.transport.TMemoryBuffer;
+import org.apache.thrift.ext.GenericThriftToArrowConverter;
 import org.junit.Test;
 import org.junit.Ignore;
 

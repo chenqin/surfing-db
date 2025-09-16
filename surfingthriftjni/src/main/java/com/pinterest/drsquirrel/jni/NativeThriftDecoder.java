@@ -9,7 +9,7 @@ import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.thrift.TBase;
 
-import com.pinterest.drsquirrel.thrift.GenericThriftToArrowConverter;
+import org.apache.thrift.ext.GenericThriftToArrowConverter;
 
 /** JNI wrapper for native Thrift->Arrow decoding (Binary protocol). */
 public final class NativeThriftDecoder {
@@ -86,10 +86,26 @@ public final class NativeThriftDecoder {
                                          byte[][] payloads,
                                          String thriftPath,
                                          String structName) {
-    try (ArrowArray outArray = ArrowArray.allocateNew(allocator);
-         ArrowSchema outSchema = ArrowSchema.allocateNew(allocator)) {
-      decode(payloads, thriftPath, structName, outSchema.memoryAddress(), outArray.memoryAddress());
-      return Data.importVectorSchemaRoot(allocator, outArray, outSchema, null);
+    // For large batches, copy payloads into direct ByteBuffers and use the native
+    // direct path which supports multi-threaded decode internally.
+    final boolean forceDirect = Boolean.parseBoolean(System.getProperty("surfing.decode.toDirect", "true"));
+    final int threshold = Integer.getInteger("surfing.decode.toDirectThreshold", 1024);
+    if (forceDirect && payloads != null && payloads.length >= threshold) {
+      java.nio.ByteBuffer[] direct = new java.nio.ByteBuffer[payloads.length];
+      for (int i = 0; i < payloads.length; i++) {
+        byte[] p = payloads[i];
+        if (p == null) { direct[i] = java.nio.ByteBuffer.allocateDirect(0); continue; }
+        java.nio.ByteBuffer d = java.nio.ByteBuffer.allocateDirect(p.length);
+        d.put(p).flip();
+        direct[i] = d;
+      }
+      return convert(allocator, direct, thriftPath, structName);
+    } else {
+      try (ArrowArray outArray = ArrowArray.allocateNew(allocator);
+           ArrowSchema outSchema = ArrowSchema.allocateNew(allocator)) {
+        decode(payloads, thriftPath, structName, outSchema.memoryAddress(), outArray.memoryAddress());
+        return Data.importVectorSchemaRoot(allocator, outArray, outSchema, null);
+      }
     }
   }
 
@@ -102,17 +118,27 @@ public final class NativeThriftDecoder {
                                          java.nio.ByteBuffer[] payloads,
                                          String thriftPath,
                                          String structName) {
-    // Fallback to byte[] path for maximum compatibility (supports deep nesting today)
-    byte[][] arr = new byte[payloads.length][];
-    for (int i = 0; i < payloads.length; i++) {
-      java.nio.ByteBuffer bb = payloads[i];
-      if (bb == null) { arr[i] = new byte[0]; continue; }
-      java.nio.ByteBuffer dup = bb.duplicate(); dup.position(0);
-      byte[] b = new byte[dup.remaining()];
-      dup.get(b);
-      arr[i] = b;
+    // Prefer the direct ByteBuffer JNI path; copy non-direct buffers into direct ones
+    java.nio.ByteBuffer[] direct = new java.nio.ByteBuffer[payloads.length];
+    int idx = 0;
+    for (java.nio.ByteBuffer bb : payloads) {
+      if (bb != null && bb.isDirect()) {
+        java.nio.ByteBuffer dup = bb.duplicate(); dup.position(0);
+        direct[idx++] = dup.slice();
+      } else if (bb != null) {
+        java.nio.ByteBuffer dup = bb.duplicate(); dup.position(0);
+        java.nio.ByteBuffer d = java.nio.ByteBuffer.allocateDirect(dup.remaining());
+        d.put(dup).flip();
+        direct[idx++] = d;
+      } else {
+        direct[idx++] = java.nio.ByteBuffer.allocateDirect(0);
+      }
     }
-    return convert(allocator, arr, thriftPath, structName);
+    try (ArrowArray outArray = ArrowArray.allocateNew(allocator);
+         ArrowSchema outSchema = ArrowSchema.allocateNew(allocator)) {
+      decodeFromDirect(direct, thriftPath, structName, outSchema.memoryAddress(), outArray.memoryAddress());
+      return Data.importVectorSchemaRoot(allocator, outArray, outSchema, null);
+    }
   }
 
   /**

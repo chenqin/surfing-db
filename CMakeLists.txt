@@ -3,7 +3,6 @@
 cmake_minimum_required(VERSION 3.10)
 project(matcha LANGUAGES CXX VERSION 0.1)
 
-option(ENABLE_CUDA "Enable CUDA support" OFF)
 
 option(ENABLE_MPI_TESTS "Enable MPI-based shuffle tests" OFF)
 
@@ -25,22 +24,10 @@ find_package(CURL REQUIRED)
 find_package(JNI REQUIRED)
 include_directories(${JNI_INCLUDE_DIRS})
 
-if(ENABLE_CUDA)
-    if(NOT DEFINED CMAKE_CUDA_COMPILER)
-        # Allow override via environment; default to common install path
-        set(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc" CACHE FILEPATH "CUDA compiler")
-    endif()
-    enable_language(CUDA)
-    set(CMAKE_CUDA_STANDARD 14)
-    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-    find_package(CUDAToolkit REQUIRED)
-endif()
 
 #find_package(Torch REQUIRED)
-#find_package(ArrowCUDA REQUIRED)
 find_package(ArrowDataset REQUIRED)
 set(ARROW_DATASET_LIBRARY ArrowDataset::arrow_dataset_static)
-#set(ARROW_CUDA_LIBRARY ArrowCUDA::arrow_cuda_shared)
 
 if(APPLE)
     set(OPENSSL_ROOT_DIR /opt/homebrew/Cellar/openssl@3/3.0.8)
@@ -263,7 +250,7 @@ include(ext/OPENSSL_Ext.cmake)
 #arrow
 find_package(Arrow REQUIRED)
 set(ARROW_LIBRARY Arrow::arrow_static)
-#find_package(ArrowCUDA REQUIRED)
+ 
 find_package(Parquet REQUIRED)
 set(PARQUET_LIBRARY Parquet::parquet_static)
 
@@ -358,14 +345,12 @@ target_link_libraries(surfingprocessorsjni
     PRIVATE ${GLOG_LIBRARY})
 set_target_properties(surfingprocessorsjni PROPERTIES OUTPUT_NAME surfingprocessorsjni)
 
-# JNI library for Thrift -> Arrow decoding
-add_library(surfingthriftjni SHARED ${MATCHA_SRC}/meta/thrift_decode_jni.cpp)
-add_dependencies(surfingthriftjni thrift)
-target_link_libraries(surfingthriftjni
-    PRIVATE ${ARROW_LIBRARY}
-    PRIVATE ${PARQUET_LIBRARY}
-    PRIVATE ${GLOG_LIBRARY})
-set_target_properties(surfingthriftjni PROPERTIES OUTPUT_NAME surfingthriftjni)
+# JNI library for Thrift -> Arrow decoding has moved to the Maven submodule
+# surfingthriftjni/, which builds the native library via its own CMake under
+# surfingthriftjni/native and packages natives into a classifier JAR.
+#
+# If you need to build the JNI decoder, use:
+#   mvn -q -f surfingthriftjni/pom.xml -DskipTests package
 
 # -----------------------------
 # C++ Tests
@@ -393,25 +378,7 @@ add_test(NAME ArrowSpillTest
   COMMAND SurfingDbTests --gtest_filter=ArrowSpillTest.*)
 set_tests_properties(ArrowSpillTest PROPERTIES LABELS "unit;arrow;spill")
 
-# -----------------------------
-# CUDA (optional)
-# -----------------------------
-if(ENABLE_CUDA)
-  # Minimal CUDA utils library
-  add_library(surfingcuda STATIC ${MATCHA_SRC}/cuda/cuda_utils.cu)
-  target_include_directories(surfingcuda PUBLIC ${MATCHA_SRC})
-  target_link_libraries(surfingcuda PRIVATE CUDA::cudart)
-
-  # CUDA tests
-  add_executable(CudaTests ${MATCHA_SRC}/cuda/test/TestCuda.cpp)
-  add_dependencies(CudaTests gtest)
-  target_link_libraries(CudaTests
-      PRIVATE surfingcuda
-      PRIVATE ${GTEST_MAIN_LIBRARY}
-      PRIVATE ${GTEST_LIBRARY})
-  gtest_discover_tests(CudaTests
-    DISCOVERY_MODE PRE_TEST)
-endif()
+# (CUDA support removed)
 
 # Focused thrift parser tests (no table/connector deps)
 add_executable(ThriftParserTests

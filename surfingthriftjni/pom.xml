@@ -13,8 +13,8 @@
     <maven.compiler.source>8</maven.compiler.source>
     <maven.compiler.target>8</maven.compiler.target>
     <arrow.version>12.0.0</arrow.version>
-    <!-- Default to CMake build dir at repo root -->
-    <native.lib.dir>${project.basedir}/../build</native.lib.dir>
+    <!-- Build native lib within this module -->
+    <native.lib.dir>${project.build.directory}/nativebuild</native.lib.dir>
     <!-- OS/arch detection for natives jar (provided by os-maven-plugin) -->
     <nat.classifier>${os.detected.name}-${os.detected.arch}</nat.classifier>
     <!-- Mapped library name pieces -->
@@ -107,18 +107,28 @@
                 <argument>-lc</argument>
                 <argument><![CDATA[
 set -euo pipefail; \
-ROOT_DIR="${project.basedir}/.."; \
+MOD_DIR="${project.basedir}"; \
 BUILD_DIR="${native.lib.dir}"; \
 case "${os.detected.name}" in \
   osx) EXT=dylib;; \
   *)   EXT=so;; \
 esac; \
- LIB_NAME="lib${lib.base}.""$EXT"; \
- if [ ! -f "$BUILD_DIR/$LIB_NAME" ]; then \
-  cmake -S "$ROOT_DIR" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release; \
-  cmake --build "$BUILD_DIR" --target surfingthriftjni -j; \
- fi; \
- true
+LIB_NAME="lib${lib.base}.""$EXT"; \
+# Discover Arrow_DIR if not provided
+ARROW_DIR_ENV="${Arrow_DIR:-${ARROW_DIR:-}}"; \
+if [ -z "${ARROW_DIR_ENV}" ]; then \
+  if [ -n "${ARROW_HOME:-}" ] && [ -d "${ARROW_HOME}/lib/cmake/Arrow" ]; then \
+    ARROW_DIR_ENV="${ARROW_HOME}/lib/cmake/Arrow"; \
+  elif [ -d "$HOME/arrow-12-install/lib/cmake/Arrow" ]; then \
+    ARROW_DIR_ENV="$HOME/arrow-12-install/lib/cmake/Arrow"; \
+  elif [ -d "${project.basedir}/../arrow-12-install/lib/cmake/Arrow" ]; then \
+    ARROW_DIR_ENV="${project.basedir}/../arrow-12-install/lib/cmake/Arrow"; \
+  fi; \
+fi; \
+if [ "${SURF_SIMD:-}" = "1" ] || [ "${SURF_SIMD:-}" = "ON" ]; then SIMD_FLAG="-DSURF_SIMD=ON"; else SIMD_FLAG=""; fi; \
+cmake -S "$MOD_DIR/native" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release -DArrow_DIR="${ARROW_DIR_ENV}" $SIMD_FLAG; \
+cmake --build "$BUILD_DIR" --target surfingthriftjni -j; \
+true
                 ]]></argument>
               </arguments>
             </configuration>

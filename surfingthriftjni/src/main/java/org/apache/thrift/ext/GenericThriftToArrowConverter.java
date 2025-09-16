@@ -1,4 +1,4 @@
-package com.pinterest.drsquirrel.thrift;
+package org.apache.thrift.ext;
 
 import java.lang.reflect.Constructor;
 import java.nio.charset.StandardCharsets;
@@ -28,12 +28,6 @@ import org.apache.thrift.meta_data.MapMetaData;
 import org.apache.thrift.meta_data.SetMetaData;
 import org.apache.thrift.meta_data.StructMetaData;
 
-/**
- * Generic Thrift-to-Arrow converter using Thrift Java metadata.
- * - Supports Binary protocol payloads
- * - Maps common Thrift types to Arrow equivalents
- * - Builds nested Arrow types (struct/list/map)
- */
 public final class GenericThriftToArrowConverter implements ThriftToArrowConverter {
 
   @Override
@@ -62,7 +56,6 @@ public final class GenericThriftToArrowConverter implements ThriftToArrowConvert
       }
       case org.apache.thrift.protocol.TType.MAP: {
         MapMetaData mmd = (MapMetaData) vmd;
-        // Build key/value fields with Arrow constraints: entry struct must be non-nullable, key non-nullable.
         ArrowType keyType = toArrowType(mmd.keyMetaData);
         ArrowType valType = toArrowType(mmd.valueMetaData);
         Field key = new Field("key", new FieldType(false, keyType, null), null);
@@ -84,7 +77,7 @@ public final class GenericThriftToArrowConverter implements ThriftToArrowConvert
         return new Field(name, FieldType.nullable(new ArrowType.Struct()), children);
       }
       default: {
-        return new Field(name, FieldType.nullable(dt), /*children*/ null);
+        return new Field(name, FieldType.nullable(dt), null);
       }
     }
   }
@@ -93,41 +86,13 @@ public final class GenericThriftToArrowConverter implements ThriftToArrowConvert
     switch (vmd.type) {
       case org.apache.thrift.protocol.TType.BOOL: return ArrowType.Bool.INSTANCE;
       case org.apache.thrift.protocol.TType.BYTE: return new ArrowType.Int(8, true);
-      case org.apache.thrift.protocol.TType.I16: return new ArrowType.Int(32, true); // widen to int32 for uniformity
+      case org.apache.thrift.protocol.TType.I16: return new ArrowType.Int(32, true);
       case org.apache.thrift.protocol.TType.I32: return new ArrowType.Int(32, true);
       case org.apache.thrift.protocol.TType.I64: return new ArrowType.Int(64, true);
-      case org.apache.thrift.protocol.TType.DOUBLE: return new ArrowType.FloatingPoint(FloatingPointPrecision.SINGLE); // map to float32
+      case org.apache.thrift.protocol.TType.DOUBLE: return new ArrowType.FloatingPoint(FloatingPointPrecision.SINGLE);
       case org.apache.thrift.protocol.TType.STRING: return ArrowType.Utf8.INSTANCE;
-      // COLLECTION and STRUCT handled by toField
       default: return ArrowType.Null.INSTANCE;
     }
-  }
-
-  private FieldVector ensureListDataVector(ListVector lv, FieldValueMetaData elemMeta) {
-    FieldVector data = lv.getDataVector();
-    if (!(data instanceof org.apache.arrow.vector.NullVector)) {
-      return data;
-    }
-    ArrowType childType = toArrowType(elemMeta);
-    FieldType ft;
-    switch (elemMeta.type) {
-      case org.apache.thrift.protocol.TType.LIST:
-        ft = FieldType.nullable(ArrowType.List.INSTANCE);
-        break;
-      case org.apache.thrift.protocol.TType.MAP:
-        // Map values inside list: create a Map logical type (keys non-nullable by convention)
-        ft = new FieldType(true, new ArrowType.Map(false), null);
-        break;
-      case org.apache.thrift.protocol.TType.STRUCT:
-        ft = FieldType.nullable(new ArrowType.Struct());
-        break;
-      default:
-        ft = FieldType.nullable(childType);
-    }
-    org.apache.arrow.vector.ValueVector vv = lv.addOrGetVector(ft).getVector();
-    FieldVector newData = (FieldVector) vv;
-    newData.allocateNew();
-    return newData;
   }
 
   @Override
@@ -143,87 +108,58 @@ public final class GenericThriftToArrowConverter implements ThriftToArrowConvert
     VectorSchemaRoot root = VectorSchemaRoot.create(schema, allocator);
     root.allocateNew();
 
-    // Prepare metadata order matching schema fields
     Map<?, FieldMetaData> meta = FieldMetaData.getStructMetaDataMap(thriftClass);
     List<Map.Entry<?, FieldMetaData>> ordered = new ArrayList<>(meta.entrySet());
     ordered.sort(Comparator.comparingInt(e -> ((org.apache.thrift.TFieldIdEnum) e.getKey()).getThriftFieldId()));
 
-    // Prepare deserializer and ctor
-    TDeserializer deser;
-    Constructor<?> ctor;
+    final TDeserializer deser = new TDeserializer(new TBinaryProtocol.Factory());
+    final TBase<?, ?> obj;
     try {
-      deser = new TDeserializer(new TBinaryProtocol.Factory());
-      ctor = thriftClass.getDeclaredConstructor();
+      Constructor<?> ctor = thriftClass.getDeclaredConstructor();
       ctor.setAccessible(true);
+      obj = (TBase<?, ?>) ctor.newInstance();
     } catch (Exception e) {
       root.close();
-      throw new RuntimeException("No default constructor for Thrift class: " + thriftClass, e);
+      throw new RuntimeException("Failed to construct Thrift class: " + thriftClass, e);
+    }
+
+    final java.util.List<FieldVector> vecList = root.getFieldVectors();
+    final FieldVector[] vectors = vecList.toArray(new FieldVector[0]);
+    final FieldValueMetaData[] vmd = new FieldValueMetaData[ordered.size()];
+    final org.apache.thrift.TFieldIdEnum[] keys = new org.apache.thrift.TFieldIdEnum[ordered.size()];
+    for (int i = 0; i < ordered.size(); i++) {
+      vmd[i] = ordered.get(i).getValue().valueMetaData;
+      keys[i] = (org.apache.thrift.TFieldIdEnum) ordered.get(i).getKey();
     }
 
     for (int row = 0; row < payloads.size(); row++) {
-      TBase<?, ?> obj;
       try {
-        obj = (TBase<?, ?>) ctor.newInstance();
+        obj.clear();
         deser.deserialize(obj, payloads.get(row));
       } catch (Exception e) {
         root.close();
         throw new RuntimeException("Failed to deserialize Thrift payload", e);
       }
-      // Write each field into vectors
-      List<FieldVector> vectors = root.getFieldVectors();
-      for (int i = 0; i < ordered.size(); i++) {
-        FieldMetaData fmd = ordered.get(i).getValue();
-        Object val = ((TBase) obj).getFieldValue((org.apache.thrift.TFieldIdEnum) ordered.get(i).getKey());
-        writeValue(vectors.get(i), fmd.valueMetaData, val, row);
+      for (int i = 0; i < vectors.length; i++) {
+        Object val = ((TBase) obj).getFieldValue(keys[i]);
+        writeValue(vectors[i], vmd[i], val, row);
       }
     }
 
-    // Set row count for all top-level vectors
     root.setRowCount(payloads.size());
-    for (FieldVector v : root.getFieldVectors()) {
-      v.setValueCount(payloads.size());
-    }
+    for (FieldVector v : root.getFieldVectors()) v.setValueCount(payloads.size());
     return root;
   }
 
   private void writeValue(FieldVector vector, FieldValueMetaData vmd, Object value, int row) {
-    if (value == null) {
-      // leave as null (validity bit unset). We'll set vector value counts later.
-      return;
-    }
+    if (value == null) return;
     switch (vmd.type) {
-      case org.apache.thrift.protocol.TType.BOOL: {
-        BitVector v = (BitVector) vector;
-        v.setSafe(row, ((Boolean) value) ? 1 : 0);
-        break;
-      }
-      case org.apache.thrift.protocol.TType.BYTE: {
-        TinyIntVector v = (TinyIntVector) vector;
-        v.setSafe(row, ((Byte) value).intValue());
-        break;
-      }
-      case org.apache.thrift.protocol.TType.I16: {
-        // stored as int32
-        IntVector v = (IntVector) vector;
-        v.setSafe(row, ((Short) value).intValue());
-        break;
-      }
-      case org.apache.thrift.protocol.TType.I32: {
-        IntVector v = (IntVector) vector;
-        v.setSafe(row, ((Integer) value).intValue());
-        break;
-      }
-      case org.apache.thrift.protocol.TType.I64: {
-        BigIntVector v = (BigIntVector) vector;
-        v.setSafe(row, ((Long) value).longValue());
-        break;
-      }
-      case org.apache.thrift.protocol.TType.DOUBLE: {
-        // mapped to float32
-        Float4Vector v = (Float4Vector) vector;
-        v.setSafe(row, ((Double) value).floatValue());
-        break;
-      }
+      case org.apache.thrift.protocol.TType.BOOL: ((BitVector) vector).setSafe(row, ((Boolean) value) ? 1 : 0); break;
+      case org.apache.thrift.protocol.TType.BYTE: ((TinyIntVector) vector).setSafe(row, ((Byte) value).intValue()); break;
+      case org.apache.thrift.protocol.TType.I16: ((IntVector) vector).setSafe(row, ((Short) value).intValue()); break;
+      case org.apache.thrift.protocol.TType.I32: ((IntVector) vector).setSafe(row, ((Integer) value)); break;
+      case org.apache.thrift.protocol.TType.I64: ((BigIntVector) vector).setSafe(row, ((Long) value)); break;
+      case org.apache.thrift.protocol.TType.DOUBLE: ((Float4Vector) vector).setSafe(row, ((Double) value).floatValue()); break;
       case org.apache.thrift.protocol.TType.STRING: {
         VarCharVector v = (VarCharVector) vector;
         if (value instanceof java.nio.ByteBuffer) {
@@ -239,32 +175,24 @@ public final class GenericThriftToArrowConverter implements ThriftToArrowConvert
       case org.apache.thrift.protocol.TType.LIST: {
         ListMetaData lmd = (ListMetaData) vmd;
         ListVector lv = (ListVector) vector;
-        @SuppressWarnings("unchecked")
-        List<Object> list = (List<Object>) value;
+        @SuppressWarnings("unchecked") List<Object> list = (List<Object>) value;
         int start = lv.startNewValue(row);
         FieldVector data = ensureListDataVector(lv, lmd.elemMetaData);
-        // Current number of values already in data vector
         int offset = data.getValueCount();
-        for (int i = 0; i < list.size(); i++) {
-          writeElement(data, lmd.elemMetaData, list.get(i), offset + i);
-        }
+        for (int i = 0; i < list.size(); i++) writeElement(data, lmd.elemMetaData, list.get(i), offset + i);
         data.setValueCount(offset + list.size());
         lv.endValue(row, list.size());
         break;
       }
       case org.apache.thrift.protocol.TType.SET: {
-        // Treat set like list
         SetMetaData smd = (SetMetaData) vmd;
         ListVector lv = (ListVector) vector;
-        @SuppressWarnings("unchecked")
-        java.util.Set<Object> set = (java.util.Set<Object>) value;
+        @SuppressWarnings("unchecked") java.util.Set<Object> set = (java.util.Set<Object>) value;
         List<Object> list = new ArrayList<>(set);
         int start = lv.startNewValue(row);
-        FieldVector data = lv.getDataVector();
+        FieldVector data = ensureListDataVector(lv, smd.elemMetaData);
         int offset = data.getValueCount();
-        for (int i = 0; i < list.size(); i++) {
-          writeElement(data, smd.elemMetaData, list.get(i), offset + i);
-        }
+        for (int i = 0; i < list.size(); i++) writeElement(data, smd.elemMetaData, list.get(i), offset + i);
         data.setValueCount(offset + list.size());
         lv.endValue(row, list.size());
         break;
@@ -272,8 +200,7 @@ public final class GenericThriftToArrowConverter implements ThriftToArrowConvert
       case org.apache.thrift.protocol.TType.MAP: {
         MapMetaData mmd = (MapMetaData) vmd;
         MapVector mv = (MapVector) vector;
-        @SuppressWarnings("unchecked")
-        Map<Object, Object> map = (Map<Object, Object>) value;
+        @SuppressWarnings("unchecked") Map<Object, Object> map = (Map<Object, Object>) value;
         int start = mv.startNewValue(row);
         StructVector entry = (StructVector) mv.getDataVector();
         FieldVector keyVec = entry.getChild("key");
@@ -292,8 +219,7 @@ public final class GenericThriftToArrowConverter implements ThriftToArrowConvert
       case org.apache.thrift.protocol.TType.STRUCT: {
         StructMetaData smd = (StructMetaData) vmd;
         StructVector sv = (StructVector) vector;
-        @SuppressWarnings("unchecked")
-        TBase<?, ?> nested = (TBase<?, ?>) value;
+        @SuppressWarnings("unchecked") TBase<?, ?> nested = (TBase<?, ?>) value;
         Map<?, FieldMetaData> meta = FieldMetaData.getStructMetaDataMap(smd.structClass);
         List<Map.Entry<?, FieldMetaData>> ordered = new ArrayList<>(meta.entrySet());
         ordered.sort(Comparator.comparingInt(e -> ((org.apache.thrift.TFieldIdEnum) e.getKey()).getThriftFieldId()));
@@ -309,10 +235,7 @@ public final class GenericThriftToArrowConverter implements ThriftToArrowConvert
   }
 
   private void writeElement(FieldVector vector, FieldValueMetaData vmd, Object value, int index) {
-    // Write element in the data vector of a list/map
-    if (value == null) {
-      return;
-    }
+    if (value == null) return;
     switch (vmd.type) {
       case org.apache.thrift.protocol.TType.BOOL: ((BitVector) vector).setSafe(index, ((Boolean) value) ? 1 : 0); break;
       case org.apache.thrift.protocol.TType.BYTE: ((TinyIntVector) vector).setSafe(index, ((Byte) value).intValue()); break;
@@ -335,12 +258,11 @@ public final class GenericThriftToArrowConverter implements ThriftToArrowConvert
       case org.apache.thrift.protocol.TType.STRUCT: {
         StructMetaData smd = (StructMetaData) vmd;
         StructVector sv = (StructVector) vector;
-        @SuppressWarnings("unchecked")
-        TBase<?, ?> nested = (TBase<?, ?>) value;
+        @SuppressWarnings("unchecked") TBase<?, ?> nested = (TBase<?, ?>) value;
         Map<?, FieldMetaData> meta = FieldMetaData.getStructMetaDataMap(smd.structClass);
-        List<Map.Entry<?, FieldMetaData>> ordered = new ArrayList<>(meta.entrySet());
-        ordered.sort(Comparator.comparingInt(e -> ((org.apache.thrift.TFieldIdEnum) e.getKey()).getThriftFieldId()));
-        for (Map.Entry<?, FieldMetaData> e : ordered) {
+        List<Map.Entry<?, FieldMetaData>> order = new ArrayList<>(meta.entrySet());
+        order.sort(Comparator.comparingInt(e -> ((org.apache.thrift.TFieldIdEnum) e.getKey()).getThriftFieldId()));
+        for (Map.Entry<?, FieldMetaData> e : order) {
           FieldVector child = sv.getChild(e.getValue().fieldName);
           Object childVal = ((TBase) nested).getFieldValue((org.apache.thrift.TFieldIdEnum) e.getKey());
           writeElement(child, e.getValue().valueMetaData, childVal, index);
@@ -350,14 +272,11 @@ public final class GenericThriftToArrowConverter implements ThriftToArrowConvert
       case org.apache.thrift.protocol.TType.LIST: {
         ListMetaData lmd = (ListMetaData) vmd;
         ListVector lv = (ListVector) vector;
-        @SuppressWarnings("unchecked")
-        List<Object> list = (List<Object>) value;
+        @SuppressWarnings("unchecked") List<Object> list = (List<Object>) value;
         int start = lv.startNewValue(index);
         FieldVector data = ensureListDataVector(lv, lmd.elemMetaData);
         int offset = data.getValueCount();
-        for (int i = 0; i < list.size(); i++) {
-          writeElement(data, lmd.elemMetaData, list.get(i), offset + i);
-        }
+        for (int i = 0; i < list.size(); i++) writeElement(data, lmd.elemMetaData, list.get(i), offset + i);
         data.setValueCount(offset + list.size());
         lv.endValue(index, list.size());
         break;
@@ -365,15 +284,12 @@ public final class GenericThriftToArrowConverter implements ThriftToArrowConvert
       case org.apache.thrift.protocol.TType.SET: {
         SetMetaData smd = (SetMetaData) vmd;
         ListVector lv = (ListVector) vector;
-        @SuppressWarnings("unchecked")
-        java.util.Set<Object> set = (java.util.Set<Object>) value;
+        @SuppressWarnings("unchecked") java.util.Set<Object> set = (java.util.Set<Object>) value;
         List<Object> list = new ArrayList<>(set);
         int start = lv.startNewValue(index);
-        FieldVector data = lv.getDataVector();
+        FieldVector data = ensureListDataVector(lv, smd.elemMetaData);
         int offset = data.getValueCount();
-        for (int i = 0; i < list.size(); i++) {
-          writeElement(data, smd.elemMetaData, list.get(i), offset + i);
-        }
+        for (int i = 0; i < list.size(); i++) writeElement(data, smd.elemMetaData, list.get(i), offset + i);
         data.setValueCount(offset + list.size());
         lv.endValue(index, list.size());
         break;
@@ -381,8 +297,7 @@ public final class GenericThriftToArrowConverter implements ThriftToArrowConvert
       case org.apache.thrift.protocol.TType.MAP: {
         MapMetaData mmd = (MapMetaData) vmd;
         MapVector mv = (MapVector) vector;
-        @SuppressWarnings("unchecked")
-        Map<Object, Object> map = (Map<Object, Object>) value;
+        @SuppressWarnings("unchecked") Map<Object, Object> map = (Map<Object, Object>) value;
         int start = mv.startNewValue(index);
         StructVector entry = (StructVector) mv.getDataVector();
         FieldVector keyVec = entry.getChild("key");
@@ -398,7 +313,24 @@ public final class GenericThriftToArrowConverter implements ThriftToArrowConvert
         mv.endValue(index, i);
         break;
       }
-      default: { /* leave null */ }
+      default: { }
     }
   }
+
+  private FieldVector ensureListDataVector(ListVector lv, FieldValueMetaData elemMeta) {
+    FieldVector data = lv.getDataVector();
+    if (!(data instanceof org.apache.arrow.vector.NullVector)) return data;
+    ArrowType childType = toArrowType(elemMeta);
+    FieldType ft;
+    switch (elemMeta.type) {
+      case org.apache.thrift.protocol.TType.LIST: ft = FieldType.nullable(ArrowType.List.INSTANCE); break;
+      case org.apache.thrift.protocol.TType.MAP: ft = new FieldType(true, new ArrowType.Map(false), null); break;
+      case org.apache.thrift.protocol.TType.STRUCT: ft = FieldType.nullable(new ArrowType.Struct()); break;
+      default: ft = FieldType.nullable(childType);
+    }
+    org.apache.arrow.vector.ValueVector vv = lv.addOrGetVector(ft).getVector();
+    FieldVector newData = (FieldVector) vv; newData.allocateNew();
+    return newData;
+  }
 }
+

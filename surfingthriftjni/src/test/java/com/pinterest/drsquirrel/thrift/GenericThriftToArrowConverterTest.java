@@ -13,6 +13,7 @@ import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.thrift.TBase;
 import org.apache.thrift.transport.TMemoryBuffer;
+import org.apache.thrift.ext.GenericThriftToArrowConverter;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TStruct;
 import org.apache.thrift.protocol.TField;

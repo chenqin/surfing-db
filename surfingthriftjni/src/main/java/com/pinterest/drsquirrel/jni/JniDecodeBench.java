@@ -13,7 +13,8 @@ import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.thrift.TBase;
 
 import com.pinterest.mabs_metrics.thrift.MabsMetrics;
-import com.pinterest.drsquirrel.thrift.GenericThriftToArrowConverter;
+import org.apache.thrift.ext.GenericThriftToArrowConverter;
+import org.apache.thrift.ext.FastThriftBinaryDecoder;
 
 public final class JniDecodeBench {
   public static void main(String[] args) throws Exception {
@@ -155,13 +156,14 @@ public final class JniDecodeBench {
     // Java baseline using GenericThriftToArrowConverter and MabsLite class
     // Note: For bb/bbp (ByteBuffer) modes, Java baseline copies buffers into byte[]
     GenericThriftToArrowConverter conv = new GenericThriftToArrowConverter();
+    // Prefer fast protocol-based Java decoder where supported (falls back to generic for complex types)
     if ("array".equalsIgnoreCase(mode)) {
       // Warmup Java path
-      try (VectorSchemaRoot root = conv.convert(payloads, (Class<? extends TBase<?, ?>>) (Class<?>) MabsMetrics.class, alloc)) { }
+      try (VectorSchemaRoot root = FastThriftBinaryDecoder.convert(payloads, (Class<? extends TBase<?, ?>>) (Class<?>) MabsMetrics.class, alloc)) { }
       long jbest = Long.MAX_VALUE;
       for (int i = 0; i < iters; i++) {
         long t0 = System.nanoTime();
-        try (VectorSchemaRoot root = conv.convert(payloads, (Class<? extends TBase<?, ?>>) (Class<?>) MabsMetrics.class, alloc)) {
+        try (VectorSchemaRoot root = FastThriftBinaryDecoder.convert(payloads, (Class<? extends TBase<?, ?>>) (Class<?>) MabsMetrics.class, alloc)) {
           int rows = root.getRowCount();
           if (rows != payloads.size()) throw new RuntimeException("row mismatch (java)");
         }
@@ -190,11 +192,11 @@ public final class JniDecodeBench {
         jpayloads.add(arr);
       }
       // Warmup
-      try (VectorSchemaRoot root = conv.convert(jpayloads, (Class<? extends TBase<?, ?>>) (Class<?>) MabsMetrics.class, alloc)) { }
+      try (VectorSchemaRoot root = FastThriftBinaryDecoder.convert(jpayloads, (Class<? extends TBase<?, ?>>) (Class<?>) MabsMetrics.class, alloc)) { }
       long jbest = Long.MAX_VALUE;
       for (int i = 0; i < iters; i++) {
         long t0 = System.nanoTime();
-        try (VectorSchemaRoot root = conv.convert(jpayloads, (Class<? extends TBase<?, ?>>) (Class<?>) MabsMetrics.class, alloc)) {
+        try (VectorSchemaRoot root = FastThriftBinaryDecoder.convert(jpayloads, (Class<? extends TBase<?, ?>>) (Class<?>) MabsMetrics.class, alloc)) {
           int rows = root.getRowCount();
           if (rows != jpayloads.size()) throw new RuntimeException("row mismatch (java)");
         }
@@ -214,4 +216,3 @@ public final class JniDecodeBench {
     alloc.close();
   }
 }
-

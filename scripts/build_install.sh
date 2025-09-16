@@ -14,20 +14,18 @@ set -euo pipefail
 #   --build-arrow        Force build Arrow from source (if APT not desired)
 #   --arrow-prefix       Install prefix for Arrow (source-build only; default: $HOME/arrow-12-install)
 #   --arrow-version      Arrow version for source-build (default: 12.0.0)
-#   --install-cuda       Install CUDA toolkit (Ubuntu/Debian: nvidia-cuda-toolkit)
+#   (CUDA removed)
 
 USE_SUDO=1
 ARROW_PREFIX="${HOME}/arrow-12-install"
 ARROW_VERSION="12.0.0"
 USE_SYSTEM_ARROW=1
 BUILD_ARROW=0
-INSTALL_CUDA=0
 for arg in "$@"; do
   case "$arg" in
     --no-sudo) USE_SUDO=0 ;;
     --use-system-arrow) USE_SYSTEM_ARROW=1 ;;
     --build-arrow) BUILD_ARROW=1 ; USE_SYSTEM_ARROW=0 ;;
-    --install-cuda) INSTALL_CUDA=1 ;;
     --arrow-prefix)
       shift
       ARROW_PREFIX="$1" ;;
@@ -58,16 +56,6 @@ ${SUDO} ${APT} install -y \
   pybind11-dev libcurl4-openssl-dev zlib1g-dev libzstd-dev liblz4-dev libsnappy-dev libbrotli-dev \
   libthrift-dev librdkafka-dev flex bison
 
-# Optional: CUDA toolkit (Ubuntu/Debian)
-if [ "${INSTALL_CUDA}" = "1" ]; then
-  echo "[+] Installing CUDA toolkit (Ubuntu/Debian packages)"
-  ${SUDO} ${APT} install -y nvidia-cuda-toolkit || true
-  if ! command -v nvcc >/dev/null 2>&1; then
-    echo "[!] nvcc not found after install. You may need to reboot or install from NVIDIA's CUDA repository." >&2
-  else
-    echo "[i] Found nvcc: $(nvcc --version | head -n1)"
-  fi
-fi
 
 export JAVA_HOME="/usr/lib/jvm/java-8-openjdk-amd64"
 export PATH="$JAVA_HOME/bin:$PATH"

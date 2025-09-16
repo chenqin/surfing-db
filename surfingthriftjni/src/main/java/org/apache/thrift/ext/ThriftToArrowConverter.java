@@ -1,4 +1,4 @@
-package com.pinterest.drsquirrel.thrift;
+package org.apache.thrift.ext;
 
 import java.util.List;
 
