@@ -46,7 +46,27 @@
     <dependency>
       <groupId>org.apache.thrift</groupId>
       <artifactId>libthrift</artifactId>
-      <version>0.13.0</version>
+      <version>0.6.1</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-log4j12</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <!-- Test dependencies -->
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>4.13.2</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-nop</artifactId>
+      <version>1.7.25</version>
+      <scope>test</scope>
     </dependency>
   </dependencies>
 
@@ -122,6 +142,12 @@
         <payload.small>/tmp/mabs_payloads.bin</payload.small>
         <payload.large>/tmp/mabs_payloads_large_20k.bin</payload.large>
         <thrift.path>${project.basedir}/../src/mabs.thrift</thrift.path>
+        <!-- Parameterize dataset sizes -->
+        <small.count>200000</small.count>
+        <large.count>20000</large.count>
+        <large.payload.size>256</large.payload.size>
+        <large.k>16</large.k>
+        <large.v>512</large.v>
       </properties>
       <build>
         <plugins>
@@ -139,7 +165,7 @@
                   <arguments>
                     <argument>-lc</argument>
                     <argument>
-                      <![CDATA[
+                  <![CDATA[
 set -euo pipefail; \
 ROOT_DIR="${project.basedir}/.."; \
 BUILD_DIR="${project.basedir}/../build"; \
@@ -154,14 +180,14 @@ fi; \
 if [ ! -f "$BUILD_DIR/GenMabsPayloadsLarge" ]; then \
   cmake --build "$BUILD_DIR" --target GenMabsPayloadsLarge -j; \
 fi; \
-if [ ! -f "${payload.small}" ]; then "$BUILD_DIR/GenMabsPayloads" "${payload.small}" 200000; fi; \
-if [ ! -f "${payload.large}" ]; then "$BUILD_DIR/GenMabsPayloadsLarge" "${payload.large}" 20000 256 16 512; fi; \
+if [ ! -f "${payload.small}" ]; then "$BUILD_DIR/GenMabsPayloads" "${payload.small}" "${small.count}"; fi; \
+if [ ! -f "${payload.large}" ]; then "$BUILD_DIR/GenMabsPayloadsLarge" "${payload.large}" "${large.count}" "${large.payload.size}" "${large.k}" "${large.v}"; fi; \
 true
-                      ]]>
-                    </argument>
-                  </arguments>
-                </configuration>
-              </execution>
+                  ]]>
+                </argument>
+              </arguments>
+            </configuration>
+          </execution>
               <execution>
                 <id>run-benches</id>
                 <phase>verify</phase>
@@ -198,8 +224,28 @@ true
               </execution>
             </executions>
           </plugin>
+          <!-- Provide SLF4J binding for benches to avoid warnings -->
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>build-helper-maven-plugin</artifactId>
+            <version>3.5.0</version>
+            <executions>
+              <execution>
+                <id>attach-jni-bench-deps</id>
+                <phase>validate</phase>
+                <goals><goal>parse-version</goal></goals>
+              </execution>
+            </executions>
+          </plugin>
         </plugins>
       </build>
+      <dependencies>
+        <dependency>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-simple</artifactId>
+          <version>1.7.25</version>
+        </dependency>
+      </dependencies>
     </profile>
   </profiles>
 </project>

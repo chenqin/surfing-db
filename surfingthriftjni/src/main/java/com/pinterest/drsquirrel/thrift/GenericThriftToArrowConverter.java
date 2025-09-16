@@ -103,6 +103,33 @@ public final class GenericThriftToArrowConverter implements ThriftToArrowConvert
     }
   }
 
+  private FieldVector ensureListDataVector(ListVector lv, FieldValueMetaData elemMeta) {
+    FieldVector data = lv.getDataVector();
+    if (!(data instanceof org.apache.arrow.vector.NullVector)) {
+      return data;
+    }
+    ArrowType childType = toArrowType(elemMeta);
+    FieldType ft;
+    switch (elemMeta.type) {
+      case org.apache.thrift.protocol.TType.LIST:
+        ft = FieldType.nullable(ArrowType.List.INSTANCE);
+        break;
+      case org.apache.thrift.protocol.TType.MAP:
+        // Map values inside list: create a Map logical type (keys non-nullable by convention)
+        ft = new FieldType(true, new ArrowType.Map(false), null);
+        break;
+      case org.apache.thrift.protocol.TType.STRUCT:
+        ft = FieldType.nullable(new ArrowType.Struct());
+        break;
+      default:
+        ft = FieldType.nullable(childType);
+    }
+    org.apache.arrow.vector.ValueVector vv = lv.addOrGetVector(ft).getVector();
+    FieldVector newData = (FieldVector) vv;
+    newData.allocateNew();
+    return newData;
+  }
+
   @Override
   public VectorSchemaRoot convert(byte[] payload, Class<? extends TBase<?, ?>> thriftClass,
                                   BufferAllocator allocator) {
@@ -122,9 +149,10 @@ public final class GenericThriftToArrowConverter implements ThriftToArrowConvert
     ordered.sort(Comparator.comparingInt(e -> ((org.apache.thrift.TFieldIdEnum) e.getKey()).getThriftFieldId()));
 
     // Prepare deserializer and ctor
-    TDeserializer deser = new TDeserializer(new TBinaryProtocol.Factory());
+    TDeserializer deser;
     Constructor<?> ctor;
     try {
+      deser = new TDeserializer(new TBinaryProtocol.Factory());
       ctor = thriftClass.getDeclaredConstructor();
       ctor.setAccessible(true);
     } catch (Exception e) {
@@ -214,7 +242,7 @@ public final class GenericThriftToArrowConverter implements ThriftToArrowConvert
         @SuppressWarnings("unchecked")
         List<Object> list = (List<Object>) value;
         int start = lv.startNewValue(row);
-        FieldVector data = lv.getDataVector();
+        FieldVector data = ensureListDataVector(lv, lmd.elemMetaData);
         // Current number of values already in data vector
         int offset = data.getValueCount();
         for (int i = 0; i < list.size(); i++) {
@@ -325,7 +353,7 @@ public final class GenericThriftToArrowConverter implements ThriftToArrowConvert
         @SuppressWarnings("unchecked")
         List<Object> list = (List<Object>) value;
         int start = lv.startNewValue(index);
-        FieldVector data = lv.getDataVector();
+        FieldVector data = ensureListDataVector(lv, lmd.elemMetaData);
         int offset = data.getValueCount();
         for (int i = 0; i < list.size(); i++) {
           writeElement(data, lmd.elemMetaData, list.get(i), offset + i);
@@ -374,4 +402,3 @@ public final class GenericThriftToArrowConverter implements ThriftToArrowConvert
     }
   }
 }
-
