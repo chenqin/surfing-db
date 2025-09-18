@@ -5,22 +5,31 @@
 #include <arrow/api.h>
 #include <iostream>
 #include <algorithm>
+#include <stdexcept>
 
 #include "table/processors.h"
 
 using namespace matcha::table;
+
+namespace {
+void ThrowIfArrowError(const arrow::Status& st) {
+  if (!st.ok()) {
+    throw std::runtime_error(std::string("Arrow error: ") + st.ToString());
+  }
+}
+}  // namespace
 
 static std::shared_ptr<arrow::RecordBatch> make_batch_for_rank(int rank, int world) {
   arrow::Int64Builder key_builder;
   arrow::Int32Builder val_builder;
   // Create keys that likely spread across ranks
   for (int i = 0; i < 4; ++i) {
-    key_builder.Append(static_cast<int64_t>(rank * 100 + i * 7));
-    val_builder.Append(rank * 1000 + i);
+    ThrowIfArrowError(key_builder.Append(static_cast<int64_t>(rank * 100 + i * 7)));
+    ThrowIfArrowError(val_builder.Append(rank * 1000 + i));
   }
   std::shared_ptr<arrow::Array> keys, vals;
-  key_builder.Finish(&keys);
-  val_builder.Finish(&vals);
+  ThrowIfArrowError(key_builder.Finish(&keys));
+  ThrowIfArrowError(val_builder.Finish(&vals));
   auto schema = arrow::schema({arrow::field("key", arrow::int64()),
                                arrow::field("val", arrow::int32())});
   return arrow::RecordBatch::Make(schema, keys->length(), {keys, vals});

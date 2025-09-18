@@ -42,11 +42,11 @@ done
 if [[ "$DO_BUILD" == "1" ]]; then
   echo "[+] Building native + Java + example"
   CMAKE_EXTRA_FLAGS=-DENABLE_MPI_TESTS=ON "$ROOT/scripts/build_install.sh"
-  mvn -q -f "$ROOT/drsquirrel-java/pom.xml" -Darrow.version=12.0.0 -DskipTests install
+  mvn -q -f "$ROOT/drsquirrel-java-project/pom.xml" -Darrow.version=12.0.0 -DskipTests install
   mvn -q -f "$ROOT/examples/fake-cogroup-app/pom.xml" -DskipTests package
 fi
 
-FAT_JAR="$ROOT/drsquirrel-java/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar"
+FAT_JAR="$ROOT/drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar"
 EX_JAR="$ROOT/examples/fake-cogroup-app/target/fake-cogroup-app-0.1.0-SNAPSHOT.jar"
 
 if [[ ! -f "$FAT_JAR" ]]; then

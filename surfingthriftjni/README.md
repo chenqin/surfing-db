@@ -43,7 +43,7 @@ java -Djava.library.path=$(pwd)/surfingthriftjni/target/nativebuild \
 Notes
 - If the native library is not present, only the pure Java converter path will work.
 - Package note: this module defines `com.pinterest.drsquirrel.jni.NativeThriftDecoder` and
-  `org.apache.thrift.ext.*`, which also exist in `drsquirrel-java`. Do not put both
+  `org.apache.thrift.ext.*`, which also exist in `drsquirrel-java-project`. Do not put both
   jars on the same classpath; prefer one or the other per application.
 
 Concurrency and tuning

@@ -61,6 +61,10 @@ typedef datasketches::frequent_items_sketch<std::string> frequent_strings_sketch
  */
 class utils {
 public:
+  static void CheckStatus(const arrow::Status& st) {
+    CHECK(st.ok()) << st.ToString();
+  }
+
   static void jvmGC(JNIEnv* env) {
     jclass systemClass = nullptr;
     jmethodID systemGCMethod = nullptr;
@@ -153,13 +157,13 @@ public:
     } else if (type == RowType::LONG) {
       return arrow::int64();
     } else if (type == RowType::DOUBLE) {
-      return arrow::float32();
+      return arrow::float64();
     } else if (type == RowType::STRING) {
       return arrow::utf8();
     } else if (type == RowType::LIST) {
       return arrow::list(getArrowType(type1, RowType::VOID, RowType::VOID, 1));
     } else if (type == RowType::MAP) {
-      return arrow::map(getArrowType(type1, RowType::VOID, RowType::VOID, 1), getArrowType(type2, RowType::VOID, RowType::VOID, 1), true);
+      return arrow::map(getArrowType(type1, RowType::VOID, RowType::VOID, 1), getArrowType(type2, RowType::VOID, RowType::VOID, 1), false);
     } else {
       return arrow::null();
     }
@@ -333,11 +337,11 @@ public:
         CHECK(b->GetColumnByName(field_name)->GetScalar(i).ok());
         auto v = b->GetColumnByName(field_name)->GetScalar(i).ValueOrDie();
         auto dest_rank = partitioner(v->hash(), rank, world);
-        hash_builder.Append(dest_rank);
+        CheckStatus(hash_builder.Append(dest_rank));
       }
       if (b->num_rows() > 0) {
         std::shared_ptr<arrow::Array> _array;
-        hash_builder.Finish(&_array);
+        CheckStatus(hash_builder.Finish(&_array));
         auto result = b->AddColumn(b->num_columns(), "_hash", _array);
         CHECK(result.ok());
         arrow_tables.push_back(result.ValueOrDie());
@@ -669,12 +673,12 @@ public:
       auto field = schema_ptr->fields.at(k);
       auto builder_ptr = builders.at(k);
       Value v;
-      append(builder_ptr.get(), field, v.p_val, v);
+      CheckStatus(append(builder_ptr.get(), field, v.p_val, v));
     }
 
     for (auto b : builders) {
       std::shared_ptr<arrow::Array> _array;
-      b->Finish(&_array);
+      CheckStatus(b->Finish(&_array));
       arrays.push_back(_array);
     }
     return arrow::RecordBatch::Make(schema, 1, arrays);
@@ -737,15 +741,15 @@ public:
       for (auto k = 0; k < table->getSchema()->fields.size(); k++) {
         auto field = table->getSchema()->fields.at(k);
         auto builder_ptr = builders.at(k);
-        Value v;
-        r->read(field, v);
-        append(builder_ptr.get(), field, v.p_val, v);
+       Value v;
+       r->read(field, v);
+        CheckStatus(append(builder_ptr.get(), field, v.p_val, v));
       }
     }
 
     for (auto b : builders) {
       std::shared_ptr<arrow::Array> _array;
-      b->Finish(&_array);
+      CheckStatus(b->Finish(&_array));
       arrays.push_back(_array);
     }
     return arrow::RecordBatch::Make(toArrow(table->getSchema()), table->row_count, arrays);

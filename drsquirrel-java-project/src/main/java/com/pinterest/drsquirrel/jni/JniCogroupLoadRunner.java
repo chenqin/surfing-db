@@ -1,7 +1,7 @@
 package com.pinterest.drsquirrel.jni;
 
-import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.IntVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
@@ -17,12 +17,13 @@ import java.util.Arrays;
 import java.util.Random;
 
 /**
- * MPI Java load runner for JNI processors shuffle.
+ * MPI Java load runner for JNI processors cogroup.
+ * Produces two inputs per rank and co-shuffles them by the same key.
  *
- * Usage (run under mpiexec):
+ * Usage (under mpiexec):
  *   mpiexec -np 4 java -Djava.library.path=$PWD/build \
- *     -cp drsquirrel-java/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar \
- *     com.pinterest.drsquirrel.jni.JniShuffleLoadRunner [two]
+ *     -cp drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar \
+ *     com.pinterest.drsquirrel.jni.JniCogroupLoadRunner [two]
  *
  * Env:
  *   SHUFFLE_LOAD_ROWS: rows per rank (default 200000)
@@ -30,7 +31,7 @@ import java.util.Random;
  *   SHUFFLE_TEST_SEED: base random seed (optional)
  *   SHUFFLE_LOAD_OUT: CSV path to append results (rank 0 only)
  */
-public class JniShuffleLoadRunner {
+public class JniCogroupLoadRunner {
     private static long getEnvLong(String name, long defVal) {
         String v = System.getenv(name);
         if (v == null) return defVal;
@@ -56,15 +57,14 @@ public class JniShuffleLoadRunner {
         try { return Integer.parseInt(s); } catch (NumberFormatException e) { return 1; }
     }
 
-    private static VectorSchemaRoot makeRandomBatch(BufferAllocator alloc, long rows, long seed) {
+    private static VectorSchemaRoot makeRandomBatch(BufferAllocator alloc, long rows, long seed, String valName) {
         Field key = new Field("key", FieldType.nullable(new ArrowType.Int(64, true)), null);
-        Field val = new Field("val", FieldType.nullable(new ArrowType.Int(32, true)), null);
+        Field val = new Field(valName, FieldType.nullable(new ArrowType.Int(32, true)), null);
         Schema schema = new Schema(Arrays.asList(key, val));
         VectorSchemaRoot root = VectorSchemaRoot.create(schema, alloc);
         BigIntVector keyVec = (BigIntVector) root.getVector("key");
-        IntVector valVec = (IntVector) root.getVector("val");
+        IntVector valVec = (IntVector) root.getVector(valName);
         root.allocateNew();
-
         Random rnd = new Random(seed);
         for (int i = 0; i < rows; i++) {
             long k = rnd.nextLong();
@@ -98,32 +98,33 @@ public class JniShuffleLoadRunner {
         }
 
         if (rank == 0) {
-            System.out.println("[JniLoadTest] world=" + world +
+            System.out.println("[JniCogroupLoad] world=" + world +
                     " rows_per_rank=" + rowsPerRank +
                     " iters=" + iters +
                     " mode=" + mode);
         }
 
         try (RootAllocator alloc = new RootAllocator()) {
-            try (VectorSchemaRoot in = makeRandomBatch(alloc, rowsPerRank, seedBase + rank)) {
+            try (VectorSchemaRoot left = makeRandomBatch(alloc, rowsPerRank, seedBase + rank, "la");
+                 VectorSchemaRoot right = makeRandomBatch(alloc, rowsPerRank, seedBase + rank + 17, "rb")) {
                 // warmup
-                VectorSchemaRoot warm = NativeProcessors.shuffle(alloc, in, "key", !twoSided, rank, world);
-                if (warm != null) warm.close();
+                VectorSchemaRoot[] warm = NativeProcessors.cogroup(alloc, left, right, "key", !twoSided, rank, world);
+                if (warm != null) { for (VectorSchemaRoot v : warm) if (v != null) v.close(); }
 
                 double best = Double.MAX_VALUE, total = 0.0;
                 for (int i = 0; i < iters; i++) {
                     long t0 = System.nanoTime();
-                    VectorSchemaRoot out = NativeProcessors.shuffle(alloc, in, "key", !twoSided, rank, world);
+                    VectorSchemaRoot[] out = NativeProcessors.cogroup(alloc, left, right, "key", !twoSided, rank, world);
                     long t1 = System.nanoTime();
-                    if (out != null) out.close();
+                    if (out != null) { for (VectorSchemaRoot v : out) if (v != null) v.close(); }
                     double dt = (t1 - t0) / 1e9;
                     best = Math.min(best, dt);
                     total += dt;
 
-                    long rows = rowsPerRank * world; // expected global rows
+                    long rows = rowsPerRank * world * 2; // two inputs combined
                     double rps = rows / dt;
                     if (rank == 0) {
-                        System.out.println("[JniLoadTest] iter=" + i +
+                        System.out.println("[JniCogroupLoad] iter=" + i +
                                 " rows=" + rows +
                                 " time_s=" + dt +
                                 " rows_per_sec=" + rps);
@@ -136,7 +137,7 @@ public class JniShuffleLoadRunner {
                 }
                 if (rank == 0) {
                     double avg = total / (double) iters;
-                    System.out.println("[JniLoadTest] best_s=" + best + " avg_s=" + avg);
+                    System.out.println("[JniCogroupLoad] best_s=" + best + " avg_s=" + avg);
                 }
             }
         }

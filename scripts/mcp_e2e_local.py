@@ -46,10 +46,10 @@ def prepare_inputs(base: Path):
 
 def main():
     build = ROOT / 'build'
-    jar = ROOT / 'drsquirrel-java/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar'
+    jar = ROOT / 'drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar'
     if not jar.exists():
         print('[e2e] Building drsquirrel-java shaded jar...')
-        subprocess.check_call(['mvn','-q','-f', str(ROOT/'drsquirrel-java/pom.xml'), '-Darrow.version=12.0.0','-DskipTests','package'])
+        subprocess.check_call(['mvn','-q','-f', str(ROOT/'drsquirrel-java-project/pom.xml'), '-Darrow.version=12.0.0','-DskipTests','package'])
     # Prepare local workspace
     work = ROOT / 'build' / 'e2e'
     shutil.rmtree(work, ignore_errors=True)
@@ -63,8 +63,13 @@ def main():
     # Start fastmcp server
     port = find_free_port(19000)
     env = os.environ.copy()
-    # Prefer venv python if available
-    py = sys.executable
+    # Use project venv python (with fastmcp) if available; otherwise create it
+    vpy = ROOT / '.venv' / 'bin' / 'python'
+    if not vpy.exists():
+        subprocess.check_call(['python3','-m','venv', str(ROOT/'.venv')])
+        subprocess.check_call([str(vpy), '-m', 'pip', 'install', '--upgrade', 'pip'])
+        subprocess.check_call([str(vpy), '-m', 'pip', 'install', 'fastmcp', 'uvicorn'])
+    py = str(vpy)
     server = subprocess.Popen([py, str(ROOT/'scripts/mcp_fastmcp_server.py')], env=env)
     try:
         # Wait for server
@@ -92,4 +97,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

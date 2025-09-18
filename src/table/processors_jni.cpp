@@ -47,13 +47,15 @@ Java_com_pinterest_drsquirrel_jni_NativeProcessors_shuffle(
     jint j_rank, jint j_world,
     jlong schema_out_addr, jlong array_out_addr) {
   (void)env; // unused
-  ensure_mpi();
   int rank = 0, world = 1;
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  MPI_Comm_size(MPI_COMM_WORLD, &world);
-
-  // If caller provided rank/world, ensure they match the actual MPI world (best-effort)
-  (void)j_rank; (void)j_world;
+  if (j_world > 0) {
+    rank = j_rank;
+    world = j_world;
+  } else {
+    ensure_mpi();
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &world);
+  }
 
   auto* schema_in = reinterpret_cast<ArrowSchema*>(schema_in_addr);
   auto* array_in  = reinterpret_cast<ArrowArray*>(array_in_addr);
@@ -72,8 +74,12 @@ Java_com_pinterest_drsquirrel_jni_NativeProcessors_shuffle(
   auto partitioner = [](size_t key_hash, int r, int w) { (void)r; return key_hash % w; };
 
   bool one_sided = (j_one_sided == JNI_TRUE);
-  auto out = processors::shuffle(batch, field_name, partitioner, one_sided, rank, world);
-
+  std::shared_ptr<arrow::RecordBatch> out;
+  if (world <= 1) {
+    out = batch;
+  } else {
+    out = processors::shuffle(batch, field_name, partitioner, one_sided, rank, world);
+  }
   // export to output
   auto* schema_out = reinterpret_cast<ArrowSchema*>(schema_out_addr);
   auto* array_out  = reinterpret_cast<ArrowArray*>(array_out_addr);
@@ -92,11 +98,15 @@ Java_com_pinterest_drsquirrel_jni_NativeProcessors_cogroup(
     jlong schema_out_right_addr, jlong array_out_right_addr) {
   (void)env;
 
-  ensure_mpi();
   int rank = 0, world = 1;
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  MPI_Comm_size(MPI_COMM_WORLD, &world);
-  (void)j_rank; (void)j_world;
+  if (j_world > 0) {
+    rank = j_rank;
+    world = j_world;
+  } else {
+    ensure_mpi();
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &world);
+  }
 
   auto* schema_left_in = reinterpret_cast<ArrowSchema*>(schema_in_left_addr);
   auto* array_left_in  = reinterpret_cast<ArrowArray*>(array_in_left_addr);
@@ -121,7 +131,12 @@ Java_com_pinterest_drsquirrel_jni_NativeProcessors_cogroup(
   auto partitioner = [](size_t key_hash, int r, int w) { (void)r; return key_hash % w; };
   bool one_sided = (j_one_sided == JNI_TRUE);
 
-  auto result = processors::cogroup(left_rb, right_rb, field_name, partitioner, one_sided, rank, world);
+  std::pair<std::shared_ptr<arrow::RecordBatch>, std::shared_ptr<arrow::RecordBatch>> result;
+  if (world <= 1) {
+    result = {left_rb, right_rb};
+  } else {
+    result = processors::cogroup(left_rb, right_rb, field_name, partitioner, one_sided, rank, world);
+  }
 
   // export left
   if (result.first) {

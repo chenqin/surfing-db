@@ -26,7 +26,7 @@ _seq_lock = asyncio.Lock()  # ensures FIFO execution
 
 def _default_paths():
     root = Path(__file__).resolve().parents[1]
-    jar = root / "drsquirrel-java/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar"
+    jar = root / "drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar"
     lib = root / "build"
     return str(jar), str(lib)
 

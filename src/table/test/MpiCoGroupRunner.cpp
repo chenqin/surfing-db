@@ -5,21 +5,30 @@
 #include <arrow/api.h>
 #include <iostream>
 #include <algorithm>
+#include <stdexcept>
 
 #include "table/processors.h"
 
 using namespace matcha::table;
 
+namespace {
+void ThrowIfArrowError(const arrow::Status& st) {
+  if (!st.ok()) {
+    throw std::runtime_error(std::string("Arrow error: ") + st.ToString());
+  }
+}
+}  // namespace
+
 static std::shared_ptr<arrow::RecordBatch> make_left(int rank) {
   arrow::Int64Builder key;
   arrow::Int32Builder la;
-  key.Append(rank);
-  la.Append(rank * 10 + 1);
-  key.Append(rank + 2);
-  la.Append(rank * 10 + 2);
+  ThrowIfArrowError(key.Append(rank));
+  ThrowIfArrowError(la.Append(rank * 10 + 1));
+  ThrowIfArrowError(key.Append(rank + 2));
+  ThrowIfArrowError(la.Append(rank * 10 + 2));
   std::shared_ptr<arrow::Array> k, a;
-  key.Finish(&k);
-  la.Finish(&a);
+  ThrowIfArrowError(key.Finish(&k));
+  ThrowIfArrowError(la.Finish(&a));
   auto schema = arrow::schema({arrow::field("key", arrow::int64()),
                                arrow::field("la", arrow::int32())});
   return arrow::RecordBatch::Make(schema, k->length(), {k, a});
@@ -28,13 +37,13 @@ static std::shared_ptr<arrow::RecordBatch> make_left(int rank) {
 static std::shared_ptr<arrow::RecordBatch> make_right(int rank) {
   arrow::Int64Builder key;
   arrow::Int32Builder rb;
-  key.Append(rank);
-  rb.Append(rank * 100 + 1);
-  key.Append(rank + 3);
-  rb.Append(rank * 100 + 2);
+  ThrowIfArrowError(key.Append(rank));
+  ThrowIfArrowError(rb.Append(rank * 100 + 1));
+  ThrowIfArrowError(key.Append(rank + 3));
+  ThrowIfArrowError(rb.Append(rank * 100 + 2));
   std::shared_ptr<arrow::Array> k, b;
-  key.Finish(&k);
-  rb.Finish(&b);
+  ThrowIfArrowError(key.Finish(&k));
+  ThrowIfArrowError(rb.Finish(&b));
   auto schema = arrow::schema({arrow::field("key", arrow::int64()),
                                arrow::field("rb", arrow::int32())});
   return arrow::RecordBatch::Make(schema, k->length(), {k, b});

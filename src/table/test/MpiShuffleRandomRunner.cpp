@@ -6,11 +6,20 @@
 #include <chrono>
 #include <iostream>
 #include <random>
+#include <stdexcept>
 #include <vector>
 
 #include "table/processors.h"
 
 using namespace matcha::table;
+
+namespace {
+void ThrowIfArrowError(const arrow::Status& st) {
+  if (!st.ok()) {
+    throw std::runtime_error(std::string("Arrow error: ") + st.ToString());
+  }
+}
+}  // namespace
 
 int main(int argc, char** argv) {
   int provided = 0;
@@ -39,13 +48,13 @@ int main(int argc, char** argv) {
   arrow::Int32Builder val_builder;
   for (int i = 0; i < rows_per_rank; ++i) {
     auto k = static_cast<int64_t>(dist(gen));
-    key_builder.Append(k);
-    val_builder.Append(rank * rows_per_rank + i);
+    ThrowIfArrowError(key_builder.Append(k));
+    ThrowIfArrowError(val_builder.Append(rank * rows_per_rank + i));
   }
 
   std::shared_ptr<arrow::Array> keys, vals;
-  key_builder.Finish(&keys);
-  val_builder.Finish(&vals);
+  ThrowIfArrowError(key_builder.Finish(&keys));
+  ThrowIfArrowError(val_builder.Finish(&vals));
   auto schema = arrow::schema({arrow::field("key", arrow::int64()),
                                arrow::field("val", arrow::int32())});
   auto local = arrow::RecordBatch::Make(schema, keys->length(), {keys, vals});
@@ -88,4 +97,3 @@ int main(int argc, char** argv) {
   MPI_Finalize();
   return 0;
 }
-

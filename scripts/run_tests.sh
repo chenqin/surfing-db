@@ -41,12 +41,12 @@ popd >/dev/null
 echo "[+] Running Java tests"
 # Ensure native JNI libs are discoverable for JNI tests
 export LD_LIBRARY_PATH="$(pwd)/build:${LD_LIBRARY_PATH:-}"
-mvn -q -f drsquirrel-java/pom.xml -Darrow.version=12.0.0 test
+mvn -q -f drsquirrel-java-project/pom.xml -Darrow.version=12.0.0 test
 
 if [ "$RUN_MPI" = "1" ]; then
   echo "[+] Running MPI Java JNI runner (np=2)"
-  mvn -q -f drsquirrel-java/pom.xml -Darrow.version=12.0.0 -DskipTests package
-  JAR="drsquirrel-java/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar"
+  mvn -q -f drsquirrel-java-project/pom.xml -Darrow.version=12.0.0 -DskipTests package
+  JAR="drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar"
   if [ -f "$JAR" ]; then
     mpiexec -np 2 java -Djava.library.path="$(pwd)/build" -cp "$JAR" com.pinterest.drsquirrel.jni.JniFlinkJobWatcherRunner || true
   else

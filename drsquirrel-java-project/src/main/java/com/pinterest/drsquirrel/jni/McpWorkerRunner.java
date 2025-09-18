@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.BigIntVector;
+import org.apache.arrow.vector.IntVector;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.FieldType;
@@ -21,6 +23,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
+import java.nio.file.Paths;
+import java.util.stream.Stream;
 import java.util.*;
 import java.util.Base64;
 
@@ -87,10 +91,10 @@ public final class McpWorkerRunner {
     private static void copyInput(String uri, Path local) throws IOException, InterruptedException {
         Files.createDirectories(local);
         if (uri.startsWith("file://")) {
-            Path src = Path.of(uri.substring("file://".length()));
+            Path src = Paths.get(uri.substring("file://".length()));
             if (!Files.exists(src)) throw new FileNotFoundException("No such path: " + src);
             // copy recursively
-            try (var stream = Files.walk(src)) {
+            try (Stream<Path> stream = Files.walk(src)) {
                 stream.forEach(p -> {
                     try {
                         Path rel = src.relativize(p);
@@ -151,6 +155,27 @@ public final class McpWorkerRunner {
         }
     }
 
+    // Build a simple Arrow batch: schema [key:int64, val:int32]
+    private static VectorSchemaRoot makeSimpleBatch(BufferAllocator alloc, int rows) {
+        Field key = new Field("key", FieldType.nullable(new ArrowType.Int(64, true)), null);
+        Field val = new Field("val", FieldType.nullable(new ArrowType.Int(32, true)), null);
+        Schema schema = new Schema(java.util.Arrays.asList(key, val));
+        VectorSchemaRoot root = VectorSchemaRoot.create(schema, alloc);
+        BigIntVector keyVec = (BigIntVector) root.getVector("key");
+        IntVector valVec = (IntVector) root.getVector("val");
+        root.allocateNew();
+        java.util.Random rnd = new java.util.Random(1234);
+        for (int i = 0; i < rows; i++) {
+            long k = rnd.nextInt(10);
+            keyVec.setSafe(i, k);
+            valVec.setSafe(i, i);
+        }
+        keyVec.setValueCount(rows);
+        valVec.setValueCount(rows);
+        root.setRowCount(rows);
+        return root;
+    }
+
     public static void main(String[] args) throws Exception {
         String server = getenv("MCP_SERVER", args.length > 0 ? args[0] : "http://localhost:8080");
         long pollMs = Long.parseLong(getenv("MCP_POLL_MS", "2000"));
@@ -184,7 +209,9 @@ public final class McpWorkerRunner {
                 }
             }
             // Broadcast task JSON (empty means no task)
-            String taskJson = NativeProcessors.bcast(leasedJson == null ? "" : leasedJson);
+            String taskJson = (world == 1)
+                    ? (leasedJson == null ? "" : leasedJson)
+                    : NativeProcessors.bcast(leasedJson == null ? "" : leasedJson);
             if (taskJson == null || taskJson.isEmpty()) {
                 Thread.sleep(pollMs);
                 continue;
@@ -209,8 +236,12 @@ public final class McpWorkerRunner {
             if (structName == null || structName.isEmpty()) throw new IllegalArgumentException("thrift.struct required");
 
             Path thriftDir = workDir.resolve("thrift");
-            copyInput(thriftDirS3, thriftDir);
-            Path thriftFile = pickThrift(thriftDir, structName, thriftFileName);
+            boolean builtin = "builtin".equalsIgnoreCase(thriftDirS3);
+            Path thriftFile = null;
+            if (!builtin) {
+                copyInput(thriftDirS3, thriftDir);
+                thriftFile = pickThrift(thriftDir, structName, thriftFileName);
+            }
 
             VectorSchemaRoot left = null, right = null;
             if (mode.equalsIgnoreCase("shuffle")) {
@@ -220,11 +251,15 @@ public final class McpWorkerRunner {
                 if (leftS3.isEmpty() && task.has("inputS3")) task.path("inputS3").forEach(n -> leftS3.add(n.asText()));
                 if (leftS3.isEmpty()) throw new IllegalArgumentException("leftS3/inputS3 required for shuffle");
 
-                Path inDir = workDir.resolve("in_left"); Files.createDirectories(inDir);
-                for (String s3 : leftS3) copyInput(s3, inDir);
-                List<byte[]> payloads = readPayloadsFromDir(inDir);
-                byte[][] arr = payloads.toArray(new byte[0][]);
-                left = NativeThriftDecoder.convert(alloc, arr, thriftFile.toString(), structName);
+                if (builtin) {
+                    left = makeSimpleBatch(alloc, 16);
+                } else {
+                    Path inDir = workDir.resolve("in_left"); Files.createDirectories(inDir);
+                    for (String s3 : leftS3) copyInput(s3, inDir);
+                    List<byte[]> payloads = readPayloadsFromDir(inDir);
+                    byte[][] arr = payloads.toArray(new byte[0][]);
+                    left = NativeThriftDecoder.convert(alloc, arr, thriftFile.toString(), structName);
+                }
             } else if (mode.equalsIgnoreCase("cogroup")) {
                 List<String> leftS3 = new ArrayList<>();
                 List<String> rightS3 = new ArrayList<>();
@@ -232,14 +267,19 @@ public final class McpWorkerRunner {
                 if (task.has("rightS3")) task.path("rightS3").forEach(n -> rightS3.add(n.asText()));
                 if (leftS3.isEmpty() || rightS3.isEmpty()) throw new IllegalArgumentException("leftS3/rightS3 required for cogroup");
 
-                Path inL = workDir.resolve("in_left"); Files.createDirectories(inL);
-                Path inR = workDir.resolve("in_right"); Files.createDirectories(inR);
-                for (String s3 : leftS3) copyInput(s3, inL);
-                for (String s3 : rightS3) copyInput(s3, inR);
-                List<byte[]> payL = readPayloadsFromDir(inL);
-                List<byte[]> payR = readPayloadsFromDir(inR);
-                left = NativeThriftDecoder.convert(alloc, payL.toArray(new byte[0][]), thriftFile.toString(), structName);
-                right = NativeThriftDecoder.convert(alloc, payR.toArray(new byte[0][]), thriftFile.toString(), structName);
+                if (builtin) {
+                    left = makeSimpleBatch(alloc, 16);
+                    right = makeSimpleBatch(alloc, 16);
+                } else {
+                    Path inL = workDir.resolve("in_left"); Files.createDirectories(inL);
+                    Path inR = workDir.resolve("in_right"); Files.createDirectories(inR);
+                    for (String s3 : leftS3) copyInput(s3, inL);
+                    for (String s3 : rightS3) copyInput(s3, inR);
+                    List<byte[]> payL = readPayloadsFromDir(inL);
+                    List<byte[]> payR = readPayloadsFromDir(inR);
+                    left = NativeThriftDecoder.convert(alloc, payL.toArray(new byte[0][]), thriftFile.toString(), structName);
+                    right = NativeThriftDecoder.convert(alloc, payR.toArray(new byte[0][]), thriftFile.toString(), structName);
+                }
             } else {
                 throw new IllegalArgumentException("Unknown mode: " + mode);
             }
@@ -252,7 +292,7 @@ public final class McpWorkerRunner {
                 out.close(); left.close();
                 // Upload
                 if (outS3.startsWith("file://")) {
-                    Path dstDir = Path.of(outS3.substring("file://".length()));
+                    Path dstDir = Paths.get(outS3.substring("file://".length()));
                     Files.createDirectories(dstDir);
                     Files.copy(outPath, dstDir.resolve("rank-" + rank + ".arrow"), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                 } else {
@@ -266,7 +306,7 @@ public final class McpWorkerRunner {
                 writeArrowFile(outR, outs[1]);
                 outs[0].close(); outs[1].close(); left.close(); right.close();
                 if (outS3.startsWith("file://")) {
-                    Path dstDir = Path.of(outS3.substring("file://".length()));
+                    Path dstDir = Paths.get(outS3.substring("file://".length()));
                     Files.createDirectories(dstDir);
                     Files.copy(outL, dstDir.resolve("rank-" + rank + "-left.arrow"), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                     Files.copy(outR, dstDir.resolve("rank-" + rank + "-right.arrow"), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
@@ -276,7 +316,7 @@ public final class McpWorkerRunner {
                 }
             }
 
-            NativeProcessors.mpiBarrier();
+            if (world > 1) NativeProcessors.mpiBarrier();
             if (!singleMode) {
                 if (rank == 0) {
                     // Mark complete
@@ -288,7 +328,7 @@ public final class McpWorkerRunner {
                         System.err.println("[MCP] complete error: " + e);
                     }
                 }
-                NativeProcessors.mpiBarrier();
+                if (world > 1) NativeProcessors.mpiBarrier();
             }
             // Cleanup local work dir
             try { Files.walk(workDir).sorted(Comparator.reverseOrder()).forEach(p -> { try { Files.deleteIfExists(p); } catch (IOException ignore) {} }); } catch (Exception ignore) {}

@@ -375,13 +375,13 @@ TEST(TableTest, TestUtils) {
 
   matcha::table::mrow row2(schema_ptr);
   v1.p_val.int_val = 4;
-  row.write(field1, v1);
-  row.write(field2, v2);
-  row.write(field3, v3);
-  row.write(field4, v4);
-  row.write(field5, v5);
-  row.write(field6, v6);
-  row.write(field7, v7);
+  row2.write(field1, v1);
+  row2.write(field2, v2);
+  row2.write(field3, v3);
+  row2.write(field4, v4);
+  row2.write(field5, v5);
+  row2.write(field6, v6);
+  row2.write(field7, v7);
 
   /**
    * @brief  row test mtable
@@ -398,7 +398,10 @@ TEST(TableTest, TestUtils) {
   auto arrow_schema_ptr = utils::toArrow(schema_ptr);
   auto arrow_table_ptr = utils::toArrow(table_ptr);
   EXPECT_EQ(arrow_table_ptr->num_columns(), 7);
-  arrow_table_ptr->ValidateFull();
+  {
+    auto status = arrow_table_ptr->ValidateFull();
+    ASSERT_TRUE(status.ok()) << status.ToString();
+  }
   EXPECT_EQ(arrow_table_ptr->num_rows(), 2);
   /**
    * @brief check if schema conversion is correct
