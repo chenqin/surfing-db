@@ -174,6 +174,10 @@ Common shortcuts:
 - `make load-all-cores` — run both shuffle + cogroup helpers
 - `make example` — build + run the fake cogroup example
 
+## Security & Maintenance
+- Dependabot is enabled via `.github/dependabot.yml` for GitHub Actions and Maven modules.
+- Report security issues privately via GitHub Security Advisories (see `.github/SECURITY.md`).
+
 ## Kafka Example (Java-native)
 
 A lightweight Java consumer that emits Arrow batches with schema `(topic, payload)` is provided as `KafkaSourceArrow`.
