@@ -142,9 +142,19 @@ public final class McpWorkerRunner {
         System.out.printf("[MCP] rank=%d world=%d server=%s\n", rank, world, server);
         BufferAllocator alloc = new RootAllocator();
 
+        // Support single-task mode via env MCP_TASK_JSON or arg prefix json:
+        String singleTaskJson = System.getenv("MCP_TASK_JSON");
+        if (singleTaskJson == null && args.length > 0 && args[0] != null && args[0].startsWith("json:")) {
+            singleTaskJson = new String(java.util.Base64.getDecoder().decode(args[0].substring(5)), java.nio.charset.StandardCharsets.UTF_8);
+        }
+
+        boolean singleMode = singleTaskJson != null && !singleTaskJson.isEmpty();
+
         while (true) {
             String leasedJson = null;
-            if (rank == 0) {
+            if (singleMode) {
+                leasedJson = singleTaskJson;
+            } else if (rank == 0) {
                 try {
                     leasedJson = httpGet(server + "/lease");
                     if (leasedJson != null && leasedJson.trim().equals("NONE")) leasedJson = null;
@@ -234,19 +244,23 @@ public final class McpWorkerRunner {
             }
 
             NativeProcessors.mpiBarrier();
-            if (rank == 0) {
-                // Mark complete
-                String completeBody = M.createObjectNode()
-                        .put("taskId", taskId)
-                        .put("status", "done")
-                        .toString();
-                try { httpPostJson(server + "/complete", completeBody); } catch (Exception e) {
-                    System.err.println("[MCP] complete error: " + e);
+            if (!singleMode) {
+                if (rank == 0) {
+                    // Mark complete
+                    String completeBody = M.createObjectNode()
+                            .put("taskId", taskId)
+                            .put("status", "done")
+                            .toString();
+                    try { httpPostJson(server + "/complete", completeBody); } catch (Exception e) {
+                        System.err.println("[MCP] complete error: " + e);
+                    }
                 }
+                NativeProcessors.mpiBarrier();
             }
-            NativeProcessors.mpiBarrier();
             // Cleanup local work dir
             try { Files.walk(workDir).sorted(Comparator.reverseOrder()).forEach(p -> { try { Files.deleteIfExists(p); } catch (IOException ignore) {} }); } catch (Exception ignore) {}
+
+            if (singleMode) break;
         }
     }
 }

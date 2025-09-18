@@ -242,6 +242,20 @@ Notes:
 - Environment:
   - `MCP_POLL_MS` (default 2000), `MCP_ONE_SIDED` (default true). Or pass server URL as the first arg.
 
+### MCP Server (fastmcp, StreamableHTTP + async progress)
+
+A fastmcp-based MCP server is available with StreamableHTTP transport and async progress reporting:
+
+- File: `scripts/mcp_fastmcp_server.py`
+- Install and run (in a venv):
+  - `python3 -m venv .venv && . .venv/bin/activate`
+  - `pip install fastmcp uvicorn`
+  - `python scripts/mcp_fastmcp_server.py` (serves on `:8081`, path `/mcp`)
+- Tool: `submit_task` (streams progress via MCP progress notifications)
+  - Args: `mode (shuffle|cogroup)`, `keyField`, `outputS3`, `leftS3`, `rightS3`, `oneSided`, `thriftDir`, `thriftStruct`, `thriftFile?`, `np`, `hostfile?`, `iface?`, `javaJar?`, `javaLibPath?`
+  - Behavior: acquires a global FIFO lock, spawns `mpiexec … McpWorkerRunner json:<base64>`, forwards coarse progress from process output, and returns `{taskId,status}` on completion.
+- StreamingHTTP path: `/mcp` (connect with an MCP client supporting StreamableHTTP).
+
 - Launch under MPI (two-sided cogroup)
   - `mpiexec -np 4 --mca btl_tcp_if_exclude lo,docker0 \
      java -Djava.library.path=$PWD/build \
