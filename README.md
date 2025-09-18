@@ -95,6 +95,88 @@ Programmatic use (Java): `com.pinterest.drsquirrel.jni.NativeThriftDecoder` — 
 
 Note: Scripts assume Ubuntu with `apt`. Arrow C++ 12 can be installed via APT or built from source.
 
+## Architecture Overview
+
+High-level flow for shuffle/cogroup:
+
+```
+Java App → NativeProcessors (JNI) → C++ processors → MPI world
+               │                                 │
+               │ Arrow C Data Interface          │
+               └──────────────┬──────────────────┘
+                              │
+                        One-sided (RMA)
+                        - MPI_Win + MPI_Get over
+                          concatenated Arrow IPC buffers
+
+                        Two-sided (send/recv)
+                        - MPI_Isend / MPI_Irecv into
+                          a receive buffer, then
+                          Arrow IPC deserialization
+```
+
+Thrift payloads → Arrow (optional fast path):
+
+```
+byte[] / ByteBuffer → NativeThriftDecoder (JNI) → C++ decode → Arrow C Data → VectorSchemaRoot
+                 (fallback) GenericThriftToArrowConverter (Java)
+```
+
+Key implementation notes:
+- Partitioning uses Arrow Scalar hashing of the key column; default partitioner is hash % world.
+- Serialization uses Arrow IPC to move per-destination partitions between ranks.
+- Critical paths use OpenMP for parallel loops (export, group, deserialize).
+
+## Performance Notes
+- MPI execution flags for dense local testing:
+  - `--use-hwthread-cpus --oversubscribe --map-by core --bind-to core`
+  - Prefer `--mca btl_tcp_if_include <iface>` over excluding `lo,docker0`.
+- Threads: OpenMP loops honor `OMP_NUM_THREADS`; tune per machine.
+- Spill-to-disk safeguards (optional):
+  - Pre-shuffle: `MATCHA_SPILL_DIR`, `MATCHA_SPILL_MAX_ROWS`
+  - Post-shuffle: `MATCHA_POST_SHUFFLE_SPILL_DIR`, `MATCHA_POST_SHUFFLE_SPILL_MIN_ROWS`, `MATCHA_POST_SHUFFLE_SPILL_MAX_ROWS`
+- Load tests and CSV summaries:
+  - All cores (local): `./scripts/run_shuffle_all_cores.sh`, `./scripts/run_cogroup_all_cores.sh`, `./scripts/run_all_load_all_cores.sh`
+  - JNI Thrift decode benches: `./scripts/run_thrift_arrow_bench.sh` or `mvn -f surfingthriftjni/pom.xml -P jni-bench verify`
+
+## Kafka Example (Java-native)
+
+A lightweight Java consumer that emits Arrow batches with schema `(topic, payload)` is provided as `KafkaSourceArrow`.
+
+Environment options for bootstrap:
+- `KAFKA_SERVERSET`: path to a file listing brokers (one per line), or
+- Set bootstrap directly via builder.
+
+Example:
+
+```java
+import java.time.Duration;
+import java.util.Arrays;
+import org.apache.arrow.memory.RootAllocator;
+import org.apache.arrow.vector.VectorSchemaRoot;
+import com.pinterest.drsquirrel.kafka.KafkaSourceArrow;
+
+var alloc = new RootAllocator();
+var src = KafkaSourceArrow.newBuilder()
+    .setAllocator(alloc)
+    .setServersetPath(System.getenv("KAFKA_SERVERSET")) // or setBootstrapServers("localhost:9092")
+    .setGroupId("flink-watcher-test")
+    .setTopics(Arrays.asList("metrics_topic", "logs_topic"))
+    .setPollTimeout(Duration.ofMillis(200))
+    .build();
+
+VectorSchemaRoot batch = src.pollOnce(1000);
+try {
+  // process batch (fields: topic, payload)
+} finally {
+  batch.close();
+  src.close();
+  alloc.close();
+}
+```
+
+For a JNI-backed variant (`NativeKafkaConnector`), enable the native Kafka build and ensure `libsurfingkafkajni.*` is on `java.library.path`.
+
 - Launch under MPI (two-sided cogroup)
   - `mpiexec -np 4 --mca btl_tcp_if_exclude lo,docker0 \
      java -Djava.library.path=$PWD/build \
