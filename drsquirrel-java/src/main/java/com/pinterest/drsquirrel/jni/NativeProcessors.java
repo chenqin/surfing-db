@@ -34,6 +34,8 @@ public final class NativeProcessors {
     private static native void finalizeMPI();
     private static native int mpiRank();
     private static native int mpiWorld();
+    private static native String broadcastString(String message);
+    private static native void barrier();
 
     /**
      * Shuffle the input RecordBatch by <fieldName>, using hash-based partitioning.
@@ -97,4 +99,9 @@ public final class NativeProcessors {
     public static int getMpiRank() { return mpiRank(); }
     /** Return the native MPI world size. */
     public static int getMpiWorld() { return mpiWorld(); }
+
+    /** Broadcast a UTF-8 string from rank 0 to all ranks and return it. */
+    public static String bcast(String messageFromRank0) { return broadcastString(messageFromRank0); }
+    /** Barrier across MPI ranks. */
+    public static void mpiBarrier() { barrier(); }
 }
