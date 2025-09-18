@@ -5,24 +5,33 @@
 #include <arrow/api.h>
 #include <iostream>
 #include <algorithm>
+#include <stdexcept>
 
 #include "table/processors.h"
 #include "table/utils.h"
 
 using namespace matcha::table;
 
+namespace {
+void ThrowIfArrowError(const arrow::Status& st) {
+  if (!st.ok()) {
+    throw std::runtime_error(std::string("Arrow error: ") + st.ToString());
+  }
+}
+}  // namespace
+
 static std::shared_ptr<arrow::RecordBatch> make_local_batch(int rank) {
   arrow::Int64Builder key_builder;
   arrow::Int32Builder val_builder;
   // two rows per rank
-  key_builder.Append(rank);
-  val_builder.Append(rank * 10 + 1);
-  key_builder.Append(rank + 2);
-  val_builder.Append(rank * 10 + 2);
+  ThrowIfArrowError(key_builder.Append(rank));
+  ThrowIfArrowError(val_builder.Append(rank * 10 + 1));
+  ThrowIfArrowError(key_builder.Append(rank + 2));
+  ThrowIfArrowError(val_builder.Append(rank * 10 + 2));
 
   std::shared_ptr<arrow::Array> keys, vals;
-  key_builder.Finish(&keys);
-  val_builder.Finish(&vals);
+  ThrowIfArrowError(key_builder.Finish(&keys));
+  ThrowIfArrowError(val_builder.Finish(&vals));
 
   auto schema = arrow::schema({arrow::field("key", arrow::int64()),
                                arrow::field("val", arrow::int32())});

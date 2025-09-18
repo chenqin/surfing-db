@@ -1,8 +1,8 @@
-cd ~/matcha/drsquirrel-java/
+cd ~/matcha/drsquirrel-java-project/
 mvn clean package
 cp target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar ../surfing-db-java.jar
 
-cd ~/matcha/drsquirrel-java
+cd ~/matcha/drsquirrel-java-project
 mvn clean package
 cp target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar ../surfing-db-java.jar
 cd ~/matcha/build

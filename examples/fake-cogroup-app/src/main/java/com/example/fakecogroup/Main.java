@@ -26,7 +26,7 @@ import java.util.Random;
  *   mpiexec -np 4 --use-hwthread-cpus --oversubscribe --map-by core --bind-to core \
  *     -x LD_LIBRARY_PATH=$PWD/build:$LD_LIBRARY_PATH \
  *     java -Djava.library.path=$PWD/build \
- *       -cp drsquirrel-java/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar:examples/fake-cogroup-app/target/fake-cogroup-app-0.1.0-SNAPSHOT.jar \
+ *       -cp drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar:examples/fake-cogroup-app/target/fake-cogroup-app-0.1.0-SNAPSHOT.jar \
  *       com.example.fakecogroup.Main --mode one --rows 100000 --iters 1 --out build/examples/fake-cogroup-out
  */
 public class Main {

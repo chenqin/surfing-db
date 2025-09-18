@@ -134,6 +134,6 @@ fi
 ninja -C build -j"$(nproc)"
 
 echo "[+] Building Java module"
-mvn -q -f drsquirrel-java/pom.xml -Darrow.version=12.0.0 -DskipTests=false clean package
+mvn -q -f drsquirrel-java-project/pom.xml -Darrow.version=12.0.0 -DskipTests=false clean package
 
 echo "[✓] Build complete"

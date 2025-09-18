@@ -266,21 +266,13 @@ include(ext/Sketches_Ext.cmake)
 include_directories(include ${GTEST_INCLUDE_DIRS})
 include_directories(include ${GMOCK_INCLUDE_DIRS})
 
-# build table representation
-include(src/meta/meta.cmake)
-
-# build table representation
-include(src/table/table.cmake)
-
 #include(ext/PyTorch_Ext.cmake)
 
-# build connector (Kafka) only when enabled
-if(BUILD_CPP_KAFKA)
-  include(src/connector/connector.cmake)
-endif()
+option(BUILD_CPP_KAFKA "Build C++ Kafka-based executables" OFF)
+
+add_subdirectory(core)
 
 # build test binary
-option(BUILD_CPP_KAFKA "Build C++ Kafka-based executables" OFF)
 if(BUILD_CPP_KAFKA)
   add_executable(FlinkJobWatcher src/FlinkJobWatcher.cpp)
   add_dependencies(FlinkJobWatcher thrift)
@@ -302,16 +294,14 @@ if(BUILD_CPP_KAFKA)
           COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target thrift)
 
   add_custom_command(TARGET FlinkJobWatcher PRE_BUILD
-          COMMAND cd ${CMAKE_SOURCE_DIR}/drsquirrel-java && mvn clean package -Darrow.version=${ARROW_VERSION} 
-          COMMAND cp ${CMAKE_SOURCE_DIR}/drsquirrel-java/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_SOURCE_DIR}/surfing-db-java.jar)
+          COMMAND cd ${CMAKE_SOURCE_DIR}/drsquirrel-java-project && mvn clean package -Darrow.version=${ARROW_VERSION} 
+          COMMAND cp ${CMAKE_SOURCE_DIR}/drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_SOURCE_DIR}/surfing-db-java.jar)
 endif()
 
 if(BUILD_CPP_KAFKA)
   set_target_properties(MABS PROPERTIES LINK_FLAGS "${MPI_LINK_FLAGS}")
   target_link_libraries(MABS
-          PRIVATE ${META}
-          PRIVATE ${TABLE}
-          PRIVATE ${CONNECTOR}
+          PRIVATE surfingdb_core
           PRIVATE ${ARROW_LIBRARY}
           PRIVATE ${THRIFT_LIBRARY})
 endif()
@@ -319,18 +309,14 @@ endif()
 if(BUILD_CPP_KAFKA)
   set_target_properties(FlinkJobWatcher PROPERTIES COMPILE_FLAGS "${MPI_COMPILE_FLAGS}")
   target_link_libraries(FlinkJobWatcher
-      PRIVATE ${META}
-      PRIVATE ${TABLE}
-      PRIVATE ${CONNECTOR}
+      PRIVATE surfingdb_core
       PRIVATE ${ARROW_LIBRARY})
 endif()
 
 set_target_properties(LocalCluster PROPERTIES COMPILE_FLAGS "${MPI_COMPILE_FLAGS}")
 
 target_link_libraries(LocalCluster
-    PRIVATE ${META}
-    PRIVATE ${TABLE}
-    PRIVATE ${CONNECTOR}
+    PRIVATE surfingdb_core
     PRIVATE ${ARROW_LIBRARY})
 
 ## Kafka JNI bridge removed; Java-native Kafka consumer is used instead
@@ -338,8 +324,7 @@ target_link_libraries(LocalCluster
 # JNI library for processors
 add_library(surfingprocessorsjni SHARED ${MATCHA_SRC}/table/processors_jni.cpp)
 target_link_libraries(surfingprocessorsjni
-    PRIVATE ${META}
-    PRIVATE ${TABLE}
+    PRIVATE surfingdb_core
     PRIVATE ${ARROW_LIBRARY}
     PRIVATE ${PARQUET_LIBRARY}
     PRIVATE ${GLOG_LIBRARY})
@@ -363,8 +348,7 @@ add_executable(SurfingDbTests
     ${MATCHA_SRC}/table/test/TestArrowSpill.cpp)
 add_dependencies(SurfingDbTests gtest thrift)
 target_link_libraries(SurfingDbTests
-    PRIVATE ${META}
-    PRIVATE ${TABLE}
+    PRIVATE surfingdb_core
     PRIVATE ${ARROW_LIBRARY}
     PRIVATE ${PARQUET_LIBRARY}
     PRIVATE ${GTEST_MAIN_LIBRARY}
@@ -391,7 +375,7 @@ add_executable(ThriftParserTests
     ${MATCHA_SRC}/meta/test/TestThriftParserNestedComprehensive.cpp)
 add_dependencies(ThriftParserTests gtest thrift)
 target_link_libraries(ThriftParserTests
-    PRIVATE ${META}
+    PRIVATE surfingdb_core
     PRIVATE ${ARROW_LIBRARY}
     PRIVATE ${PARQUET_LIBRARY}
     PRIVATE ${GTEST_MAIN_LIBRARY}
@@ -428,8 +412,7 @@ if(ENABLE_MPI_TESTS)
   add_executable(MpiShuffleTest ${MATCHA_SRC}/table/test/MpiShuffleRunner.cpp)
   add_dependencies(MpiShuffleTest thrift)
   target_link_libraries(MpiShuffleTest
-      PRIVATE ${TABLE}
-      PRIVATE ${META}
+      PRIVATE surfingdb_core
       PRIVATE ${ARROW_LIBRARY}
       PRIVATE ${PARQUET_LIBRARY})
 
@@ -442,8 +425,7 @@ if(ENABLE_MPI_TESTS)
   add_executable(MpiTwoSideShuffleTest ${MATCHA_SRC}/table/test/MpiTwoSideShuffleRunner.cpp)
   add_dependencies(MpiTwoSideShuffleTest thrift)
   target_link_libraries(MpiTwoSideShuffleTest
-      PRIVATE ${TABLE}
-      PRIVATE ${META}
+      PRIVATE surfingdb_core
       PRIVATE ${ARROW_LIBRARY}
       PRIVATE ${PARQUET_LIBRARY})
   if(MPI_CXX_FOUND)
@@ -456,8 +438,7 @@ if(ENABLE_MPI_TESTS)
   # Randomized distribution tests (one-sided and two-sided)
   add_executable(MpiShuffleRandomTest ${MATCHA_SRC}/table/test/MpiShuffleRandomRunner.cpp)
   target_link_libraries(MpiShuffleRandomTest
-      PRIVATE ${TABLE}
-      PRIVATE ${META}
+      PRIVATE surfingdb_core
       PRIVATE ${ARROW_LIBRARY}
       PRIVATE ${PARQUET_LIBRARY})
   if(MPI_CXX_FOUND)
@@ -470,8 +451,7 @@ if(ENABLE_MPI_TESTS)
   # Load test (disabled by default in CTest): configurable via env
   add_executable(MpiShuffleLoadTest ${MATCHA_SRC}/table/test/MpiShuffleLoadRunner.cpp)
   target_link_libraries(MpiShuffleLoadTest
-      PRIVATE ${TABLE}
-      PRIVATE ${META}
+      PRIVATE surfingdb_core
       PRIVATE ${ARROW_LIBRARY}
       PRIVATE ${PARQUET_LIBRARY})
   if(MPI_CXX_FOUND)
@@ -487,8 +467,7 @@ if(ENABLE_MPI_TESTS)
   # CoGroup tests (one-sided and two-sided)
   add_executable(MpiCoGroupTest ${MATCHA_SRC}/table/test/MpiCoGroupRunner.cpp)
   target_link_libraries(MpiCoGroupTest
-      PRIVATE ${TABLE}
-      PRIVATE ${META}
+      PRIVATE surfingdb_core
       PRIVATE ${ARROW_LIBRARY}
       PRIVATE ${PARQUET_LIBRARY})
   if(MPI_CXX_FOUND)
@@ -501,8 +480,7 @@ if(ENABLE_MPI_TESTS)
   # Nested CoGroup tests (one-sided and two-sided)
   add_executable(MpiNestedCoGroupTest ${MATCHA_SRC}/table/test/MpiNestedCoGroupRunner.cpp)
   target_link_libraries(MpiNestedCoGroupTest
-      PRIVATE ${TABLE}
-      PRIVATE ${META}
+      PRIVATE surfingdb_core
       PRIVATE ${ARROW_LIBRARY}
       PRIVATE ${PARQUET_LIBRARY})
   if(MPI_CXX_FOUND)
@@ -522,8 +500,7 @@ if(ENABLE_MPI_TESTS)
   # Nested schema shuffle tests (one-sided and two-sided)
   add_executable(MpiNestedShuffleTest ${MATCHA_SRC}/table/test/MpiNestedShuffleRunner.cpp)
   target_link_libraries(MpiNestedShuffleTest
-      PRIVATE ${TABLE}
-      PRIVATE ${META}
+      PRIVATE surfingdb_core
       PRIVATE ${ARROW_LIBRARY}
       PRIVATE ${PARQUET_LIBRARY})
   if(MPI_CXX_FOUND)

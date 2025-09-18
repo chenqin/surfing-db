@@ -29,9 +29,10 @@ Run tests:
 Configure + build:
 - `cmake -S . -B build -GNinja`
 - `ninja -C build`
+- Core C++ libraries live in the `core/` subproject (`surfingdb_core` aggregates meta/table/connector).
 
 Java modules:
-- `mvn -f drsquirrel-java/pom.xml -Darrow.version=12.0.0 -DskipTests package`
+- `mvn -f drsquirrel-java-project/pom.xml -Darrow.version=12.0.0 -DskipTests package`
 - JNI Thrift decoder: `mvn -f surfingthriftjni/pom.xml -Darrow.version=12.0.0 -DskipTests package`
 
 ## Running (JNI under MPI)
@@ -39,11 +40,11 @@ Set native library path:
 - `export LD_LIBRARY_PATH=$PWD/build:$LD_LIBRARY_PATH`
 
 Shuffle load (one-sided by default):
-- `mpiexec -np 4 java -Djava.library.path=$PWD/build -cp drsquirrel-java/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar com.pinterest.drsquirrel.jni.JniShuffleLoadRunner`
+- `mpiexec -np 4 java -Djava.library.path=$PWD/build -cp drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar com.pinterest.drsquirrel.jni.JniShuffleLoadRunner`
 - Two-sided: add `two`
 
 Cogroup load:
-- `mpiexec -np 4 java -Djava.library.path=$PWD/build -cp drsquirrel-java/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar com.pinterest.drsquirrel.jni.JniCogroupLoadRunner`
+- `mpiexec -np 4 java -Djava.library.path=$PWD/build -cp drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar com.pinterest.drsquirrel.jni.JniCogroupLoadRunner`
 - Two-sided: add `two`
 
 All-cores helpers (local machine):
@@ -230,7 +231,7 @@ This repo provides a minimal MCP server and an MPI worker runner to execute FIFO
 - Worker: Java MPI runner `com.pinterest.drsquirrel.jni.McpWorkerRunner`
   - Build shaded jar: `make java-jar`
   - Run under MPI (all hosts):
-    - `mpiexec -np <N> java -Djava.library.path=$PWD/build -cp drsquirrel-java/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar com.pinterest.drsquirrel.jni.McpWorkerRunner http://<server_host>:8080`
+    - `mpiexec -np <N> java -Djava.library.path=$PWD/build -cp drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar com.pinterest.drsquirrel.jni.McpWorkerRunner http://<server_host>:8080`
   - Behavior:
     - Rank 0 leases the next task, broadcasts to all ranks, executes shuffle/cogroup, uploads Arrow outputs to the `outputS3` prefix with filenames containing rank (e.g., `rank-3.arrow`).
     - Inputs are synced locally via `aws s3 cp --recursive`. Payload files are expected to be line-delimited Base64 Thrift Binary messages.
@@ -259,7 +260,7 @@ A fastmcp-based MCP server is available with StreamableHTTP transport and async 
 - Launch under MPI (two-sided cogroup)
   - `mpiexec -np 4 --mca btl_tcp_if_exclude lo,docker0 \
      java -Djava.library.path=$PWD/build \
-     -cp drsquirrel-java/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar \
+     -cp drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar \
      com.pinterest.drsquirrel.jni.JniCogroupLoadRunner two`
 
 - Tune for local multi-core stability
@@ -269,12 +270,12 @@ A fastmcp-based MCP server is available with StreamableHTTP transport and async 
     - `mpiexec -np $(nproc) --use-hwthread-cpus --oversubscribe --map-by core --bind-to core \
        --mca btl_tcp_if_include eth0 \
        java -Djava.library.path=$PWD/build \
-       -cp drsquirrel-java/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar \
+       -cp drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar \
        com.pinterest.drsquirrel.jni.JniCogroupLoadRunner two`
 
 - Maven alternative (profile)
   - Uses the same runner and flags via `mpiexec`:
-    - `mvn -f drsquirrel-java/pom.xml -Darrow.version=12.0.0 -P jni-cogroup-load -DskipTests \
+    - `mvn -f drsquirrel-java-project/pom.xml -Darrow.version=12.0.0 -P jni-cogroup-load -DskipTests \
        package verify -Dnp=4 -Drows=200000 -Diters=1 -Dout=$(pwd)/build/jni_cogroup.csv`
   - Interface pinning (optional): `-Diface=eth0` (uses `--mca btl_tcp_if_include eth0`).
 

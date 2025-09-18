@@ -19,6 +19,14 @@
 
 using namespace matcha::table;
 
+namespace {
+void ThrowIfArrowError(const arrow::Status& st) {
+  if (!st.ok()) {
+    throw std::runtime_error(std::string("Arrow error: ") + st.ToString());
+  }
+}
+}  // namespace
+
 static int64_t get_env_ll(const char* name, int64_t def) {
   const char* v = std::getenv(name);
   if (!v) return def;
@@ -39,24 +47,18 @@ static std::shared_ptr<arrow::RecordBatch> make_random_batch(int64_t rows, int r
 
   arrow::Int64Builder key_builder;
   arrow::Int32Builder val_builder;
-  key_builder.Reserve(rows);
-  val_builder.Reserve(rows);
+  ThrowIfArrowError(key_builder.Reserve(rows));
+  ThrowIfArrowError(val_builder.Reserve(rows));
   for (int64_t i = 0; i < rows; ++i) {
-    key_builder.Append(static_cast<int64_t>(dist(gen)));
-    val_builder.Append(static_cast<int32_t>(i));
+    ThrowIfArrowError(key_builder.Append(static_cast<int64_t>(dist(gen))));
+    ThrowIfArrowError(val_builder.Append(static_cast<int32_t>(i)));
   }
   std::shared_ptr<arrow::Array> keys, vals;
   {
-    auto st = key_builder.Finish(&keys);
-    if (!st.ok()) {
-      throw std::runtime_error(std::string("Arrow error: ") + st.ToString());
-    }
+    ThrowIfArrowError(key_builder.Finish(&keys));
   }
   {
-    auto st = val_builder.Finish(&vals);
-    if (!st.ok()) {
-      throw std::runtime_error(std::string("Arrow error: ") + st.ToString());
-    }
+    ThrowIfArrowError(val_builder.Finish(&vals));
   }
 
   auto schema = arrow::schema({arrow::field("key", arrow::int64()),

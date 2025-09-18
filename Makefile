@@ -8,7 +8,7 @@ help:
 	@echo "  make test               # Run C++ unit, MPI (if enabled), and Java tests"
 	@echo "  make test-no-mpi        # Run tests but skip MPI"
 	@echo "  make nested-mpi         # Run nested MPI tests (np=2,4)"
-	@echo "  make java-jar           # Build shaded Java jar (drsquirrel-java)"
+	@echo "  make java-jar           # Build shaded Java jar (drsquirrel-java-project)"
 	@echo "  make thrift-bench       # Run JNI Thrift decode benchmarks"
 	@echo "  make shuffle-all-cores  # Run JNI shuffle load across all cores"
 	@echo "  make cogroup-all-cores  # Run JNI cogroup load across all cores"
@@ -29,7 +29,7 @@ nested-mpi:
 	./scripts/run_nested_mpi_tests.sh --np all
 
 java-jar:
-	mvn -q -f drsquirrel-java/pom.xml -Darrow.version=12.0.0 -DskipTests package
+	mvn -q -f drsquirrel-java-project/pom.xml -Darrow.version=12.0.0 -DskipTests package
 
 thrift-bench:
 	./scripts/run_thrift_arrow_bench.sh
@@ -45,4 +45,3 @@ load-all-cores:
 
 example:
 	bash scripts/run_fake_cogroup_example.sh --build --np 4 --mode one --rows 100000 --iters 1
-
