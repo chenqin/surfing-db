@@ -139,6 +139,41 @@ Key implementation notes:
   - All cores (local): `./scripts/run_shuffle_all_cores.sh`, `./scripts/run_cogroup_all_cores.sh`, `./scripts/run_all_load_all_cores.sh`
   - JNI Thrift decode benches: `./scripts/run_thrift_arrow_bench.sh` or `mvn -f surfingthriftjni/pom.xml -P jni-bench verify`
 
+## Performance Results
+
+Thrift decode (JNI vs Java)
+- Run: `make thrift-bench`
+- Outputs written under `build/bench_small_array.txt`, `build/bench_large_bb.txt`, `build/bench_large_bbp.txt`.
+- The script prints a summary at the end, e.g.:
+  - `Small array — JNI: 3.2 GB/s`
+  - `Small array — Java: 1.1 GB/s`
+  - `Large mmap — JNI: 8.9 GB/s`
+  - `Large pooled — JNI: 9.3 GB/s`
+
+JNI shuffle/cogroup (all cores)
+- Shuffle: `make shuffle-all-cores`
+- Cogroup: `make cogroup-all-cores`
+- Both: `make load-all-cores`
+- CSVs are written to `build/` and summarized automatically. You can re-run analysis over CSVs:
+  - `./scripts/analyze_shuffle_csv.py build/jni_shuffle_one_n$(nproc).csv build/jni_shuffle_two_n$(nproc).csv`
+  - `./scripts/analyze_shuffle_csv.py build/jni_cogroup_one_n$(nproc).csv build/jni_cogroup_two_n$(nproc).csv`
+
+Tip: Set `SHUFFLE_LOAD_ROWS` and `SHUFFLE_LOAD_ITERS` to scale load; set `IFACE` to pin to a specific NIC (e.g. `eth0`).
+
+## Makefile Quick Targets
+
+Common shortcuts:
+- `make build` — install deps + build (APT Arrow by default)
+- `make test` — run C++ unit, MPI (if enabled), Java tests
+- `make test-no-mpi` — run tests without MPI
+- `make nested-mpi` — run nested shuffle/cogroup tests
+- `make java-jar` — build shaded Java jar
+- `make thrift-bench` — run JNI vs Java Thrift decode benches
+- `make shuffle-all-cores` — run JNI shuffle across cores
+- `make cogroup-all-cores` — run JNI cogroup across cores
+- `make load-all-cores` — run both shuffle + cogroup helpers
+- `make example` — build + run the fake cogroup example
+
 ## Kafka Example (Java-native)
 
 A lightweight Java consumer that emits Arrow batches with schema `(topic, payload)` is provided as `KafkaSourceArrow`.
