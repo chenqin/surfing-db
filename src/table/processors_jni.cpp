@@ -156,3 +156,34 @@ Java_com_pinterest_drsquirrel_jni_NativeProcessors_finalizeMPI(JNIEnv* env, jcla
     g_mpi_finalized = true;
   }
 }
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_pinterest_drsquirrel_jni_NativeProcessors_broadcastString(JNIEnv* env, jclass, jstring jmsg) {
+  ensure_mpi();
+  int rank = 0; MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  // Convert to bytes on rank 0
+  std::string msg;
+  if (rank == 0) {
+    if (jmsg) {
+      const char* c = env->GetStringUTFChars(jmsg, nullptr);
+      if (c) { msg.assign(c); env->ReleaseStringUTFChars(jmsg, c); }
+    }
+  }
+  // First broadcast length
+  int32_t len = static_cast<int32_t>(msg.size());
+  MPI_Bcast(&len, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  std::string recv(len, '\0');
+  if (rank == 0) {
+    if (len > 0) MPI_Bcast(msg.data(), len, MPI_CHAR, 0, MPI_COMM_WORLD);
+  } else {
+    if (len > 0) MPI_Bcast(recv.data(), len, MPI_CHAR, 0, MPI_COMM_WORLD);
+  }
+  const std::string& out = (rank == 0 ? msg : recv);
+  return env->NewStringUTF(out.c_str());
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_pinterest_drsquirrel_jni_NativeProcessors_barrier(JNIEnv*, jclass) {
+  ensure_mpi();
+  MPI_Barrier(MPI_COMM_WORLD);
+}

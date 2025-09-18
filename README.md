@@ -216,6 +216,46 @@ try {
 
 For a JNI-backed variant (`NativeKafkaConnector`), enable the native Kafka build and ensure `libsurfingkafkajni.*` is on `java.library.path`.
 
+## MCP Server + MPI Worker (Batch Queue)
+
+This repo provides a minimal MCP server and an MPI worker runner to execute FIFO tasks across the cluster.
+
+- Server: `scripts/mcp_server.py` (in-memory queue, single active lease)
+  - Start: `python3 scripts/mcp_server.py --port 8080`
+  - Enqueue task (example):
+    - `curl -sS -X POST localhost:8080/enqueue -H 'Content-Type: application/json' -d '{"taskId":"t1","mode":"shuffle","oneSided":true,"keyField":"key","leftS3":["s3://bucket/input1"],"thrift":{"dir":"s3://bucket/thrift","struct":"MyStruct","file":"schema.thrift"},"outputS3":"s3://bucket/out"}'`
+  - Lease (worker): `GET /lease` returns JSON task or `NONE`
+  - Complete: `POST /complete {"taskId":"t1"}`
+
+- Worker: Java MPI runner `com.pinterest.drsquirrel.jni.McpWorkerRunner`
+  - Build shaded jar: `make java-jar`
+  - Run under MPI (all hosts):
+    - `mpiexec -np <N> java -Djava.library.path=$PWD/build -cp drsquirrel-java/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar com.pinterest.drsquirrel.jni.McpWorkerRunner http://<server_host>:8080`
+  - Behavior:
+    - Rank 0 leases the next task, broadcasts to all ranks, executes shuffle/cogroup, uploads Arrow outputs to the `outputS3` prefix with filenames containing rank (e.g., `rank-3.arrow`).
+    - Inputs are synced locally via `aws s3 cp --recursive`. Payload files are expected to be line-delimited Base64 Thrift Binary messages.
+    - Thrift schema is pulled from `thrift.dir` and struct is chosen via `thrift.struct` (optional `thrift.file`).
+
+Notes:
+- Requires AWS CLI on each host with appropriate credentials.
+- MPI tasks run strictly one-at-a-time via the server lease (FIFO).
+- Environment:
+  - `MCP_POLL_MS` (default 2000), `MCP_ONE_SIDED` (default true). Or pass server URL as the first arg.
+
+### MCP Server (fastmcp, StreamableHTTP + async progress)
+
+A fastmcp-based MCP server is available with StreamableHTTP transport and async progress reporting:
+
+- File: `scripts/mcp_fastmcp_server.py`
+- Install and run (in a venv):
+  - `python3 -m venv .venv && . .venv/bin/activate`
+  - `pip install fastmcp uvicorn`
+  - `python scripts/mcp_fastmcp_server.py` (serves on `:8081`, path `/mcp`)
+- Tool: `submit_task` (streams progress via MCP progress notifications)
+  - Args: `mode (shuffle|cogroup)`, `keyField`, `outputS3`, `leftS3`, `rightS3`, `oneSided`, `thriftDir`, `thriftStruct`, `thriftFile?`, `np`, `hostfile?`, `iface?`, `javaJar?`, `javaLibPath?`
+  - Behavior: acquires a global FIFO lock, spawns `mpiexec … McpWorkerRunner json:<base64>`, forwards coarse progress from process output, and returns `{taskId,status}` on completion.
+- StreamingHTTP path: `/mcp` (connect with an MCP client supporting StreamableHTTP).
+
 - Launch under MPI (two-sided cogroup)
   - `mpiexec -np 4 --mca btl_tcp_if_exclude lo,docker0 \
      java -Djava.library.path=$PWD/build \
