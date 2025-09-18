@@ -2,7 +2,7 @@
 
 High-performance shuffle and cogroup primitives for Apache Arrow RecordBatches with MPI, plus a lightweight Thrift IDL → Arrow schema toolkit and Java/JNI bindings.
 
-This is originally build in 2021 in Hawaii.
+this is originally build in 2021 in hawaii
 
 ## Features
 - Arrow-native shuffle (one-sided MPI RMA and two-sided send/recv)
