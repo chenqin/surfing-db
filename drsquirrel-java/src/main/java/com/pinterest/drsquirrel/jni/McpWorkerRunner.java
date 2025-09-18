@@ -84,10 +84,30 @@ public final class McpWorkerRunner {
         return p.waitFor();
     }
 
-    private static void awsSync(String s3, Path local) throws IOException, InterruptedException {
+    private static void copyInput(String uri, Path local) throws IOException, InterruptedException {
         Files.createDirectories(local);
-        int rc = sh("bash", "-lc", "aws s3 cp --recursive '" + s3 + "' '" + local.toString() + "'");
-        if (rc != 0) throw new IOException("aws s3 cp failed for " + s3);
+        if (uri.startsWith("file://")) {
+            Path src = Path.of(uri.substring("file://".length()));
+            if (!Files.exists(src)) throw new FileNotFoundException("No such path: " + src);
+            // copy recursively
+            try (var stream = Files.walk(src)) {
+                stream.forEach(p -> {
+                    try {
+                        Path rel = src.relativize(p);
+                        Path dst = local.resolve(rel.toString());
+                        if (Files.isDirectory(p)) Files.createDirectories(dst);
+                        else {
+                            Files.createDirectories(dst.getParent());
+                            Files.copy(p, dst, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                        }
+                    } catch (IOException e) { throw new RuntimeException(e); }
+                });
+            }
+            return;
+        }
+        // default to aws s3 cp for s3://
+        int rc = sh("bash", "-lc", "aws s3 cp --recursive '" + uri + "' '" + local.toString() + "'");
+        if (rc != 0) throw new IOException("aws s3 cp failed for " + uri);
     }
 
     private static Path pickThrift(Path thriftDir, String structName, String explicitFile) throws IOException {
@@ -189,7 +209,7 @@ public final class McpWorkerRunner {
             if (structName == null || structName.isEmpty()) throw new IllegalArgumentException("thrift.struct required");
 
             Path thriftDir = workDir.resolve("thrift");
-            awsSync(thriftDirS3, thriftDir);
+            copyInput(thriftDirS3, thriftDir);
             Path thriftFile = pickThrift(thriftDir, structName, thriftFileName);
 
             VectorSchemaRoot left = null, right = null;
@@ -201,7 +221,7 @@ public final class McpWorkerRunner {
                 if (leftS3.isEmpty()) throw new IllegalArgumentException("leftS3/inputS3 required for shuffle");
 
                 Path inDir = workDir.resolve("in_left"); Files.createDirectories(inDir);
-                for (String s3 : leftS3) awsSync(s3, inDir);
+                for (String s3 : leftS3) copyInput(s3, inDir);
                 List<byte[]> payloads = readPayloadsFromDir(inDir);
                 byte[][] arr = payloads.toArray(new byte[0][]);
                 left = NativeThriftDecoder.convert(alloc, arr, thriftFile.toString(), structName);
@@ -214,8 +234,8 @@ public final class McpWorkerRunner {
 
                 Path inL = workDir.resolve("in_left"); Files.createDirectories(inL);
                 Path inR = workDir.resolve("in_right"); Files.createDirectories(inR);
-                for (String s3 : leftS3) awsSync(s3, inL);
-                for (String s3 : rightS3) awsSync(s3, inR);
+                for (String s3 : leftS3) copyInput(s3, inL);
+                for (String s3 : rightS3) copyInput(s3, inR);
                 List<byte[]> payL = readPayloadsFromDir(inL);
                 List<byte[]> payR = readPayloadsFromDir(inR);
                 left = NativeThriftDecoder.convert(alloc, payL.toArray(new byte[0][]), thriftFile.toString(), structName);
@@ -231,7 +251,13 @@ public final class McpWorkerRunner {
                 writeArrowFile(outPath, out);
                 out.close(); left.close();
                 // Upload
-                sh("bash", "-lc", "aws s3 cp '" + outPath + "' '" + outS3 + "/rank-" + rank + ".arrow'");
+                if (outS3.startsWith("file://")) {
+                    Path dstDir = Path.of(outS3.substring("file://".length()));
+                    Files.createDirectories(dstDir);
+                    Files.copy(outPath, dstDir.resolve("rank-" + rank + ".arrow"), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                } else {
+                    sh("bash", "-lc", "aws s3 cp '" + outPath + "' '" + outS3 + "/rank-" + rank + ".arrow'");
+                }
             } else {
                 VectorSchemaRoot[] outs = NativeProcessors.cogroup(alloc, left, right, keyField, oneSided, rank, world);
                 Path outL = workDir.resolve("rank-" + rank + "-left.arrow");
@@ -239,8 +265,15 @@ public final class McpWorkerRunner {
                 writeArrowFile(outL, outs[0]);
                 writeArrowFile(outR, outs[1]);
                 outs[0].close(); outs[1].close(); left.close(); right.close();
-                sh("bash", "-lc", "aws s3 cp '" + outL + "' '" + outS3 + "/rank-" + rank + "-left.arrow'");
-                sh("bash", "-lc", "aws s3 cp '" + outR + "' '" + outS3 + "/rank-" + rank + "-right.arrow'");
+                if (outS3.startsWith("file://")) {
+                    Path dstDir = Path.of(outS3.substring("file://".length()));
+                    Files.createDirectories(dstDir);
+                    Files.copy(outL, dstDir.resolve("rank-" + rank + "-left.arrow"), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    Files.copy(outR, dstDir.resolve("rank-" + rank + "-right.arrow"), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                } else {
+                    sh("bash", "-lc", "aws s3 cp '" + outL + "' '" + outS3 + "/rank-" + rank + "-left.arrow'");
+                    sh("bash", "-lc", "aws s3 cp '" + outR + "' '" + outS3 + "/rank-" + rank + "-right.arrow'");
+                }
             }
 
             NativeProcessors.mpiBarrier();

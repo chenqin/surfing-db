@@ -100,11 +100,14 @@ async def submit_task(
     iface_opt = f"--mca btl_tcp_if_include {shlex.quote(iface)}" if iface else "--mca btl_tcp_if_exclude lo,docker0"
     hostfile_opt = f"--hostfile {shlex.quote(hostfile)}" if hostfile else ""
 
-    cmd = (
-        f"mpiexec -np {np} {hostfile_opt} --use-hwthread-cpus --oversubscribe --map-by core --bind-to core "
-        f"{iface_opt} "
-        f"{shlex.quote(java)} -Djava.library.path={shlex.quote(lib)} -cp {shlex.quote(cp)} {runner} {shlex.quote(json_arg)}"
-    )
+    if np <= 1:
+        cmd = f"{shlex.quote(java)} -Djava.library.path={shlex.quote(lib)} -cp {shlex.quote(cp)} {runner} {shlex.quote(json_arg)}"
+    else:
+        cmd = (
+            f"mpiexec -np {np} {hostfile_opt} --use-hwthread-cpus --oversubscribe --map-by core --bind-to core "
+            f"{iface_opt} "
+            f"{shlex.quote(java)} -Djava.library.path={shlex.quote(lib)} -cp {shlex.quote(cp)} {runner} {shlex.quote(json_arg)}"
+        )
 
     # Enforce FIFO execution
     await ctx.report_progress(0, 100, "Queued")
@@ -158,4 +161,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
