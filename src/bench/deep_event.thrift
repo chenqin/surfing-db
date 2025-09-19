@@ -34,6 +34,27 @@ struct Meta {
   2: list<Attr> kvs
 }
 
+struct DeepLeaf {
+  1: string leaf_id,
+  2: list<i64> samples
+}
+
+struct DeepBranch {
+  1: map<string, DeepLeaf> leaves
+}
+
+struct DeepRoot {
+  1: list<DeepBranch> branches
+}
+
+struct DeepForest {
+  1: map<string, DeepRoot> roots
+}
+
+struct DeepUniverse {
+  1: list<DeepForest> forests
+}
+
 struct DeepEvent {
   1: i64 event_id,
   2: string source,
@@ -44,6 +65,6 @@ struct DeepEvent {
   7: list<Reading> readings,
   8: map<string, Bundle> bundles,
   9: list<map<string, list<Attr>>> attr_maps,
-  10: Geo geo
+  10: Geo geo,
+  11: DeepUniverse deep_universe
 }
-

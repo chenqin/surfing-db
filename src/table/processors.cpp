@@ -122,9 +122,13 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle_one_side(
   int local_batches = batches.size();
   MPI_Allreduce(&local_batches, &total_batches, 1, MPI_INT, MPI_SUM,
                 MPI_COMM_WORLD);
-  LOG(INFO) << "data batch check " << MPI_Wtime() - start << " seconds " << rank;
+  double discovery_elapsed = MPI_Wtime() - start;
+  LOG(INFO) << "[rank " << rank << "/" << world
+            << "] shuffle_one_side discovered " << total_batches
+            << " total batch(es) (" << local_batches << " local) for field '"
+            << filedname << "' in " << discovery_elapsed << "s";
   // nothing to shuffle
-  CHECK (total_batches > 0);
+  CHECK_GT(total_batches, 0);
 
   auto schema = batches[0]->schema();
   size_t local_org_row = 0;
@@ -149,7 +153,9 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle_one_side(
       if (maybe_paths.ok()) {
         auto& paths = maybe_paths.ValueUnsafe();
         if (!paths.empty()) {
-          LOG(INFO) << "Spilled partition to " << paths.size() << " file(s) under " << spill_dir;
+          LOG(INFO) << "[rank " << rank << "/" << world
+                    << "] spilled partition for dest " << j << " to "
+                    << paths.size() << " file(s) under " << spill_dir;
         }
       }
     }
@@ -160,7 +166,10 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle_one_side(
     local_org_row += send_to_dest_table->num_rows();
   }
 
-  LOG(INFO) << "data group " << MPI_Wtime() - start << " seconds " << rank;
+  double group_elapsed = MPI_Wtime() - start;
+  LOG(INFO) << "[rank " << rank << "/" << world
+            << "] grouped " << local_org_row << " row(s) into " << world
+            << " partition(s) in " << group_elapsed << "s";
 
   for (int j = 0; j < world; j++) {
     send_to_vec[j] = send_buffers[j]->size();
@@ -176,7 +185,15 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle_one_side(
   // RDMA
   MPI_Alltoall(&send_to_vec_offset, 1, MPI_UNSIGNED_LONG, recv_from_vec_offset,
                1, MPI_UNSIGNED_LONG, MPI_COMM_WORLD);
-  LOG(INFO) << "data offseting " << MPI_Wtime() - start << " seconds " << rank;
+  double offset_elapsed = MPI_Wtime() - start;
+  size_t total_recv_bytes = 0;
+  for (int j = 0; j < world; j++) {
+    total_recv_bytes += recv_from_vec[j];
+  }
+  LOG(INFO) << "[rank " << rank << "/" << world
+            << "] exchanged partition sizes in " << offset_elapsed
+            << "s; sending " << total_bytes << " byte(s), expecting "
+            << total_recv_bytes << " byte(s)";
 
   /**
    * @brief contact send buffers into one window buffer
@@ -185,7 +202,10 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle_one_side(
   start = MPI_Wtime();
   auto window_buffer = arrow::ConcatenateBuffers(send_buffers).ValueOrDie();
   CHECK_EQ(total_bytes, window_buffer->size());
-  LOG(INFO) << "data map " << MPI_Wtime() - start << " seconds " << rank;
+  double concat_elapsed = MPI_Wtime() - start;
+  LOG(INFO) << "[rank " << rank << "/" << world
+            << "] concatenated send buffers (" << total_bytes
+            << " byte(s)) in " << concat_elapsed << "s";
 
   start = MPI_Wtime();
   MPI_Win_create(window_buffer->mutable_data(), window_buffer->size(),
@@ -207,7 +227,10 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle_one_side(
   MPI_Win_fence(0, window);
 
   MPI_Win_free(&window);
-  LOG(INFO) << "data movement " << MPI_Wtime() - start << " seconds " << rank;
+  double movement_elapsed = MPI_Wtime() - start;
+  LOG(INFO) << "[rank " << rank << "/" << world
+            << "] completed RDMA window transfer in " << movement_elapsed
+            << "s";
 
   arrow::RecordBatchVector arrow_tables;
   start = MPI_Wtime();
@@ -224,7 +247,10 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle_one_side(
     auto arrow_table = utils::deserialize(send_buffers[rank], schema);
     arrow_tables.push_back(arrow_table);
   }
-  LOG(INFO) << "data deser " << MPI_Wtime() - start << " seconds " << rank;
+  double deser_elapsed = MPI_Wtime() - start;
+  LOG(INFO) << "[rank " << rank << "/" << world
+            << "] deserialized " << arrow_tables.size()
+            << " partition batch(es) in " << deser_elapsed << "s";
 
   size_t total_rows = 0;
   for (auto& batch : arrow_tables) {
@@ -243,11 +269,16 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle_one_side(
       if (maybe_paths.ok()) {
         auto& paths = maybe_paths.ValueUnsafe();
         if (!paths.empty()) {
-          LOG(INFO) << "Post-shuffle spill: wrote " << paths.size() << " file(s) to " << post_spill_dir;
+          LOG(INFO) << "[rank " << rank << "/" << world
+                    << "] post-shuffle spill wrote " << paths.size()
+                    << " file(s) to " << post_spill_dir;
         }
       }
     }
   }
+  LOG(INFO) << "[rank " << rank << "/" << world
+            << "] shuffle_one_side produced " << total_rows
+            << " row(s) across " << arrow_tables.size() << " batch(es)";
   return out_batch;
 
 /*
@@ -280,21 +311,34 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle_two_side(
 
   int total_batches = 0;
   int local_batches = batches.size();
+  double phase_start = MPI_Wtime();
   MPI_Allreduce(&local_batches, &total_batches, 1, MPI_INT, MPI_SUM,
                 MPI_COMM_WORLD);
+  double discovery_elapsed = MPI_Wtime() - phase_start;
+  LOG(INFO) << "[rank " << rank << "/" << world
+            << "] shuffle_two_side discovered " << total_batches
+            << " total batch(es) (" << local_batches << " local) for field '"
+            << filedname << "' in " << discovery_elapsed << "s";
 
   // nothing to shuffle
-  CHECK(total_batches > 0);
+  CHECK_GT(total_batches, 0);
 
   size_t total_rows = 0;
   for (auto& batch : batches) {
     total_rows += batch->num_rows();
   }
   size_t orgin_row_sum = 0;
+  phase_start = MPI_Wtime();
   MPI_Allreduce(&total_rows, &orgin_row_sum, 1, MPI_UNSIGNED_LONG, MPI_SUM,
                 MPI_COMM_WORLD);
+  double row_reduce_elapsed = MPI_Wtime() - phase_start;
+  LOG(INFO) << "[rank " << rank << "/" << world
+            << "] shuffle_two_side accounted for " << total_rows
+            << " local row(s); global total " << orgin_row_sum
+            << " row(s) computed in " << row_reduce_elapsed << "s";
 
   auto schema = batches[0]->schema();
+  phase_start = MPI_Wtime();
 #pragma omp parallel for 
   for (int j = 0; j < world; j++) {
     auto send_to_dest_table =
@@ -308,6 +352,17 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle_two_side(
 }
   }
 
+  double partition_elapsed = MPI_Wtime() - phase_start;
+  size_t total_send_bytes = 0;
+  for (int j = 0; j < world; j++) {
+    total_send_bytes += send_to_vec[j];
+  }
+  LOG(INFO) << "[rank " << rank << "/" << world
+            << "] shuffle_two_side partitioned " << total_rows
+            << " row(s) into " << world << " buffer(s) totaling "
+            << total_send_bytes << " byte(s) in " << partition_elapsed << "s";
+
+  phase_start = MPI_Wtime();
   MPI_Alltoall(&send_to_vec, 1, MPI_UNSIGNED_LONG, recv_from_vec, 1,
                MPI_UNSIGNED_LONG, MPI_COMM_WORLD);
 
@@ -318,12 +373,18 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle_two_side(
     tranfer_bytes_rank_index[i] =
         (i == 0) ? 0 : recv_from_vec[i - 1] + tranfer_bytes_rank_index[i - 1];
   }
+  double size_exchange_elapsed = MPI_Wtime() - phase_start;
+  LOG(INFO) << "[rank " << rank << "/" << world
+            << "] shuffle_two_side exchanged partition sizes in "
+            << size_exchange_elapsed << "s; sending " << total_send_bytes
+            << " byte(s) and expecting " << recv_bytes << " byte(s)";
   auto maybe_buffer = arrow::AllocateBuffer(recv_bytes);
   CHECK(maybe_buffer.ok());
   std::shared_ptr<arrow::Buffer> recv_buffer =
       std::move(maybe_buffer.ValueOrDie());
   int send_count = 0, recv_count = 0;
 
+  phase_start = MPI_Wtime();
   for (int i = 0; i < world; i++) {
     int send_to_rank = i;
     if (send_to_vec[send_to_rank] > 0) {
@@ -344,6 +405,11 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle_two_side(
   }
   MPI_Waitall(send_count, sends, statuses);
   MPI_Waitall(recv_count, recvs, statuses);
+  double transfer_elapsed = MPI_Wtime() - phase_start;
+  LOG(INFO) << "[rank " << rank << "/" << world
+            << "] shuffle_two_side completed " << send_count
+            << " send(s) and " << recv_count << " recv(s) moving "
+            << recv_bytes << " byte(s) in " << transfer_elapsed << "s";
 
   for (int i = 0; i < world; i++) {
     if (sends[i] != MPI_REQUEST_NULL) MPI_Request_free(&sends[i]);
@@ -351,6 +417,7 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle_two_side(
   }
 
   arrow::RecordBatchVector arrow_tables;
+  phase_start = MPI_Wtime();
 #pragma omp parallel for 
   for (int i = 0; i < world; i++) {
     if (recv_from_vec[i] > 0) {
@@ -366,6 +433,11 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle_two_side(
   for (auto& batch : arrow_tables) {
     total_rows += batch->num_rows();
   }
+  double deser_elapsed = MPI_Wtime() - phase_start;
+  LOG(INFO) << "[rank " << rank << "/" << world
+            << "] shuffle_two_side deserialized " << arrow_tables.size()
+            << " batch(es) totaling " << total_rows << " row(s) in "
+            << deser_elapsed << "s";
 
   size_t shuffle_row_sum = 0;
   MPI_Allreduce(&total_rows, &shuffle_row_sum, 1, MPI_UNSIGNED_LONG, MPI_SUM,
@@ -386,12 +458,17 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle_two_side(
         if (maybe_paths.ok()) {
           auto& paths = maybe_paths.ValueUnsafe();
           if (!paths.empty()) {
-            LOG(INFO) << "Post-shuffle spill: wrote " << paths.size() << " file(s) to " << post_spill_dir;
+            LOG(INFO) << "[rank " << rank << "/" << world
+                      << "] post-shuffle spill wrote " << paths.size()
+                      << " file(s) to " << post_spill_dir;
           }
         }
       }
     }
   }
+  LOG(INFO) << "[rank " << rank << "/" << world
+            << "] shuffle_two_side produced " << total_rows
+            << " row(s) across " << arrow_tables.size() << " batch(es)";
   return out_batch2;
 }
 
@@ -406,7 +483,14 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle(
                                                        partitioner, rank, world)
                         : processors::shuffle_two_side(
                               input, field_name, partitioner, rank, world);
-  LOG(INFO) << "data shuffle by " << field_name << " takes " << MPI_Wtime() - start << " seconds " << rank;
+  double shuffle_elapsed = MPI_Wtime() - start;
+  const char* mode = singleside ? "one-side" : "two-side";
+  int64_t input_rows = batch ? batch->num_rows() : 0;
+  int64_t output_rows = out ? out->num_rows() : 0;
+  LOG(INFO) << "[rank " << rank << "/" << world
+            << "] shuffle(" << mode << ") by '" << field_name << "' finished in "
+            << shuffle_elapsed << "s; input rows=" << input_rows
+            << ", output rows=" << output_rows;
   // TODO: we observed a bug in tcp MPI_GET that lead to one row of garbage
   return out;
 }
@@ -552,15 +636,30 @@ arrow::RecordBatchVector processors::jni(
     std::string class_name, JNIEnv* env, int rank) {
   auto start = MPI_Wtime();
   arrow::RecordBatchVector out;
+  int processed_batches = 0;
+  int64_t input_rows = 0;
+  int64_t output_rows = 0;
   for (int i = 0; i < batch.size(); i++) {
     auto& b = batch[i];
     //std::cout << b->ToString();
     CHECK(b->Validate().ok());
     if ( b->num_rows() == 0 ) continue;
+    processed_batches++;
+    input_rows += b->num_rows();
     auto result = java(b, class_name, env);
+    if (result) {
+      output_rows += result->num_rows();
+    }
     out.push_back(std::move(result));
   }
-  if(batch.size() > 0) LOG(INFO) << "jni call to "<< class_name << " takes " << MPI_Wtime() - start << " seconds rank" << rank;
+  if (!batch.empty()) {
+    double elapsed = MPI_Wtime() - start;
+    LOG(INFO) << "[rank " << rank
+              << "] jni call to '" << class_name << "' processed "
+              << processed_batches << "/" << batch.size() << " batch(es); input rows="
+              << input_rows << ", output rows=" << output_rows << ", elapsed="
+              << elapsed << "s";
+  }
   return std::move(out);
 }
 

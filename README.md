@@ -9,6 +9,7 @@ this is originally build in 2021 in hawaii
 - Arrow-native cogroup for co-partitioning two inputs by key
 - Thrift `.thrift` → Arrow Schema converter (+ Matcha `mschema`)
 - Java integrations: JNI wrappers for shuffle/cogroup and a JNI Thrift decoder
+- Python bindings: pybind11 module exposing shuffle/cogroup over Arrow C Data
 - Example Java app demonstrating MPI cogroup
 
 ## Quick Start
@@ -36,6 +37,12 @@ Java modules:
 - `mvn -f drsquirrel-java-project/pom.xml -Darrow.version=12.0.0 -DskipTests package`
 - JNI Thrift decoder: `mvn -f surfingthriftjni/pom.xml -Darrow.version=12.0.0 -DskipTests package`
 
+Python bindings:
+- Build native module: `cmake --build build --target surfingprocessorspy`
+- Create a virtualenv (recommended) and install PyArrow: `python3 -m venv .venv && . .venv/bin/activate && python -m pip install pyarrow`
+- Run the cogroup benchmark (single rank): `. .venv/bin/activate && PYTHONPATH=build python examples/python/cogroup_benchmark.py --rows 100000 --iters 3`
+- Under MPI: `mpiexec -np 4 --use-hwthread-cpus --oversubscribe --map-by core --bind-to core env PYTHONPATH=build .venv/bin/python examples/python/cogroup_benchmark.py --rows 100000 --iters 3`
+
 ## Running (JNI under MPI)
 Set native library path:
 - `export LD_LIBRARY_PATH=$PWD/build:$LD_LIBRARY_PATH`
@@ -47,6 +54,7 @@ Shuffle load (one-sided by default):
 Cogroup load:
 - `mpiexec -np 4 java -Djava.library.path=$PWD/build -cp drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar com.pinterest.drsquirrel.jni.JniCogroupLoadRunner`
 - Two-sided: add `two`
+- Decode pre-generated Thrift payloads: append `--thrift-path src/bench/deep_event.thrift --thrift-struct DeepEvent --payload-left /tmp/deep_left.bin --payload-right /tmp/deep_right.bin --key-field event_id`
 
 All-cores helpers (local machine):
 - Shuffle: `./scripts/run_shuffle_all_cores.sh`
@@ -60,7 +68,10 @@ Two-sided:
 - `bash scripts/run_fake_cogroup_example.sh --np 2 --mode two --rows 50000 --iters 2`
 Optional post-sort by a field present in outputs (e.g. `la` or `rb`):
 - `--sort-by la`
+- Decode deep nested Thrift payloads via surfingthriftjni: `bash scripts/run_fake_cogroup_example.sh --deep-thrift --np 4 --iters 2 --sort-by event_id`
+- Bring your own payloads: pass `--thrift-path PATH --thrift-struct StructName --payload-left /path/to/left.bin [--payload-right ...] [--key-field field]`.
 Output samples per rank land under `build/examples/fake-cogroup-out/`.
+The bundled `DeepEvent` schema now includes a five-level nested structure (`deep_universe`) composed of lists and maps of structs to stress deep decoding.
 
 ## Thrift → Arrow
 C++ usage (library): see `src/meta/thrift_parser.h`.

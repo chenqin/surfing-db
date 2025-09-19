@@ -169,6 +169,23 @@ true
               <overwrite>true</overwrite>
             </configuration>
           </execution>
+          <execution>
+            <id>stage-natives-jar-root</id>
+            <phase>prepare-package</phase>
+            <goals><goal>copy-resources</goal></goals>
+            <configuration>
+              <outputDirectory>${project.build.directory}/natives-jar-root/META-INF/lib/${nat.classifier}</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${native.lib.dir}</directory>
+                  <includes>
+                    <include>${mapped.lib}</include>
+                  </includes>
+                </resource>
+              </resources>
+              <overwrite>true</overwrite>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
 
@@ -188,32 +205,6 @@ true
                 <descriptorRef>jar-with-dependencies</descriptorRef>
               </descriptorRefs>
               <finalName>${project.artifactId}-${project.version}</finalName>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-
-      <!-- Stage native .so/.dylib into META-INF/lib/<os>-<arch>/ for a natives jar -->
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-resources-plugin</artifactId>
-        <version>3.3.1</version>
-        <executions>
-          <execution>
-            <id>stage-natives-jar-root</id>
-            <phase>prepare-package</phase>
-            <goals><goal>copy-resources</goal></goals>
-            <configuration>
-              <outputDirectory>${project.build.directory}/natives-jar-root/META-INF/lib/${nat.classifier}</outputDirectory>
-              <resources>
-                <resource>
-                  <directory>${native.lib.dir}</directory>
-                  <includes>
-                    <include>${mapped.lib}</include>
-                  </includes>
-                </resource>
-              </resources>
-              <overwrite>true</overwrite>
             </configuration>
           </execution>
         </executions>
