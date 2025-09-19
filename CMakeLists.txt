@@ -330,6 +330,15 @@ target_link_libraries(surfingprocessorsjni
     PRIVATE ${GLOG_LIBRARY})
 set_target_properties(surfingprocessorsjni PROPERTIES OUTPUT_NAME surfingprocessorsjni)
 
+# Python module exposing the same processor primitives via pybind11
+pybind11_add_module(surfingprocessorspy MODULE ${MATCHA_SRC}/table/processors_py.cpp)
+target_link_libraries(surfingprocessorspy
+    PRIVATE surfingdb_core
+    PRIVATE ${ARROW_LIBRARY}
+    PRIVATE ${PARQUET_LIBRARY}
+    PRIVATE ${GLOG_LIBRARY}
+    PRIVATE MPI::MPI_CXX)
+
 # JNI library for Thrift -> Arrow decoding has moved to the Maven submodule
 # surfingthriftjni/, which builds the native library via its own CMake under
 # surfingthriftjni/native and packages natives into a classifier JAR.

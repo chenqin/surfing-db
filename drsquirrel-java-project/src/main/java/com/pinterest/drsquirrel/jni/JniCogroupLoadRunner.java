@@ -39,10 +39,21 @@ public class JniCogroupLoadRunner {
     }
 
     private static String getEnv(String name) {
-        String v = System.getenv(name);
-        return v == null ? "" : v;
+        return getEnv(name, "");
     }
 
+    private static String getEnv(String name, String defVal) {
+        String v = System.getenv(name);
+        return v == null ? defVal : v;
+    }
+
+    private static String requireArg(String[] args, int index, String flag) {
+        if (index >= args.length) {
+            System.err.println("Missing value for " + flag);
+            System.exit(2);
+        }
+        return args[index];
+    }
     private static int getOmniRank() {
         String s = System.getenv("OMPI_COMM_WORLD_RANK");
         if (s == null) s = System.getenv("PMI_RANK");
@@ -78,11 +89,67 @@ public class JniCogroupLoadRunner {
     }
 
     public static void main(String[] args) throws IOException {
-        boolean twoSided = args.length > 0 && "two".equalsIgnoreCase(args[0]);
+        boolean twoSided = false;
+        String thriftPathArg = null;
+        String thriftStructArg = null;
+        String payloadLeftArg = null;
+        String payloadRightArg = null;
+        String keyFieldArg = null;
+
+        for (int i = 0; i < args.length; i++) {
+            String arg = args[i];
+            switch (arg) {
+                case "two":
+                case "--two":
+                    twoSided = true;
+                    break;
+                case "one":
+                case "--one":
+                    twoSided = false;
+                    break;
+                case "--thrift-path":
+                    thriftPathArg = requireArg(args, ++i, "--thrift-path");
+                    break;
+                case "--thrift-struct":
+                    thriftStructArg = requireArg(args, ++i, "--thrift-struct");
+                    break;
+                case "--payload-left":
+                    payloadLeftArg = requireArg(args, ++i, "--payload-left");
+                    break;
+                case "--payload-right":
+                    payloadRightArg = requireArg(args, ++i, "--payload-right");
+                    break;
+                case "--key-field":
+                    keyFieldArg = requireArg(args, ++i, "--key-field");
+                    break;
+                default:
+                    System.err.println("Unknown argument: " + arg);
+                    System.exit(2);
+            }
+        }
+
         long rowsPerRank = getEnvLong("SHUFFLE_LOAD_ROWS", 200_000);
         long iters = getEnvLong("SHUFFLE_LOAD_ITERS", 3);
         String outCsv = getEnv("SHUFFLE_LOAD_OUT");
         long seedBase = getEnvLong("SHUFFLE_TEST_SEED", System.currentTimeMillis());
+
+        if (thriftPathArg == null || thriftPathArg.isEmpty()) {
+            thriftPathArg = getEnv("SHUFFLE_THRIFT_PATH", "");
+        }
+        if (thriftStructArg == null || thriftStructArg.isEmpty()) {
+            thriftStructArg = getEnv("SHUFFLE_THRIFT_STRUCT", "");
+        }
+        if (payloadLeftArg == null || payloadLeftArg.isEmpty()) {
+            payloadLeftArg = getEnv("SHUFFLE_THRIFT_PAYLOAD_LEFT", "");
+        }
+        if (payloadRightArg == null || payloadRightArg.isEmpty()) {
+            payloadRightArg = getEnv("SHUFFLE_THRIFT_PAYLOAD_RIGHT", "");
+        }
+        if (keyFieldArg == null || keyFieldArg.isEmpty()) {
+            keyFieldArg = getEnv("SHUFFLE_THRIFT_KEY_FIELD", getEnv("SHUFFLE_LOAD_KEY", "key"));
+        }
+
+        final boolean useThrift = !thriftPathArg.isEmpty() && !thriftStructArg.isEmpty() && !payloadLeftArg.isEmpty();
 
         int rank = getOmniRank();
         int world = getOmniWorld();
@@ -97,31 +164,58 @@ public class JniCogroupLoadRunner {
             csvEnabled = true;
         }
 
-        if (rank == 0) {
-            System.out.println("[JniCogroupLoad] world=" + world +
-                    " rows_per_rank=" + rowsPerRank +
-                    " iters=" + iters +
-                    " mode=" + mode);
-        }
-
         try (RootAllocator alloc = new RootAllocator()) {
-            try (VectorSchemaRoot left = makeRandomBatch(alloc, rowsPerRank, seedBase + rank, "la");
-                 VectorSchemaRoot right = makeRandomBatch(alloc, rowsPerRank, seedBase + rank + 17, "rb")) {
-                // warmup
-                VectorSchemaRoot[] warm = NativeProcessors.cogroup(alloc, left, right, "key", !twoSided, rank, world);
+            CogroupInputFactory.ThriftInputs thriftInputs = null;
+            VectorSchemaRoot left = null;
+            VectorSchemaRoot right = null;
+            String keyField = keyFieldArg == null ? "key" : keyFieldArg;
+            long rowsPerRankResolved = rowsPerRank;
+            try {
+                if (useThrift) {
+                    thriftInputs = CogroupInputFactory.fromThrift(
+                            alloc,
+                            thriftPathArg,
+                            thriftStructArg,
+                            payloadLeftArg,
+                            payloadRightArg.isEmpty() ? null : payloadRightArg,
+                            keyField,
+                            rank,
+                            world);
+                    left = thriftInputs.left;
+                    right = thriftInputs.right;
+                    keyField = thriftInputs.keyField;
+                    rowsPerRankResolved = thriftInputs.rowsPerRank;
+                } else {
+                    left = makeRandomBatch(alloc, rowsPerRank, seedBase + rank, "la");
+                    right = makeRandomBatch(alloc, rowsPerRank, seedBase + rank + 17, "rb");
+                }
+
+                if (rank == 0) {
+                    System.out.println("[JniCogroupLoad] world=" + world +
+                            " rows_per_rank=" + rowsPerRankResolved +
+                            " iters=" + iters +
+                            " mode=" + mode +
+                            (useThrift ? (" thrift=" + thriftStructArg + " key_field=" + keyField) : ""));
+                    if (useThrift) {
+                        System.out.println("[JniCogroupLoad] left_payload=" + payloadLeftArg +
+                                (payloadRightArg.isEmpty() ? "" : (" right_payload=" + payloadRightArg)));
+                    }
+                }
+
+                VectorSchemaRoot[] warm = NativeProcessors.cogroup(alloc, left, right, keyField, !twoSided, rank, world);
                 if (warm != null) { for (VectorSchemaRoot v : warm) if (v != null) v.close(); }
 
                 double best = Double.MAX_VALUE, total = 0.0;
                 for (int i = 0; i < iters; i++) {
                     long t0 = System.nanoTime();
-                    VectorSchemaRoot[] out = NativeProcessors.cogroup(alloc, left, right, "key", !twoSided, rank, world);
+                    VectorSchemaRoot[] out = NativeProcessors.cogroup(alloc, left, right, keyField, !twoSided, rank, world);
                     long t1 = System.nanoTime();
                     if (out != null) { for (VectorSchemaRoot v : out) if (v != null) v.close(); }
                     double dt = (t1 - t0) / 1e9;
                     best = Math.min(best, dt);
                     total += dt;
 
-                    long rows = rowsPerRank * world * 2; // two inputs combined
+                    long rows = rowsPerRankResolved * world * 2; // two inputs combined
                     double rps = rows / dt;
                     if (rank == 0) {
                         System.out.println("[JniCogroupLoad] iter=" + i +
@@ -130,7 +224,7 @@ public class JniCogroupLoadRunner {
                                 " rows_per_sec=" + rps);
                         if (csvEnabled) {
                             long epoch = Instant.now().getEpochSecond();
-                            csv.write(epoch + "," + epoch + "," + mode + "," + world + "," + rowsPerRank + "," + i + "," + rows + "," + dt + "," + rps + "\n");
+                            csv.write(epoch + "," + epoch + "," + mode + "," + world + "," + rowsPerRankResolved + "," + i + "," + rows + "," + dt + "," + rps + "\n");
                             csv.flush();
                         }
                     }
@@ -138,6 +232,15 @@ public class JniCogroupLoadRunner {
                 if (rank == 0) {
                     double avg = total / (double) iters;
                     System.out.println("[JniCogroupLoad] best_s=" + best + " avg_s=" + avg);
+                }
+            } finally {
+                if (useThrift) {
+                    if (thriftInputs != null) {
+                        thriftInputs.close();
+                    }
+                } else {
+                    if (left != null) left.close();
+                    if (right != null) right.close();
                 }
             }
         }
@@ -147,4 +250,3 @@ public class JniCogroupLoadRunner {
         }
     }
 }
-

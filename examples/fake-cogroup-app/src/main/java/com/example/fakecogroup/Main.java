@@ -1,9 +1,11 @@
 package com.example.fakecogroup;
 
+import com.pinterest.drsquirrel.jni.CogroupInputFactory;
 import com.pinterest.drsquirrel.jni.NativeProcessors;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
+import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.IntVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.pojo.ArrowType;
@@ -17,6 +19,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Random;
 
 /**
@@ -69,6 +72,11 @@ public class Main {
         o.addOption(Option.builder().longOpt("iters").hasArg().desc("iterations (default 1)").build());
         o.addOption(Option.builder().longOpt("out").hasArg().desc("output directory for fake sink (default build/examples/fake-cogroup-out)").build());
         o.addOption(Option.builder().longOpt("sort-by").hasArg().desc("optional: field name to sort outputs by after cogroup").build());
+        o.addOption(Option.builder().longOpt("thrift-path").hasArg().desc("Path to Thrift IDL when decoding payloads via surfingthriftjni").build());
+        o.addOption(Option.builder().longOpt("thrift-struct").hasArg().desc("Struct name in the Thrift IDL").build());
+        o.addOption(Option.builder().longOpt("payload-left").hasArg().desc("Left payload file (little-endian [len][bytes] format)").build());
+        o.addOption(Option.builder().longOpt("payload-right").hasArg().desc("Right payload file (defaults to left if omitted)").build());
+        o.addOption(Option.builder().longOpt("key-field").hasArg().desc("Key field for cogroup (default: key; DeepEvent uses event_id)").build());
         return o;
     }
 
@@ -90,6 +98,24 @@ public class Main {
         int iters = Integer.parseInt(cl.getOptionValue("iters", "1"));
         String outDirS = cl.getOptionValue("out", "build/examples/fake-cogroup-out");
         String sortBy = cl.getOptionValue("sort-by", "");
+        String thriftPath = cl.getOptionValue("thrift-path", System.getenv("SHUFFLE_THRIFT_PATH"));
+        String thriftStruct = cl.getOptionValue("thrift-struct", System.getenv("SHUFFLE_THRIFT_STRUCT"));
+        String payloadLeft = cl.getOptionValue("payload-left", System.getenv("SHUFFLE_THRIFT_PAYLOAD_LEFT"));
+        String payloadRight = cl.getOptionValue("payload-right", System.getenv("SHUFFLE_THRIFT_PAYLOAD_RIGHT"));
+        boolean useThrift = thriftPath != null && !thriftPath.isEmpty()
+                && thriftStruct != null && !thriftStruct.isEmpty()
+                && payloadLeft != null && !payloadLeft.isEmpty();
+        String keyField = cl.getOptionValue("key-field");
+        if (keyField == null || keyField.isEmpty()) {
+            String envKey = System.getenv("SHUFFLE_THRIFT_KEY_FIELD");
+            if (envKey != null && !envKey.isEmpty()) {
+                keyField = envKey;
+            } else if (useThrift && "DeepEvent".equals(thriftStruct)) {
+                keyField = "event_id";
+            } else {
+                keyField = "key";
+            }
+        }
         File outDir = new File(outDirS);
         if (!outDir.exists() && !outDir.mkdirs() && !outDir.exists()) {
             throw new IOException("Failed to create output dir: " + outDir);
@@ -97,24 +123,50 @@ public class Main {
 
         int rank = omniRank();
         int world = omniWorld();
-        if (rank == 0) {
-            System.out.printf("[fake-cogroup] world=%d rows_per_rank=%d iters=%d mode=%s out=%s\n",
-                    world, rows, iters, (oneSided ? "one" : "two"), outDir.getAbsolutePath());
-        }
-
         long seedBase = Instant.now().getEpochSecond();
         try (RootAllocator alloc = new RootAllocator()) {
-            try (VectorSchemaRoot left = makeRandomBatch(alloc, rows, seedBase + rank, "la");
-                 VectorSchemaRoot right = makeRandomBatch(alloc, rows, seedBase + rank + 17, "rb")) {
+            CogroupInputFactory.ThriftInputs thriftInputs = null;
+            VectorSchemaRoot left = null;
+            VectorSchemaRoot right = null;
+            long rowsPerRankActual = rows;
+            try {
+                if (useThrift) {
+                    thriftInputs = CogroupInputFactory.fromThrift(
+                            alloc,
+                            thriftPath,
+                            thriftStruct,
+                            payloadLeft,
+                            payloadRight == null || payloadRight.isEmpty() ? null : payloadRight,
+                            keyField,
+                            rank,
+                            world);
+                    left = thriftInputs.left;
+                    right = thriftInputs.right;
+                    keyField = thriftInputs.keyField;
+                    rowsPerRankActual = thriftInputs.rowsPerRank;
+                } else {
+                    left = makeRandomBatch(alloc, rows, seedBase + rank, "la");
+                    right = makeRandomBatch(alloc, rows, seedBase + rank + 17, "rb");
+                }
+
+                if (rank == 0) {
+                    System.out.printf("[fake-cogroup] world=%d rows_per_rank=%d iters=%d mode=%s out=%s\n",
+                            world, rowsPerRankActual, iters, (oneSided ? "one" : "two"), outDir.getAbsolutePath());
+                    if (useThrift) {
+                        System.out.printf("[fake-cogroup] thrift schema=%s struct=%s key=%s left=%s%s\n",
+                                thriftPath, thriftStruct, keyField, payloadLeft,
+                                (payloadRight == null || payloadRight.isEmpty()) ? "" : (" right=" + payloadRight));
+                    }
+                }
 
                 // Warmup
-                VectorSchemaRoot[] warm = NativeProcessors.cogroup(alloc, left, right, "key", oneSided, rank, world);
+                VectorSchemaRoot[] warm = NativeProcessors.cogroup(alloc, left, right, keyField, oneSided, rank, world);
                 if (warm != null) { for (VectorSchemaRoot v : warm) if (v != null) v.close(); }
 
                 double best = Double.MAX_VALUE, total = 0.0;
                 for (int i = 0; i < iters; i++) {
                     long t0 = System.nanoTime();
-                    VectorSchemaRoot[] outs = NativeProcessors.cogroup(alloc, left, right, "key", oneSided, rank, world);
+                    VectorSchemaRoot[] outs = NativeProcessors.cogroup(alloc, left, right, keyField, oneSided, rank, world);
                     long t1 = System.nanoTime();
                     double dt = (t1 - t0) / 1e9;
                     best = Math.min(best, dt);
@@ -152,7 +204,7 @@ public class Main {
                     for (VectorSchemaRoot v : outs) if (v != null) v.close();
 
                     if (rank == 0) {
-                        long totalRows = (long) rows * world * 2;
+                        long totalRows = rowsPerRankActual * world * 2;
                         double rps = totalRows / dt;
                         System.out.printf("[fake-cogroup] iter=%d rows=%d time_s=%.6f rows_per_sec=%.0f\n",
                                 i, totalRows, dt, rps);
@@ -162,23 +214,34 @@ public class Main {
                     double avg = total / (double) iters;
                     System.out.printf("[fake-cogroup] best_s=%.6f avg_s=%.6f\n", best, avg);
                 }
+            } finally {
+                if (useThrift) {
+                    if (thriftInputs != null) {
+                        thriftInputs.close();
+                    }
+                } else {
+                    if (left != null) left.close();
+                    if (right != null) right.close();
+                }
             }
         }
     }
 
     private static void dumpSample(VectorSchemaRoot root, String label, FileWriter fw, int maxRows) throws IOException {
         int n = Math.min(maxRows, root.getRowCount());
-        BigIntVector key = (BigIntVector) root.getVector("key");
-        IntVector valLa = (IntVector) root.getVector("la");
-        IntVector valRb = (IntVector) root.getVector("rb");
         fw.write("sample_" + label + " (first " + n + ")\n");
+        List<FieldVector> vectors = root.getFieldVectors();
         for (int i = 0; i < n; i++) {
-            long k = key.get(i);
-            String vals;
-            if (valLa != null) vals = "la=" + valLa.get(i);
-            else if (valRb != null) vals = "rb=" + valRb.get(i);
-            else vals = "vals=?";
-            fw.write(String.format("  %d: key=%d %s\n", i, k, vals));
+            fw.write("  " + i + ": ");
+            for (int f = 0; f < vectors.size(); f++) {
+                FieldVector vec = vectors.get(f);
+                Object value = vec.getObject(i);
+                fw.write(vec.getName() + "=" + value);
+                if (f + 1 < vectors.size()) {
+                    fw.write(", ");
+                }
+            }
+            fw.write("\n");
         }
     }
 

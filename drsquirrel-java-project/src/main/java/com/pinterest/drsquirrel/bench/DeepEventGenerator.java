@@ -126,6 +126,10 @@ public final class DeepEventGenerator {
     p.writeFieldBegin(new org.apache.thrift.protocol.TField("geo", TType.STRUCT, (short)10));
     writeGeo(p, rnd);
     p.writeFieldEnd();
+    // 11: deep_universe (five-level nested map/list/struct)
+    p.writeFieldBegin(new org.apache.thrift.protocol.TField("deep_universe", TType.STRUCT, (short)11));
+    writeDeepUniverse(p, rnd);
+    p.writeFieldEnd();
 
     p.writeFieldStop();
     p.writeStructEnd();
@@ -186,6 +190,81 @@ public final class DeepEventGenerator {
     p.writeFieldStop(); p.writeStructEnd();
     p.writeFieldEnd();
     p.writeFieldStop(); p.writeStructEnd();
+  }
+
+  private static void writeDeepLeaf(TBinaryProtocol p, Random rnd) throws Exception {
+    p.writeStructBegin(new org.apache.thrift.protocol.TStruct("DeepLeaf"));
+    p.writeFieldBegin(new org.apache.thrift.protocol.TField("leaf_id", TType.STRING, (short)1));
+    p.writeString("leaf-" + randStr(rnd, 6));
+    p.writeFieldEnd();
+    p.writeFieldBegin(new org.apache.thrift.protocol.TField("samples", TType.LIST, (short)2));
+    int count = 2 + rnd.nextInt(4);
+    p.writeListBegin(new org.apache.thrift.protocol.TList(TType.I64, count));
+    for (int i = 0; i < count; i++) {
+      p.writeI64(Math.abs(rnd.nextLong()) % 1_000_000L);
+    }
+    p.writeListEnd();
+    p.writeFieldEnd();
+    p.writeFieldStop();
+    p.writeStructEnd();
+  }
+
+  private static void writeDeepBranch(TBinaryProtocol p, Random rnd) throws Exception {
+    p.writeStructBegin(new org.apache.thrift.protocol.TStruct("DeepBranch"));
+    p.writeFieldBegin(new org.apache.thrift.protocol.TField("leaves", TType.MAP, (short)1));
+    int entries = 1 + rnd.nextInt(3);
+    p.writeMapBegin(new org.apache.thrift.protocol.TMap(TType.STRING, TType.STRUCT, entries));
+    for (int i = 0; i < entries; i++) {
+      p.writeString("leaf_key_" + i);
+      writeDeepLeaf(p, rnd);
+    }
+    p.writeMapEnd();
+    p.writeFieldEnd();
+    p.writeFieldStop();
+    p.writeStructEnd();
+  }
+
+  private static void writeDeepRoot(TBinaryProtocol p, Random rnd) throws Exception {
+    p.writeStructBegin(new org.apache.thrift.protocol.TStruct("DeepRoot"));
+    p.writeFieldBegin(new org.apache.thrift.protocol.TField("branches", TType.LIST, (short)1));
+    int branches = 1 + rnd.nextInt(3);
+    p.writeListBegin(new org.apache.thrift.protocol.TList(TType.STRUCT, branches));
+    for (int i = 0; i < branches; i++) {
+      writeDeepBranch(p, rnd);
+    }
+    p.writeListEnd();
+    p.writeFieldEnd();
+    p.writeFieldStop();
+    p.writeStructEnd();
+  }
+
+  private static void writeDeepForest(TBinaryProtocol p, Random rnd) throws Exception {
+    p.writeStructBegin(new org.apache.thrift.protocol.TStruct("DeepForest"));
+    p.writeFieldBegin(new org.apache.thrift.protocol.TField("roots", TType.MAP, (short)1));
+    int roots = 1 + rnd.nextInt(3);
+    p.writeMapBegin(new org.apache.thrift.protocol.TMap(TType.STRING, TType.STRUCT, roots));
+    for (int i = 0; i < roots; i++) {
+      p.writeString("root_" + i);
+      writeDeepRoot(p, rnd);
+    }
+    p.writeMapEnd();
+    p.writeFieldEnd();
+    p.writeFieldStop();
+    p.writeStructEnd();
+  }
+
+  private static void writeDeepUniverse(TBinaryProtocol p, Random rnd) throws Exception {
+    p.writeStructBegin(new org.apache.thrift.protocol.TStruct("DeepUniverse"));
+    p.writeFieldBegin(new org.apache.thrift.protocol.TField("forests", TType.LIST, (short)1));
+    int forests = 1 + rnd.nextInt(3);
+    p.writeListBegin(new org.apache.thrift.protocol.TList(TType.STRUCT, forests));
+    for (int i = 0; i < forests; i++) {
+      writeDeepForest(p, rnd);
+    }
+    p.writeListEnd();
+    p.writeFieldEnd();
+    p.writeFieldStop();
+    p.writeStructEnd();
   }
 
   private static String randStr(Random rnd, int n) {
