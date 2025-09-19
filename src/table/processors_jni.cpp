@@ -5,6 +5,7 @@
 #include <arrow/c/bridge.h>
 #include <arrow/c/helpers.h>
 
+#include <algorithm>
 #include <memory>
 #include <string>
 
@@ -47,14 +48,26 @@ Java_com_pinterest_drsquirrel_jni_NativeProcessors_shuffle(
     jint j_rank, jint j_world,
     jlong schema_out_addr, jlong array_out_addr) {
   (void)env; // unused
-  int rank = 0, world = 1;
+  ensure_mpi();
+
+  int actual_rank = 0;
+  int actual_world = 1;
+  MPI_Comm_rank(MPI_COMM_WORLD, &actual_rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &actual_world);
+
+  int rank = actual_rank;
+  int world = actual_world;
   if (j_world > 0) {
-    rank = j_rank;
-    world = j_world;
-  } else {
-    ensure_mpi();
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    MPI_Comm_size(MPI_COMM_WORLD, &world);
+    if (actual_world > 1) {
+      world = std::min<int>(j_world, actual_world);
+      int requested_rank = j_rank;
+      if (requested_rank >= 0 && requested_rank < actual_world) {
+        rank = requested_rank;
+      }
+    } else {
+      rank = 0;
+      world = 1;
+    }
   }
 
   auto* schema_in = reinterpret_cast<ArrowSchema*>(schema_in_addr);
@@ -98,14 +111,26 @@ Java_com_pinterest_drsquirrel_jni_NativeProcessors_cogroup(
     jlong schema_out_right_addr, jlong array_out_right_addr) {
   (void)env;
 
-  int rank = 0, world = 1;
+  ensure_mpi();
+
+  int actual_rank = 0;
+  int actual_world = 1;
+  MPI_Comm_rank(MPI_COMM_WORLD, &actual_rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &actual_world);
+
+  int rank = actual_rank;
+  int world = actual_world;
   if (j_world > 0) {
-    rank = j_rank;
-    world = j_world;
-  } else {
-    ensure_mpi();
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    MPI_Comm_size(MPI_COMM_WORLD, &world);
+    if (actual_world > 1) {
+      world = std::min<int>(j_world, actual_world);
+      int requested_rank = j_rank;
+      if (requested_rank >= 0 && requested_rank < actual_world) {
+        rank = requested_rank;
+      }
+    } else {
+      rank = 0;
+      world = 1;
+    }
   }
 
   auto* schema_left_in = reinterpret_cast<ArrowSchema*>(schema_in_left_addr);
