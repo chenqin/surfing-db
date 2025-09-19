@@ -19,6 +19,7 @@ Prerequisites (Ubuntu/Debian):
 One-shot build (installs Arrow via APT by default):
 - `./scripts/build_install.sh`
 - Enable MPI tests at configure time: `CMAKE_EXTRA_FLAGS=-DENABLE_MPI_TESTS=ON ./scripts/build_install.sh`
+- If APT cannot resolve Arrow dependencies (e.g. missing `libabsl20220623t64`/`libre2-10`), rerun with `./scripts/build_install.sh --build-arrow` to download and build Arrow C++ 12.0.0 locally under `~/arrow-12-install`.
 
 Run tests:
 - All (C++ unit, MPI if enabled, Java): `./scripts/run_tests.sh`
@@ -94,7 +95,7 @@ Programmatic use (Java): `com.pinterest.drsquirrel.jni.NativeThriftDecoder` — 
 
 ---
 
-Note: Scripts assume Ubuntu with `apt`. Arrow C++ 12 can be installed via APT or built from source.
+Note: Scripts assume Ubuntu with `apt`. Arrow C++ 12 can be installed via APT or, if dependencies are unavailable, built from source with `./scripts/build_install.sh --build-arrow` (outputs static libs in `~/arrow-12-install`).
 
 ## Architecture Overview
 
