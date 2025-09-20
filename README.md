@@ -27,6 +27,77 @@ Run tests:
 - Skip MPI: `./scripts/run_tests.sh --no-mpi`
 - Nested MPI only: `./scripts/run_nested_mpi_tests.sh --np all`
 
+## Thrift → Arrow → RAPIDS (Spark 3.2)
+
+This repo includes:
+- Java `KafkaSourceArrow` to consume Kafka value bytes and decode Thrift payloads to Arrow (Java or JNI).
+- A tool to generate Parquet/CSV from Thrift Binary payloads.
+- A Spark 3.2 app to groupBy using the RAPIDS plugin.
+
+### Build artifacts
+- Build native/JNI and Java modules:
+```
+mvn -q -f surfingthriftjni/pom.xml -Darrow.version=12.0.0 -DskipTests install
+mvn -q -f drsquirrel-java-project/pom.xml -Darrow.version=12.0.0 -DskipTests package
+```
+Fat jar: `drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar`
+
+### Generate Parquet/CSV from Thrift payloads
+Tool: `com.pinterest.drsquirrel.tools.ThriftToParquet`
+
+- Parquet (Java decoder):
+```
+java -cp drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar \
+  com.pinterest.drsquirrel.tools.ThriftToParquet \
+  --out artifacts/thrift_batch.parquet --format parquet --decoder java
+```
+
+- CSV (Java decoder):
+```
+java -cp drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar \
+  com.pinterest.drsquirrel.tools.ThriftToParquet \
+  --out artifacts/thrift_batch.csv --format csv --decoder java
+```
+
+- JNI fast path (requires native lib + schema):
+```
+java -Djava.library.path=./build -cp drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar \
+  com.pinterest.drsquirrel.tools.ThriftToParquet \
+  --out artifacts/thrift_batch.parquet --format parquet --decoder jni \
+  --thrift-path /abs/path/mabs.thrift --struct-name MabsMetrics
+```
+
+### Run Spark 3.2 with RAPIDS
+
+Set env:
+```
+export SPARK_HOME=/path/to/spark-3.2.x
+export RAPIDS_JAR=/path/to/rapids-4-spark_2.12-22.12.0.jar
+export CUDF_JAR=/path/to/cudf-22.12.0-cuda11.jar
+```
+
+Submit (Parquet or CSV):
+```
+scripts/run_rapids_groupby.sh artifacts/thrift_batch.parquet
+# or
+scripts/run_rapids_groupby.sh artifacts/thrift_batch.csv
+```
+
+The app `com.pinterest.drsquirrel.spark.RapidsGroupBy` also supports Thrift payload files directly:
+```
+"$SPARK_HOME/bin/spark-submit" \
+  --jars "$RAPIDS_JAR","$CUDF_JAR" \
+  --conf spark.plugins=com.nvidia.spark.SQLPlugin \
+  --conf spark.rapids.sql.enabled=true \
+  --conf spark.rapids.sql.explain=NOT_ON_GPU \
+  --class com.pinterest.drsquirrel.spark.RapidsGroupBy \
+  drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar \
+  --input-mode thrift --input /path/to/payloads.b64 --in-format lines-base64 --decoder java
+```
+Supported `--in-format` for thrift input:
+- `lines-base64`: one Base64 payload per line
+- `raw-len`: binary file with repeated frames `[u32 length][bytes]`
+
 ## Building Manually
 Configure + build:
 - `cmake -S . -B build -GNinja`
@@ -198,6 +269,29 @@ A lightweight Java consumer that emits Arrow batches with schema `(topic, payloa
 Environment options for bootstrap:
 - `KAFKA_SERVERSET`: path to a file listing brokers (one per line), or
 - Set bootstrap directly via builder.
+
+KafkaSourceArrow decode usage:
+- Java converter:
+```
+KafkaSourceArrow src = KafkaSourceArrow.newBuilder()
+    .setBootstrapServers("broker:9092")
+    .setTopics(java.util.Arrays.asList("topic"))
+    .setThriftDecodeStrategy("java")
+    .build();
+org.apache.arrow.vector.VectorSchemaRoot root = src.pollOnceAsThrift(1000, com.pinterest.mabs_metrics.thrift.MabsMetrics.class);
+```
+- JNI native schema:
+```
+VectorSchemaRoot root = src.pollOnceAsThriftNative(1000, "/path/to/mabs.thrift", "MabsMetrics", com.pinterest.mabs_metrics.thrift.MabsMetrics.class);
+```
+- Strategy API with classpath schema:
+```
+KafkaSourceArrow src = KafkaSourceArrow.newBuilder()
+    .setThriftDecodeStrategy("auto")
+    .setThriftSchemaResource("schemas/mabs.thrift")
+    .build();
+VectorSchemaRoot root = src.pollOnceToArrow(1000, com.pinterest.mabs_metrics.thrift.MabsMetrics.class, null);
+```
 
 Example:
 
