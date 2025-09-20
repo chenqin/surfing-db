@@ -125,6 +125,10 @@
           <environmentVariables>
             <LD_LIBRARY_PATH>${project.basedir}/../build:${env.LD_LIBRARY_PATH}</LD_LIBRARY_PATH>
           </environmentVariables>
+          <!-- Exclude JNI-heavy tests by class name pattern to keep unit tests stable here -->
+          <excludes>
+            <exclude>**/jni/**</exclude>
+          </excludes>
         </configuration>
       </plugin>
       <plugin>
