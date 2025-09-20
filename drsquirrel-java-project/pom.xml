@@ -15,6 +15,7 @@
     <maven.compiler.source>8</maven.compiler.source>
     <maven.compiler.target>8</maven.compiler.target>
     <arrow.version>12.0.0</arrow.version>
+    <scala.binary.version>2.12</scala.binary.version>
   </properties>
 
   <dependencies>
@@ -66,6 +67,27 @@
       <artifactId>arrow-vector</artifactId>
       <version>${arrow.version}</version>
     </dependency>
+    <!-- Use parquet-avro and arrow-vector for writing Parquet via Avro fallback to avoid missing arrow-parquet artifact -->
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-avro</artifactId>
+      <version>1.13.1</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-common</artifactId>
+      <version>3.3.4</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-client</artifactId>
+      <version>3.3.4</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-hadoop</artifactId>
+      <version>1.13.1</version>
+    </dependency>
     <dependency>
       <groupId>org.apache.arrow</groupId>
       <artifactId>arrow-memory-core</artifactId>
@@ -113,9 +135,32 @@
       <artifactId>libthrift</artifactId>
       <version>0.13.0</version>
     </dependency>
+    <!-- Spark API provided at runtime by spark-submit -->
+    <dependency>
+      <groupId>org.apache.spark</groupId>
+      <artifactId>spark-sql_${scala.binary.version}</artifactId>
+      <version>3.2.4</version>
+      <scope>provided</scope>
+    </dependency>
   </dependencies>
   <build>
     <plugins>
+      <plugin>
+        <groupId>net.alchim31.maven</groupId>
+        <artifactId>scala-maven-plugin</artifactId>
+        <version>4.8.1</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>compile</goal>
+              <goal>testCompile</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <scalaVersion>2.12.17</scalaVersion>
+        </configuration>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
@@ -144,6 +189,11 @@
               <descriptorRefs>
                 <descriptorRef>jar-with-dependencies</descriptorRef>
               </descriptorRefs>
+              <archive>
+                <manifest>
+                  <mainClass>com.pinterest.drsquirrel.spark.RapidsGroupBy</mainClass>
+                </manifest>
+              </archive>
             </configuration>
           </execution>
         </executions>
