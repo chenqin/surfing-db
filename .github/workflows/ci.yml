@@ -28,13 +28,14 @@ jobs:
             build-essential cmake ninja-build pkg-config git curl ca-certificates ccache \
             libomp-dev libopenmpi-dev openmpi-bin \
             libssl-dev libboost-dev libunwind-dev libgoogle-glog-dev pybind11-dev libgtest-dev \
+            libfmt-dev libflatbuffers-dev rapidjson-dev libgflags-dev \
             libcurl4-openssl-dev zlib1g-dev libzstd-dev liblz4-dev libsnappy-dev libbrotli-dev \
             libthrift-dev
 
       - name: Install Apache Arrow dev packages
         run: |
           set -euxo pipefail
-          sudo apt-get install -y lsb-release wget gnupg
+          sudo apt-get install -y --no-install-recommends lsb-release wget gnupg
           CODENAME=$(lsb_release --codename --short)
           DEB_URL="https://apache.jfrog.io/artifactory/arrow/ubuntu/apache-arrow-apt-source-latest-${CODENAME}.deb"
           ALT_URL="https://packages.apache.org/artifactory/arrow/ubuntu/apache-arrow-apt-source-latest-noble.deb"
@@ -42,7 +43,7 @@ jobs:
           if ! wget -q -O "$TMP_DEB" "$DEB_URL"; then wget -q -O "$TMP_DEB" "$ALT_URL"; fi
           sudo apt-get install -y "$TMP_DEB"
           sudo apt-get update -y
-          sudo apt-get install -y libarrow-dev libparquet-dev libarrow-compute-dev libarrow-dataset-dev
+          sudo apt-get install -y --no-install-recommends libarrow-dev libparquet-dev libarrow-compute-dev libarrow-dataset-dev
 
       - name: Configure
         env:
@@ -87,13 +88,14 @@ jobs:
             build-essential cmake ninja-build pkg-config git curl ca-certificates ccache \
             libomp-dev libopenmpi-dev openmpi-bin \
             libssl-dev libboost-dev libunwind-dev libgoogle-glog-dev pybind11-dev libgtest-dev \
+            libfmt-dev libflatbuffers-dev rapidjson-dev libgflags-dev \
             libcurl4-openssl-dev zlib1g-dev libzstd-dev liblz4-dev libsnappy-dev libbrotli-dev \
             libthrift-dev
 
       - name: Install Apache Arrow dev packages
         run: |
           set -euxo pipefail
-          sudo apt-get install -y lsb-release wget gnupg
+          sudo apt-get install -y --no-install-recommends lsb-release wget gnupg
           CODENAME=$(lsb_release --codename --short)
           DEB_URL="https://apache.jfrog.io/artifactory/arrow/ubuntu/apache-arrow-apt-source-latest-${CODENAME}.deb"
           ALT_URL="https://packages.apache.org/artifactory/arrow/ubuntu/apache-arrow-apt-source-latest-noble.deb"
@@ -101,7 +103,7 @@ jobs:
           if ! wget -q -O "$TMP_DEB" "$DEB_URL"; then wget -q -O "$TMP_DEB" "$ALT_URL"; fi
           sudo apt-get install -y "$TMP_DEB"
           sudo apt-get update -y
-          sudo apt-get install -y libarrow-dev libparquet-dev libarrow-compute-dev libarrow-dataset-dev
+          sudo apt-get install -y --no-install-recommends libarrow-dev libparquet-dev libarrow-compute-dev libarrow-dataset-dev
 
       - name: Configure (MPI tests enabled)
         env:
