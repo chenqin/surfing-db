@@ -2,8 +2,6 @@ package com.pinterest.drsquirrel.jni;
 
 import java.io.DataInputStream;
 import java.io.FileInputStream;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -156,6 +154,10 @@ public final class JniDecodeBench {
     // Java baseline using GenericThriftToArrowConverter and MabsLite class
     // Note: For bb/bbp (ByteBuffer) modes, Java baseline copies buffers into byte[]
     GenericThriftToArrowConverter conv = new GenericThriftToArrowConverter();
+    if (!"MabsMetrics".equals(structName)) {
+      System.out.println("Skipping Java baseline: no generated class for struct " + structName);
+      return;
+    }
     // Prefer fast protocol-based Java decoder where supported (falls back to generic for complex types)
     if ("array".equalsIgnoreCase(mode)) {
       // Warmup Java path
