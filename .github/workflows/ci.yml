@@ -13,11 +13,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'core/**', 'src/**', 'include/**') }}
+          restore-keys: |
+            ccache-${{ runner.os }}-
+
       - name: Install base dependencies
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y \
-            build-essential cmake ninja-build pkg-config git curl ca-certificates \
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build pkg-config git curl ca-certificates ccache \
             libomp-dev libopenmpi-dev openmpi-bin \
             libssl-dev libboost-dev libunwind-dev libgoogle-glog-dev pybind11-dev libgtest-dev \
             libcurl4-openssl-dev zlib1g-dev libzstd-dev liblz4-dev libsnappy-dev libbrotli-dev \
@@ -37,9 +45,15 @@ jobs:
           sudo apt-get install -y libarrow-dev libparquet-dev libarrow-compute-dev libarrow-dataset-dev
 
       - name: Configure
-        run: cmake -S . -B build -GNinja
+        env:
+          CCACHE_BASEDIR: ${{ github.workspace }}
+          CCACHE_DIR: ~/.ccache
+          CCACHE_MAXSIZE: 2G
+        run: cmake -S . -B build -GNinja -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build unit tests
+        env:
+          CCACHE_DIR: ~/.ccache
         run: ninja -C build SurfingDbTests
 
       - name: Run unit tests
@@ -58,11 +72,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'core/**', 'src/**', 'include/**') }}
+          restore-keys: |
+            ccache-${{ runner.os }}-
+
       - name: Install build + MPI deps
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y \
-            build-essential cmake ninja-build pkg-config git curl ca-certificates \
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build pkg-config git curl ca-certificates ccache \
             libomp-dev libopenmpi-dev openmpi-bin \
             libssl-dev libboost-dev libunwind-dev libgoogle-glog-dev pybind11-dev libgtest-dev \
             libcurl4-openssl-dev zlib1g-dev libzstd-dev liblz4-dev libsnappy-dev libbrotli-dev \
@@ -82,9 +104,15 @@ jobs:
           sudo apt-get install -y libarrow-dev libparquet-dev libarrow-compute-dev libarrow-dataset-dev
 
       - name: Configure (MPI tests enabled)
-        run: cmake -S . -B build -GNinja -DENABLE_MPI_TESTS=ON
+        env:
+          CCACHE_BASEDIR: ${{ github.workspace }}
+          CCACHE_DIR: ~/.ccache
+          CCACHE_MAXSIZE: 2G
+        run: cmake -S . -B build -GNinja -DENABLE_MPI_TESTS=ON -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build nested MPI tests
+        env:
+          CCACHE_DIR: ~/.ccache
         run: ninja -C build MpiNestedShuffleTest MpiNestedCoGroupTest
 
       - name: Run nested MPI tests (${{ matrix.mode }}, np=${{ matrix.np }})
