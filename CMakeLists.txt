@@ -28,6 +28,16 @@ include_directories(${JNI_INCLUDE_DIRS})
 #find_package(Torch REQUIRED)
 find_package(ArrowDataset REQUIRED)
 set(ARROW_DATASET_LIBRARY ArrowDataset::arrow_dataset_static)
+find_package(Thrift QUIET)
+if(Thrift_FOUND)
+  set(THRIFT_LINK_LIBS Thrift::thrift)
+else()
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(THRIFT REQUIRED thrift)
+  set(THRIFT_LINK_LIBS ${THRIFT_LIBRARIES})
+  include_directories(${THRIFT_INCLUDE_DIRS})
+endif()
+find_package(GTest REQUIRED)
 
 if(APPLE)
     set(OPENSSL_ROOT_DIR /opt/homebrew/Cellar/openssl@3/3.0.8)
@@ -40,17 +50,12 @@ if(APPLE)
     include_directories(/opt/homebrew/Cellar/boost/1.81.0_1/include/)
     set(BOOST_LIBRARIES /opt/homebrew/Cellar/boost/1.81.0_1/lib/)
 
-    set(THRIFT_ROOT_DIR /opt/homebrew/Cellar/thrift@0.9/0.9.3.1)
-    set(THRIFT_INCLUDE_DIR /opt/homebrew/Cellar/thrift@0.9/0.9.3.1/include)
-    set(THRIFT_LIBRARY ${THRIFT_ROOT_DIR}/lib/libthrift.a)
-
     set(glog_INCLUDE_DIR /opt/homebrew/Cellar/glog/0.6.0/include/)
     set(GLOG_LIBRARY /opt/homebrew/Cellar/glog/0.6.0/lib/libglog.dylib)
+    set(glog_INCLUDE_DIRS ${glog_INCLUDE_DIR})
 
     #/opt/homebrew/Cellar/googletest/1.13.0
 else()
-    #used by thrift
-    include(ext/Thrift_Ext.cmake)
     #find_package (Glog REQUIRED)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(glog REQUIRED libglog)
@@ -230,18 +235,9 @@ endif ()
 #include(ext/FMT_Ext.cmake)
 
 # add a basic gtest dependency
-include(ext/Gtest_Ext.cmake)
 enable_testing()
 
-# add a dependency of glog
-#include(ext/Gflags_Ext.cmake)
-
-# add a dependency of glog
-#include(ext/Glog_Ext.cmake)
-
 # include utils
-#include(ext/Gflatbuffers_Ext.cmake)
-include(ext/Json_Ext.cmake)
 include(ext/OPENSSL_Ext.cmake)
 
 #set(PYTHON_INCLUDE_DIRS ${PYTHON_INCLUDE_DIRS} /home/chen/.local/lib/python3.10/site-packages/numpy/core/include)
@@ -258,13 +254,10 @@ set(PARQUET_LIBRARY Parquet::parquet_static)
 find_package(Python3 COMPONENTS Interpreter Development)
 
 # include ML libs
-include(ext/Sketches_Ext.cmake)
 #find_package(lz4)
 ## Removed C++ Kafka connector; Java-native consumer is used instead
 
 # set up directory to search for headers
-include_directories(include ${GTEST_INCLUDE_DIRS})
-include_directories(include ${GMOCK_INCLUDE_DIRS})
 
 #include(ext/PyTorch_Ext.cmake)
 
@@ -303,7 +296,7 @@ if(BUILD_CPP_KAFKA)
   target_link_libraries(MABS
           PRIVATE surfingdb_core
           PRIVATE ${ARROW_LIBRARY}
-          PRIVATE ${THRIFT_LIBRARY})
+          PRIVATE ${THRIFT_LINK_LIBS})
 endif()
 
 if(BUILD_CPP_KAFKA)
@@ -355,13 +348,12 @@ include(GoogleTest)
 add_executable(SurfingDbTests
     ${MATCHA_SRC}/table/test/TestIntegration.cpp
     ${MATCHA_SRC}/table/test/TestArrowSpill.cpp)
-add_dependencies(SurfingDbTests gtest thrift)
 target_link_libraries(SurfingDbTests
     PRIVATE surfingdb_core
     PRIVATE ${ARROW_LIBRARY}
     PRIVATE ${PARQUET_LIBRARY}
-    PRIVATE ${GTEST_MAIN_LIBRARY}
-    PRIVATE ${GTEST_LIBRARY})
+    PRIVATE GTest::gtest_main
+    PRIVATE GTest::gtest)
 gtest_discover_tests(SurfingDbTests
   DISCOVERY_MODE PRE_TEST
 )
@@ -382,13 +374,12 @@ add_executable(ThriftParserTests
     ${MATCHA_SRC}/meta/test/TestThriftParserMore.cpp
     ${MATCHA_SRC}/meta/test/TestThriftMabs.cpp
     ${MATCHA_SRC}/meta/test/TestThriftParserNestedComprehensive.cpp)
-add_dependencies(ThriftParserTests gtest thrift)
 target_link_libraries(ThriftParserTests
     PRIVATE surfingdb_core
     PRIVATE ${ARROW_LIBRARY}
     PRIVATE ${PARQUET_LIBRARY}
-    PRIVATE ${GTEST_MAIN_LIBRARY}
-    PRIVATE ${GTEST_LIBRARY})
+    PRIVATE GTest::gtest_main
+    PRIVATE GTest::gtest)
 # Workaround: register the tests explicitly so CTest always finds them
 add_test(NAME ThriftParserTests_list COMMAND ThriftParserTests --gtest_list_tests)
 add_test(NAME ThriftParserTests_run COMMAND ThriftParserTests)
@@ -401,16 +392,14 @@ add_executable(GenMabsPayloads
     ${MATCHA_SRC}/meta/tools/gen_mabs_payloads.cpp
     ${MATCHA_SRC}/mabs/mabs_types.cpp
     ${MATCHA_SRC}/mabs/mabs_constants.cpp)
-add_dependencies(GenMabsPayloads thrift)
-target_link_libraries(GenMabsPayloads PRIVATE ${THRIFT_LIBRARY})
+target_link_libraries(GenMabsPayloads PRIVATE ${THRIFT_LINK_LIBS})
 
 # Large payloads generator
 add_executable(GenMabsPayloadsLarge 
     ${MATCHA_SRC}/meta/tools/gen_mabs_payloads_large.cpp
     ${MATCHA_SRC}/mabs/mabs_types.cpp
     ${MATCHA_SRC}/mabs/mabs_constants.cpp)
-add_dependencies(GenMabsPayloadsLarge thrift)
-target_link_libraries(GenMabsPayloadsLarge PRIVATE ${THRIFT_LIBRARY})
+target_link_libraries(GenMabsPayloadsLarge PRIVATE ${THRIFT_LINK_LIBS})
 
 # -----------------------------
 # MPI Tests (optional)

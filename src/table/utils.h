@@ -43,7 +43,6 @@
 #include "arrow/util/io_util.h"
 
 #include "KMeanOperator.h"
-#include "frequent_items_sketch.hpp"
 #include "mrow.h"
 #include "mtable.h"
 
@@ -54,7 +53,6 @@ namespace meta { class node; }
 namespace table {
 using namespace matcha::meta;
 
-typedef datasketches::frequent_items_sketch<std::string> frequent_strings_sketch;
 /**
  * @brief convert surfing db internal data struct to arrow types and vice versa
  *

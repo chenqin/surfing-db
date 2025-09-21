@@ -1,9 +1,6 @@
 set(TABLE surftable)
 
 #include_directories(${JEMALLOC_INCLUDE_DIRS})
-include_directories(${DATASKETCHES_INCLUDE_DIRS})
-
-include_directories(${THRIFT_INCLUDE_DIR})
 include_directories(${MATCHA_SRC}/meta/gen-cpp)
 
 if(APPLE)
