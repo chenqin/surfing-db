@@ -15,6 +15,9 @@ if str(HELPER_DIR) not in sys.path:
 
 import cogroup_helpers as helpers  # noqa: E402  (added to path above)
 
+MPI_RANK = helpers.omni_rank()
+pytestmark = pytest.mark.skipif(MPI_RANK != 0, reason="Run on a single MPI rank to avoid duplicate execution")
+
 
 def test_omni_rank_prefers_valid_env(monkeypatch: pytest.MonkeyPatch) -> None:
     env = {helpers.ENV_RANK_VARS[0]: "7"}
