@@ -50,6 +50,26 @@ def test_make_random_batch_is_deterministic() -> None:
     assert batch_a.equals(batch_b)
 
 
+def test_make_nested_struct_batch_has_expected_schema() -> None:
+    batch = helpers.make_nested_struct_batch(rows=3, seed=321)
+    assert batch.schema.names == ["id", "metric", "nested_list", "nested_map"]
+
+    list_field = batch.schema.field("nested_list")
+    assert pa.types.is_list(list_field.type)
+    struct_type = list_field.type.value_type
+    assert struct_type.names == ["item_key", "item_value"]
+
+    map_field = batch.schema.field("nested_map")
+    assert pa.types.is_map(map_field.type)
+    value_type = map_field.type.item_type
+    assert value_type.names == ["count", "flag"]
+
+    # Ensure the contents are converted to Python objects correctly.
+    first_row = batch.column(2)[0].as_py()
+    assert isinstance(first_row, list)
+    assert first_row[0]["item_key"] != first_row[1]["item_key"]
+
+
 def test_sort_record_batch_sorts_when_field_present() -> None:
     batch = pa.record_batch(
         [pa.array([3, 1, 2], type=pa.int64()), pa.array([30, 10, 20], type=pa.int32())],
@@ -77,3 +97,12 @@ def test_dump_sample_writes_expected_output() -> None:
     assert "key=1" in text
     assert "val=10" in text
 
+
+def test_dump_sample_handles_nested_values() -> None:
+    batch = helpers.make_nested_struct_batch(rows=1, seed=999)
+    buffer = io.StringIO()
+    helpers.dump_sample(batch, "nested", buffer, limit=1)
+    text = buffer.getvalue()
+    assert "nested" in text
+    assert "nested_list" in text
+    assert "nested_map" in text

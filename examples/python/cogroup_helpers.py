@@ -66,6 +66,52 @@ def make_random_batch(rows: int, seed: int, value_name: str) -> pa.RecordBatch:
     return pa.record_batch(arrays, names=["key", value_name])
 
 
+def make_nested_struct_batch(rows: int, seed: int) -> pa.RecordBatch:
+    """Generate a batch containing nested list/map-of-struct columns.
+
+    The shape mimics the data structures exercised in the cogroup benchmark so
+    the Python tests stress Arrow conversions similar to the production flow.
+    """
+
+    rng = random.Random(seed)
+    keys = [rng.randint(-(1 << 31), (1 << 31) - 1) for _ in range(rows)]
+    base_values = [rng.random() for _ in range(rows)]
+
+    nested_list_type = pa.list_(
+        pa.struct([
+            pa.field("item_key", pa.int64()),
+            pa.field("item_value", pa.float64()),
+        ])
+    )
+    nested_map_type = pa.map_(pa.string(), pa.struct([
+        pa.field("count", pa.int32()),
+        pa.field("flag", pa.bool_()),
+    ]))
+
+    list_entries = []
+    map_entries = []
+    for idx, (k, v) in enumerate(zip(keys, base_values)):
+        list_entries.append([
+            {"item_key": k, "item_value": v},
+            {"item_key": k + 1, "item_value": v + 0.5},
+        ])
+        map_entries.append({
+            f"k{idx}": {"count": idx, "flag": idx % 2 == 0},
+            f"k{idx}_alt": {"count": idx * 2, "flag": idx % 3 == 0},
+        })
+
+    batch = pa.record_batch(
+        [
+            pa.array(keys, type=pa.int64()),
+            pa.array(base_values, type=pa.float64()),
+            pa.array(list_entries, type=nested_list_type),
+            pa.array(map_entries, type=nested_map_type),
+        ],
+        names=["id", "metric", "nested_list", "nested_map"],
+    )
+    return batch
+
+
 def sort_record_batch(batch: pa.RecordBatch, field: str) -> pa.RecordBatch:
     """Return a copy of ``batch`` sorted by ``field`` if it exists.
 
@@ -106,7 +152,7 @@ __all__ = [
     "omni_rank",
     "omni_world",
     "make_random_batch",
+    "make_nested_struct_batch",
     "sort_record_batch",
     "dump_sample",
 ]
-
