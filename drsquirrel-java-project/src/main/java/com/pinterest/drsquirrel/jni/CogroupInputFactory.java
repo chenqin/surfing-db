@@ -28,12 +28,27 @@ public final class CogroupInputFactory {
     public final VectorSchemaRoot right;
     public final String keyField;
     public final long rowsPerRank;
+    public final double leftDecodeSeconds;
+    public final double rightDecodeSeconds;
+    public final long leftBytes;
+    public final long rightBytes;
 
-    ThriftInputs(VectorSchemaRoot left, VectorSchemaRoot right, String keyField, long rowsPerRank) {
+    ThriftInputs(VectorSchemaRoot left,
+                 VectorSchemaRoot right,
+                 String keyField,
+                 long rowsPerRank,
+                 double leftDecodeSeconds,
+                 double rightDecodeSeconds,
+                 long leftBytes,
+                 long rightBytes) {
       this.left = Objects.requireNonNull(left, "left");
       this.right = Objects.requireNonNull(right, "right");
       this.keyField = Objects.requireNonNull(keyField, "keyField");
       this.rowsPerRank = rowsPerRank;
+      this.leftDecodeSeconds = leftDecodeSeconds;
+      this.rightDecodeSeconds = rightDecodeSeconds;
+      this.leftBytes = leftBytes;
+      this.rightBytes = rightBytes;
     }
 
     @Override
@@ -81,6 +96,7 @@ public final class CogroupInputFactory {
     if (leftPartition.length == 0) {
       throw new IOException("Left payload partition is empty for rank " + rank + " in world " + world);
     }
+    long leftBytes = sumBytes(leftPartition);
 
     byte[][] rightPartition;
     if (rightPath != null) {
@@ -92,16 +108,26 @@ public final class CogroupInputFactory {
       if (rightPartition.length == 0) {
         throw new IOException("Right payload partition is empty for rank " + rank + " in world " + world);
       }
+      if (rightPartition == leftPartition) {
+        // Shouldn't happen, but guard against aliasing.
+        rightPartition = rightPartition.clone();
+      }
     } else {
       // If no explicit RHS payloads provided, reuse left payloads (but decode into a fresh batch).
       rightPartition = leftPartition;
     }
+    long rightBytes = sumBytes(rightPartition);
 
     VectorSchemaRoot leftRoot = null;
     VectorSchemaRoot rightRoot = null;
     try {
+      long t0 = System.nanoTime();
       leftRoot = NativeThriftDecoder.convert(allocator, leftPartition, thrift.toString(), structName);
+      double leftSeconds = (System.nanoTime() - t0) / 1e9;
+
+      long t1 = System.nanoTime();
       rightRoot = NativeThriftDecoder.convert(allocator, rightPartition, thrift.toString(), structName);
+      double rightSeconds = (System.nanoTime() - t1) / 1e9;
 
       long rowsPerRank = leftRoot.getRowCount();
       if (rowsPerRank == 0) {
@@ -124,7 +150,7 @@ public final class CogroupInputFactory {
       if (rightRoot.getSchema().findField(keyField) == null) {
         throw new IOException("Key field '" + keyField + "' not present in decoded right schema");
       }
-      return new ThriftInputs(leftRoot, rightRoot, keyField, rowsPerRank);
+      return new ThriftInputs(leftRoot, rightRoot, keyField, rowsPerRank, leftSeconds, rightSeconds, leftBytes, rightBytes);
     } catch (Throwable t) {
       if (leftRoot != null) {
         leftRoot.close();
@@ -167,5 +193,15 @@ public final class CogroupInputFactory {
       out.add(payloads[i]);
     }
     return out.toArray(new byte[0][]);
+  }
+
+  private static long sumBytes(byte[][] payloads) {
+    long sum = 0L;
+    for (byte[] payload : payloads) {
+      if (payload != null) {
+        sum += payload.length;
+      }
+    }
+    return sum;
   }
 }

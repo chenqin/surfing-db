@@ -23,7 +23,6 @@ import org.apache.thrift.protocol.TType;
 import org.apache.thrift.transport.TMemoryBuffer;
 import org.apache.thrift.ext.GenericThriftToArrowConverter;
 import org.junit.Test;
-import org.junit.Ignore;
 
 import com.pinterest.nested.thrift.DeepContainer;
 
@@ -93,7 +92,6 @@ public class GenericThriftToArrowConverterDeepNestedTest {
   }
 
   @Test
-  @Ignore("Pending: deep nested ListVector materialization semantics causing NullVector reads")
   public void deepNestedStructuresAreConverted() throws Exception {
     byte[] payload = encodeDeep(new long[]{5L, 6L});
     BufferAllocator alloc = new RootAllocator();

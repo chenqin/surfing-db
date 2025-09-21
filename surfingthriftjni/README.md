@@ -21,6 +21,10 @@ Run benchmarks
     - Large payloads (mmap ByteBuffer)
     - Large payloads (pooled direct ByteBuffer)
   - Outputs go to `target/bench_*.txt` and a summary is printed at the end.
+- DeepEvent payload benchmarks (mirroring the historical Surfing DeepEvent workload):
+  - `scripts/run_deep_event_bench.sh` builds the JNI artifacts, generates small and large DeepEvent payloads, runs `JniDecodeBench`, and emits results under `build/deep_event_*.txt` (including the Java baseline when the corresponding TBase class is available).
+  - Advanced knobs: set `DEEP_EVENT_SMALL_ROWS`, `DEEP_EVENT_LARGE_ROWS`, `DEEP_EVENT_SMALL_PAYLOAD`, `DEEP_EVENT_LARGE_PAYLOAD`, or `DEEP_EVENT_FORCE_REGEN=1` to tweak dataset sizes, output paths, or force regeneration. Use `DEEP_EVENT_SMALL_ITERS` / `DEEP_EVENT_LARGE_ITERS` to control the number of benchmark iterations per mode.
+  - The script prints a summary that includes payload byte/MB sizes alongside the best JNI/Java timings for quick comparisons.
 
 Running with JNI
 - Preferred: put the natives JAR on the classpath — the loader auto-extracts and loads `META-INF/lib/<os>-<arch>/libsurfingthriftjni.*`.

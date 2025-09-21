@@ -2,8 +2,6 @@ package com.pinterest.drsquirrel.jni;
 
 import java.io.DataInputStream;
 import java.io.FileInputStream;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -12,8 +10,8 @@ import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.thrift.TBase;
 
+import com.pinterest.deep.bench.DeepEvent;
 import com.pinterest.mabs_metrics.thrift.MabsMetrics;
-import org.apache.thrift.ext.GenericThriftToArrowConverter;
 import org.apache.thrift.ext.FastThriftBinaryDecoder;
 
 public final class JniDecodeBench {
@@ -153,17 +151,20 @@ public final class JniDecodeBench {
     double mbps = (totalBytesPayload / (1024.0 * 1024.0)) / bestSecs;
     System.out.printf("JNI Best: %.2f ms, %.1f rows/s, %.1f MB/s\n", best/1e6, rps, mbps);
 
-    // Java baseline using GenericThriftToArrowConverter and MabsLite class
-    // Note: For bb/bbp (ByteBuffer) modes, Java baseline copies buffers into byte[]
-    GenericThriftToArrowConverter conv = new GenericThriftToArrowConverter();
+    // Java baseline using generated TBase classes (FastThriftBinaryDecoder falls back internally for complex schemas)
+    Class<? extends TBase<?, ?>> thriftClass = resolveThriftClass(structName);
+    if (thriftClass == null) {
+      System.out.println("Skipping Java baseline: no generated class for struct " + structName);
+      return;
+    }
     // Prefer fast protocol-based Java decoder where supported (falls back to generic for complex types)
     if ("array".equalsIgnoreCase(mode)) {
       // Warmup Java path
-      try (VectorSchemaRoot root = FastThriftBinaryDecoder.convert(payloads, (Class<? extends TBase<?, ?>>) (Class<?>) MabsMetrics.class, alloc)) { }
+      try (VectorSchemaRoot root = FastThriftBinaryDecoder.convert(payloads, thriftClass, alloc)) { }
       long jbest = Long.MAX_VALUE;
       for (int i = 0; i < iters; i++) {
         long t0 = System.nanoTime();
-        try (VectorSchemaRoot root = FastThriftBinaryDecoder.convert(payloads, (Class<? extends TBase<?, ?>>) (Class<?>) MabsMetrics.class, alloc)) {
+        try (VectorSchemaRoot root = FastThriftBinaryDecoder.convert(payloads, thriftClass, alloc)) {
           int rows = root.getRowCount();
           if (rows != payloads.size()) throw new RuntimeException("row mismatch (java)");
         }
@@ -192,11 +193,11 @@ public final class JniDecodeBench {
         jpayloads.add(arr);
       }
       // Warmup
-      try (VectorSchemaRoot root = FastThriftBinaryDecoder.convert(jpayloads, (Class<? extends TBase<?, ?>>) (Class<?>) MabsMetrics.class, alloc)) { }
+      try (VectorSchemaRoot root = FastThriftBinaryDecoder.convert(jpayloads, thriftClass, alloc)) { }
       long jbest = Long.MAX_VALUE;
       for (int i = 0; i < iters; i++) {
         long t0 = System.nanoTime();
-        try (VectorSchemaRoot root = FastThriftBinaryDecoder.convert(jpayloads, (Class<? extends TBase<?, ?>>) (Class<?>) MabsMetrics.class, alloc)) {
+        try (VectorSchemaRoot root = FastThriftBinaryDecoder.convert(jpayloads, thriftClass, alloc)) {
           int rows = root.getRowCount();
           if (rows != jpayloads.size()) throw new RuntimeException("row mismatch (java)");
         }
@@ -214,5 +215,16 @@ public final class JniDecodeBench {
       System.out.printf("Java Best: %.2f ms, %.1f rows/s, %.1f MB/s\n", jbest/1e6, jrps, jmbps);
     }
     alloc.close();
+  }
+
+  private static Class<? extends TBase<?, ?>> resolveThriftClass(String structName) {
+    switch (structName) {
+      case "MabsMetrics":
+        return MabsMetrics.class;
+      case "DeepEvent":
+        return DeepEvent.class;
+      default:
+        return null;
+    }
   }
 }

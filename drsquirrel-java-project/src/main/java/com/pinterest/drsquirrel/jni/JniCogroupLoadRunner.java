@@ -30,6 +30,11 @@ import java.util.Random;
  *   SHUFFLE_LOAD_ITERS: iterations (default 3)
  *   SHUFFLE_TEST_SEED: base random seed (optional)
  *   SHUFFLE_LOAD_OUT: CSV path to append results (rank 0 only)
+ *   COGROUP_THRIFT_FILE: optional thrift IDL path (enables thrift decoding)
+ *   COGROUP_THRIFT_STRUCT: thrift struct name
+ *   COGROUP_THRIFT_PAYLOAD: payload file (left input). If *_LEFT omitted, uses this value
+ *   COGROUP_THRIFT_PAYLOAD_LEFT / _RIGHT: explicit payloads for each side
+ *   COGROUP_KEY_FIELD: key column name (default "key")
  */
 public class JniCogroupLoadRunner {
     private static long getEnvLong(String name, long defVal) {
@@ -132,6 +137,14 @@ public class JniCogroupLoadRunner {
         long iters = getEnvLong("SHUFFLE_LOAD_ITERS", 3);
         String outCsv = getEnv("SHUFFLE_LOAD_OUT");
         long seedBase = getEnvLong("SHUFFLE_TEST_SEED", System.currentTimeMillis());
+        String thriftPath = getEnv("COGROUP_THRIFT_FILE");
+        String thriftStruct = getEnv("COGROUP_THRIFT_STRUCT");
+        String payloadLeftPath = getEnv("COGROUP_THRIFT_PAYLOAD_LEFT");
+        if (payloadLeftPath.isEmpty()) payloadLeftPath = getEnv("COGROUP_THRIFT_PAYLOAD");
+        String payloadRightPath = getEnv("COGROUP_THRIFT_PAYLOAD_RIGHT");
+        String keyField = getEnv("COGROUP_KEY_FIELD");
+        if (keyField.isEmpty()) keyField = "key";
+        boolean thriftEnabled = !payloadLeftPath.isEmpty() && !thriftPath.isEmpty() && !thriftStruct.isEmpty();
 
         if (thriftPathArg == null || thriftPathArg.isEmpty()) {
             thriftPathArg = getEnv("SHUFFLE_THRIFT_PATH", "");
@@ -168,7 +181,7 @@ public class JniCogroupLoadRunner {
             CogroupInputFactory.ThriftInputs thriftInputs = null;
             VectorSchemaRoot left = null;
             VectorSchemaRoot right = null;
-            String keyField = keyFieldArg == null ? "key" : keyFieldArg;
+            String keyFieldResolved = keyFieldArg == null ? "key" : keyFieldArg;
             long rowsPerRankResolved = rowsPerRank;
             try {
                 if (useThrift) {
@@ -178,53 +191,76 @@ public class JniCogroupLoadRunner {
                             thriftStructArg,
                             payloadLeftArg,
                             payloadRightArg.isEmpty() ? null : payloadRightArg,
-                            keyField,
+                            keyFieldResolved,
                             rank,
                             world);
                     left = thriftInputs.left;
                     right = thriftInputs.right;
-                    keyField = thriftInputs.keyField;
+                    keyFieldResolved = thriftInputs.keyField;
                     rowsPerRankResolved = thriftInputs.rowsPerRank;
+
+                    if (rank == 0) {
+                        if (thriftInputs.leftDecodeSeconds > 0.0) {
+                            double rowsPerSec = thriftInputs.rowsPerRank / thriftInputs.leftDecodeSeconds;
+                            double mbPerSec = (thriftInputs.leftBytes / (1024.0 * 1024.0)) / thriftInputs.leftDecodeSeconds;
+                            System.out.printf(
+                                    "[JniCogroupLoad] thrift_decode_left rows=%d time_s=%.6f rows_per_sec=%.1f mb_per_sec=%.1f%n",
+                                    left.getRowCount(), thriftInputs.leftDecodeSeconds, rowsPerSec, mbPerSec);
+                        }
+                        if (thriftInputs.rightDecodeSeconds > 0.0) {
+                            double rowsPerSec = right.getRowCount() / thriftInputs.rightDecodeSeconds;
+                            double mbPerSec = (thriftInputs.rightBytes / (1024.0 * 1024.0)) / thriftInputs.rightDecodeSeconds;
+                            System.out.printf(
+                                    "[JniCogroupLoad] thrift_decode_right rows=%d time_s=%.6f rows_per_sec=%.1f mb_per_sec=%.1f%n",
+                                    right.getRowCount(), thriftInputs.rightDecodeSeconds, rowsPerSec, mbPerSec);
+                        }
+                    }
                 } else {
                     left = makeRandomBatch(alloc, rowsPerRank, seedBase + rank, "la");
                     right = makeRandomBatch(alloc, rowsPerRank, seedBase + rank + 17, "rb");
                 }
+
+                long rowsLocal = (long) left.getRowCount() + (right != null ? right.getRowCount() : 0);
+                long rowsGlobal = rowsLocal * Math.max(1, world);
 
                 if (rank == 0) {
                     System.out.println("[JniCogroupLoad] world=" + world +
                             " rows_per_rank=" + rowsPerRankResolved +
                             " iters=" + iters +
                             " mode=" + mode +
-                            (useThrift ? (" thrift=" + thriftStructArg + " key_field=" + keyField) : ""));
+                            (useThrift ? (" thrift=" + thriftStructArg + " key_field=" + keyFieldResolved) : ""));
                     if (useThrift) {
                         System.out.println("[JniCogroupLoad] left_payload=" + payloadLeftArg +
                                 (payloadRightArg.isEmpty() ? "" : (" right_payload=" + payloadRightArg)));
                     }
                 }
 
-                VectorSchemaRoot[] warm = NativeProcessors.cogroup(alloc, left, right, keyField, !twoSided, rank, world);
-                if (warm != null) { for (VectorSchemaRoot v : warm) if (v != null) v.close(); }
+                VectorSchemaRoot[] warm = NativeProcessors.cogroup(alloc, left, right, keyFieldResolved, !twoSided, rank, world);
+                if (warm != null) {
+                    for (VectorSchemaRoot v : warm) if (v != null) v.close();
+                }
 
                 double best = Double.MAX_VALUE, total = 0.0;
                 for (int i = 0; i < iters; i++) {
                     long t0 = System.nanoTime();
-                    VectorSchemaRoot[] out = NativeProcessors.cogroup(alloc, left, right, keyField, !twoSided, rank, world);
+                    VectorSchemaRoot[] out = NativeProcessors.cogroup(alloc, left, right, keyFieldResolved, !twoSided, rank, world);
                     long t1 = System.nanoTime();
-                    if (out != null) { for (VectorSchemaRoot v : out) if (v != null) v.close(); }
+                    if (out != null) {
+                        for (VectorSchemaRoot v : out) if (v != null) v.close();
+                    }
                     double dt = (t1 - t0) / 1e9;
                     best = Math.min(best, dt);
                     total += dt;
 
-                    long rows = rowsPerRankResolved * world * 2; // two inputs combined
-                    double rps = rows / dt;
+                    double rps = rowsGlobal / dt;
                     if (rank == 0) {
                         System.out.println("[JniCogroupLoad] iter=" + i +
-                                " rows=" + rows +
+                                " rows=" + rowsGlobal +
                                 " time_s=" + dt +
                                 " rows_per_sec=" + rps);
                         if (csvEnabled) {
                             long epoch = Instant.now().getEpochSecond();
-                            csv.write(epoch + "," + epoch + "," + mode + "," + world + "," + rowsPerRankResolved + "," + i + "," + rows + "," + dt + "," + rps + "\n");
+                            csv.write(epoch + "," + epoch + "," + mode + "," + world + "," + rowsPerRankResolved + "," + i + "," + rowsGlobal + "," + dt + "," + rps + "\n");
                             csv.flush();
                         }
                     }
@@ -234,10 +270,8 @@ public class JniCogroupLoadRunner {
                     System.out.println("[JniCogroupLoad] best_s=" + best + " avg_s=" + avg);
                 }
             } finally {
-                if (useThrift) {
-                    if (thriftInputs != null) {
-                        thriftInputs.close();
-                    }
+                if (thriftInputs != null) {
+                    thriftInputs.close();
                 } else {
                     if (left != null) left.close();
                     if (right != null) right.close();
