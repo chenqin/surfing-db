@@ -28,7 +28,6 @@ target_link_libraries(surfingdb_core INTERFACE ${_core_link_targets})
 target_include_directories(surfingdb_core INTERFACE
   $<BUILD_INTERFACE:${MATCHA_ROOT}/include>
   $<BUILD_INTERFACE:${MATCHA_ROOT}/surfingthriftjni/native/include>
-  ${DATASKETCHES_INCLUDE_DIRS}
 )
 
 # Expose component target names to parent scopes for backward compatibility

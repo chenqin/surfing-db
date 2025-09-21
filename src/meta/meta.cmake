@@ -21,10 +21,9 @@ target_link_libraries(${META}
         PUBLIC MPI::MPI_CXX
         PUBLIC OpenMP::OpenMP_CXX
         PUBLIC ${GLOG_LIBRARY}
-        PUBLIC ${GFLAGS_LIBRARY}
         PUBLIC ${ARROW_LIBRARY}
         PRIVATE ${JNI_LIBRARIES}
-        PUBLIC ${THRIFT_LIBRARY})
+        PUBLIC ${THRIFT_LINK_LIBS})
 
 # discover all gtests in this module
 include(GoogleTest)
