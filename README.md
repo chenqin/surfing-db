@@ -6,6 +6,7 @@ Surfing DB is a performance lab for moving complex Thrift payloads into Apache A
 - **Nested Thrift ⇢ Arrow at speed** – JNI bridge (`surfingthriftjni`) decodes deeply nested payloads (e.g. `DeepEvent`) into Arrow `VectorSchemaRoot`s with SIMD-aware native code and Java fallbacks.
 - **MPI shuffle & cogroup primitives** – one-sided RMA or two-sided send/recv data movers balance thousands of Arrow RecordBatches across ranks with optional Thrift ingest.
 - **End-to-end benchmarks** – repeatable runners contrast JNI vs Java decode, throttle multi-rank shuffle/cogroup, and emit size + throughput summaries for easy regression tracking.
+- **Automatic memory management** – Configurable disk spilling prevents OOM errors when processing large datasets. Supports multi-directory spilling for 2-4x I/O throughput. See [MEMORY_MANAGEMENT.md](MEMORY_MANAGEMENT.md) for details.
 
 ## Quick Start
 ```bash
@@ -74,6 +75,7 @@ Tune with JVM system properties, e.g. `-Ddeep.event.count=100000 -Ddeep.event.ra
 ## Tools & Integrations
 - **Thrift schema conversion** – `thrift2arrow` (C++) and `org.apache.thrift.ext.*` (Java) translate `.thrift` IDL into Arrow schemas / builders.
 - **Parquet / CSV dumps** – `com.pinterest.drsquirrel.tools.ThriftToParquet` converts Thrift payload batches with either Java or JNI decoder paths.
+- **Parquet folder operations** – Read/write collections of Parquet files across C++, Java, and Python. See [PARQUET_FOLDER_USAGE.md](PARQUET_FOLDER_USAGE.md) for details.
 - **Spark RAPIDS demo** – `scripts/run_fake_cogroup_example.sh` and `scripts/run_rapids_groupby.sh` showcase GPU-accelerated group-by on decoded Arrow columns.
 - **Python shim** – `examples/python/cogroup_benchmark.py` drives the native processors through Arrow C Data using PyArrow (MPI optional).
 
@@ -86,17 +88,28 @@ cmake --build build
 Key targets:
 - `surfingdb_core` – Arrow shuffle/cogroup kernels
 - `thrift2arrow` – Thrift ⇢ Arrow CLI
+- `parquet_folder_tool` – Parquet folder read/write utility
 - `GenMabsPayloads*` – dataset generators for benchmarks
 
 ### Java / JNI
+**Modular Build (Recommended):**
 ```
-mvn -q -f surfingthriftjni/pom.xml -Darrow.version=12.0.0 -DskipTests package
-mvn -q -f drsquirrel-java-project/pom.xml -Darrow.version=12.0.0 -DskipTests package
+mvn clean install  # Builds all modules: surfingthriftjni, surfing-parquet-java, drsquirrel-java
 ```
+
+**Individual Modules:**
+```
+mvn -f surfingthriftjni/pom.xml package        # Thrift→Arrow JNI
+mvn -f surfing-parquet-java/pom.xml package    # Parquet utilities
+mvn -f drsquirrel-java-project/pom.xml package # MPI/Flink workflows
+```
+
 Artifacts:
-- `surfingthriftjni/target/nativebuild/libsurfingthriftjni.*`
-- `surfingthriftjni/target/surfingthriftjni-1.0-SNAPSHOT-jar-with-dependencies.jar`
+- `surfingthriftjni/target/surfingthriftjni-1.0-SNAPSHOT.jar` + native lib
+- `surfing-parquet-java/target/surfing-parquet-java-1.0-SNAPSHOT.jar`
 - `drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar`
+
+See [MODULAR_BUILD.md](MODULAR_BUILD.md) for details on the new modular structure.
 
 ### Python
 ```
@@ -108,6 +121,8 @@ PYTHONPATH=build python examples/python/cogroup_benchmark.py --rows 100000 --ite
 Add `mpiexec -np <ranks>` to distribute across a cluster.
 
 ## Configuration Cheatsheet
+
+### General Configuration
 | Variable | Purpose |
 | --- | --- |
 | `SHUFFLE_TEST_SEED` | Seed randomized MPI loads |
@@ -116,6 +131,30 @@ Add `mpiexec -np <ranks>` to distribute across a cluster.
 | `DEEP_EVENT_SMALL_ROWS`, `DEEP_EVENT_LARGE_ROWS` | Control dataset sizes for JNI benchmark |
 | `SURF_SIMD=ON` | Enable SIMD build for JNI decoder |
 | `SURF_THRIFT_DECODE_THREADS` | Override parallel decode threads in JNI |
+
+### Memory Management & Disk Spilling
+Configure automatic disk spilling to handle datasets larger than available RAM:
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `SURFING_MAX_BATCH_MEMORY` | Maximum memory per batch (bytes) | 512MB |
+| `SURFING_TEMP_DIR` | Single temp directory for spilled files | `/tmp/surfing_spill` |
+| `SURFING_TEMP_DIRS` | Multiple temp directories (comma-separated) for parallel I/O | - |
+| `SURFING_LOAD_BALANCING` | Load balancing strategy: `ROUND_ROBIN`, `SPACE_AWARE`, `RANDOM` | `ROUND_ROBIN` |
+| `SURFING_ENABLE_SPILLING` | Enable/disable disk spilling | `1` (enabled) |
+
+**Example - Multi-directory spilling for 2-4x I/O throughput:**
+```bash
+# Distribute spill across multiple NVMe drives
+export SURFING_TEMP_DIRS="/mnt/nvme0/spill,/mnt/nvme1/spill,/mnt/nvme2/spill"
+export SURFING_LOAD_BALANCING=ROUND_ROBIN
+export SURFING_MAX_BATCH_MEMORY=1073741824  # 1GB threshold
+
+# Java API alternative
+java -cp ... -Djava.library.path=... YourApp
+```
+
+See [MEMORY_MANAGEMENT.md](MEMORY_MANAGEMENT.md) for detailed configuration, performance tuning, and troubleshooting.
 
 ## Contributing
 1. Fork / branch from `main`.
