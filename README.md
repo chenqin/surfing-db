@@ -60,6 +60,17 @@ Local stress tests pin every hardware thread.
 ./scripts/run_all_load_all_cores.sh
 ```
 
+### 4. Flink DataStream (DeepEvent datagen)
+Demonstrates how to feed Flink's datagen source into the generated `DeepEvent` Java stub and access nested fields downstream.
+```bash
+mvn -q -f drsquirrel-java-project/pom.xml -Darrow.version=12.0.0 -DskipTests package
+FLINK_HOME=/path/to/flink \
+  "$FLINK_HOME/bin/flink" run \
+  --class com.pinterest.drsquirrel.flink.DeepEventDataStreamExample \
+  drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar
+```
+Tune with JVM system properties, e.g. `-Ddeep.event.count=100000 -Ddeep.event.rate=20000` to control record count and generator rate.
+
 ## Tools & Integrations
 - **Thrift schema conversion** – `thrift2arrow` (C++) and `org.apache.thrift.ext.*` (Java) translate `.thrift` IDL into Arrow schemas / builders.
 - **Parquet / CSV dumps** – `com.pinterest.drsquirrel.tools.ThriftToParquet` converts Thrift payload batches with either Java or JNI decoder paths.
