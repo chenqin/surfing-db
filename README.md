@@ -12,12 +12,14 @@ Surfing DB is a performance lab for moving complex Thrift payloads into Apache A
 ```bash
 ./scripts/build_install.sh          # C++ libraries, Arrow deps (APT or source)
 cmake --build build                 # native targets, including JNI library
-mvn -q -f surfingthriftjni/pom.xml -Darrow.version=12.0.0 -DskipTests package
+mvn clean install -DskipTests       # Build all Java modules (surfingthriftjni, drsquirrel-java)
 ```
 Run validation:
 ```bash
-./scripts/run_tests.sh
+./scripts/run_tests.sh              # C++ tests, MPI tests, Java tests
 ```
+
+> **Note:** All Java modules are now compatible with Arrow 12.0. The build system handles JNI library compilation and dependency management automatically.
 
 ## Key Workloads
 ### 1. DeepEvent JNI Benchmark
@@ -92,24 +94,28 @@ Key targets:
 - `GenMabsPayloads*` – dataset generators for benchmarks
 
 ### Java / JNI
-**Modular Build (Recommended):**
+**Arrow 12.0 Compatible Build:**
 ```
-mvn clean install  # Builds all modules: surfingthriftjni, surfing-parquet-java, drsquirrel-java
+mvn clean install  # Builds all modules: surfingthriftjni, drsquirrel-java
 ```
 
 **Individual Modules:**
 ```
-mvn -f surfingthriftjni/pom.xml package        # Thrift→Arrow JNI
-mvn -f surfing-parquet-java/pom.xml package    # Parquet utilities
+mvn -f surfingthriftjni/pom.xml package        # Thrift→Arrow JNI + Parquet I/O
 mvn -f drsquirrel-java-project/pom.xml package # MPI/Flink workflows
 ```
 
 Artifacts:
 - `surfingthriftjni/target/surfingthriftjni-1.0-SNAPSHOT.jar` + native lib
-- `surfing-parquet-java/target/surfing-parquet-java-1.0-SNAPSHOT.jar`
 - `drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar`
 
-See [MODULAR_BUILD.md](MODULAR_BUILD.md) for details on the new modular structure.
+**Key improvements:**
+- All modules now compatible with Arrow 12.0 API
+- Unified Parquet functionality in `surfingthriftjni` module via JNI
+- Java 8 compatible (no Java 11+ APIs)
+- Automatic dependency resolution through Maven reactor build
+
+See [CLAUDE.md](CLAUDE.md) for detailed build instructions, troubleshooting, and architecture documentation.
 
 ### Python
 ```
@@ -156,10 +162,24 @@ java -cp ... -Djava.library.path=... YourApp
 
 See [MEMORY_MANAGEMENT.md](MEMORY_MANAGEMENT.md) for detailed configuration, performance tuning, and troubleshooting.
 
+## Documentation
+
+- **[CLAUDE.md](CLAUDE.md)** - Comprehensive guide for AI assistants and developers (build commands, architecture, troubleshooting)
+- **[MEMORY_MANAGEMENT.md](MEMORY_MANAGEMENT.md)** - Disk spilling configuration and performance tuning
+- **[MODULAR_BUILD.md](MODULAR_BUILD.md)** - Java module structure and dependency management
+- **[PARQUET_FOLDER_USAGE.md](PARQUET_FOLDER_USAGE.md)** - Parquet folder operations across C++, Java, and Python
+- **[SIMD_OPTIMIZATIONS.md](SIMD_OPTIMIZATIONS.md)** - SIMD optimization details for JNI decoder
+
 ## Contributing
 1. Fork / branch from `main`.
 2. Run `./scripts/run_tests.sh` (or targeted modules) before submitting.
 3. Open a PR describing the workload and datasets touched.
+
+**Recent improvements:**
+- ✅ Arrow 12.0 API compatibility (all Java modules)
+- ✅ Java 8 compatibility maintained
+- ✅ Unified Parquet functionality via JNI
+- ✅ Comprehensive test coverage (C++, MPI, Java)
 
 ---
 Need help reproducing a benchmark or integrating an Arrow workflow? Check the scripts under `scripts/` and open an issue with the command you ran and the payload description.
