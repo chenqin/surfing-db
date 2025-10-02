@@ -41,6 +41,9 @@
 #include "arrow/record_batch.h"
 #include "arrow/type.h"
 #include "arrow/util/io_util.h"
+#include "parquet/arrow/reader.h"
+#include "parquet/arrow/writer.h"
+#include <iomanip>
 
 #include "KMeanOperator.h"
 #include "mrow.h"
@@ -813,6 +816,143 @@ public:
       ARROW_RETURN_NOT_OK(infile->Close());
     }
     return out;
+  }
+
+  // Read all Parquet files from a directory into RecordBatchVector
+  static arrow::Result<arrow::RecordBatchVector> ReadParquetFolder(
+      const std::string& folder_path) {
+    namespace fs = std::filesystem;
+    arrow::RecordBatchVector batches;
+
+    if (!fs::exists(folder_path) || !fs::is_directory(folder_path)) {
+      return arrow::Status::Invalid("Path does not exist or is not a directory: " + folder_path);
+    }
+
+    for (const auto& entry : fs::directory_iterator(folder_path)) {
+      if (!entry.is_regular_file()) continue;
+
+      std::string path_str = entry.path().string();
+      // Check if file has .parquet extension
+      if (path_str.size() < 8 || path_str.substr(path_str.size() - 8) != ".parquet") {
+        continue;
+      }
+
+      ARROW_ASSIGN_OR_RAISE(auto infile, arrow::io::ReadableFile::Open(path_str));
+      std::unique_ptr<parquet::arrow::FileReader> reader;
+      ARROW_RETURN_NOT_OK(
+          parquet::arrow::OpenFile(infile, arrow::default_memory_pool(), &reader));
+
+      std::shared_ptr<arrow::Table> table;
+      ARROW_RETURN_NOT_OK(reader->ReadTable(&table));
+
+      // Convert table to record batches
+      arrow::TableBatchReader batch_reader(*table);
+      std::shared_ptr<arrow::RecordBatch> batch;
+      while (true) {
+        ARROW_RETURN_NOT_OK(batch_reader.ReadNext(&batch));
+        if (batch == nullptr) break;
+        batches.push_back(batch);
+      }
+    }
+
+    return batches;
+  }
+
+  // Write RecordBatchVector to Parquet files in a directory
+  // Each batch is written to a separate file
+  static arrow::Result<std::vector<std::string>> WriteParquetFolder(
+      const arrow::RecordBatchVector& batches,
+      const std::string& folder_path,
+      const std::string& prefix = "part") {
+    namespace fs = std::filesystem;
+    std::vector<std::string> written_files;
+
+    if (batches.empty()) {
+      return written_files;
+    }
+
+    fs::create_directories(folder_path);
+
+    for (size_t i = 0; i < batches.size(); ++i) {
+      const auto& batch = batches[i];
+      if (!batch || batch->num_rows() == 0) continue;
+
+      std::ostringstream oss;
+      oss << prefix << "_" << std::setfill('0') << std::setw(5) << i << ".parquet";
+      fs::path file_path = fs::path(folder_path) / oss.str();
+
+      ARROW_ASSIGN_OR_RAISE(auto outfile,
+          arrow::io::FileOutputStream::Open(file_path.string()));
+
+      // Convert RecordBatch to Table for Parquet writing
+      std::shared_ptr<arrow::Table> table = arrow::Table::FromRecordBatches({batch}).ValueOrDie();
+
+      // Set up Parquet writer properties
+      parquet::WriterProperties::Builder props_builder;
+      props_builder.compression(parquet::Compression::SNAPPY);
+      auto props = props_builder.build();
+
+      // Set up Arrow writer properties
+      auto arrow_props = parquet::ArrowWriterProperties::Builder().build();
+
+      // Write the table
+      ARROW_RETURN_NOT_OK(
+          parquet::arrow::WriteTable(*table, arrow::default_memory_pool(),
+                                     outfile, batch->num_rows(), props, arrow_props));
+
+      ARROW_RETURN_NOT_OK(outfile->Close());
+      written_files.push_back(file_path.string());
+    }
+
+    return written_files;
+  }
+
+  // Write a single RecordBatch to a Parquet file
+  static arrow::Status WriteParquetFile(
+      const std::shared_ptr<arrow::RecordBatch>& batch,
+      const std::string& file_path) {
+    if (!batch || batch->num_rows() == 0) {
+      return arrow::Status::Invalid("Empty or null RecordBatch");
+    }
+
+    ARROW_ASSIGN_OR_RAISE(auto outfile, arrow::io::FileOutputStream::Open(file_path));
+
+    std::shared_ptr<arrow::Table> table = arrow::Table::FromRecordBatches({batch}).ValueOrDie();
+
+    parquet::WriterProperties::Builder props_builder;
+    props_builder.compression(parquet::Compression::SNAPPY);
+    auto props = props_builder.build();
+    auto arrow_props = parquet::ArrowWriterProperties::Builder().build();
+
+    ARROW_RETURN_NOT_OK(
+        parquet::arrow::WriteTable(*table, arrow::default_memory_pool(),
+                                   outfile, batch->num_rows(), props, arrow_props));
+
+    return outfile->Close();
+  }
+
+  // Read a single Parquet file into RecordBatchVector
+  static arrow::Result<arrow::RecordBatchVector> ReadParquetFile(
+      const std::string& file_path) {
+    arrow::RecordBatchVector batches;
+
+    ARROW_ASSIGN_OR_RAISE(auto infile, arrow::io::ReadableFile::Open(file_path));
+    std::unique_ptr<parquet::arrow::FileReader> reader;
+    ARROW_RETURN_NOT_OK(
+        parquet::arrow::OpenFile(infile, arrow::default_memory_pool(), &reader));
+
+    std::shared_ptr<arrow::Table> table;
+    ARROW_RETURN_NOT_OK(reader->ReadTable(&table));
+
+    arrow::TableBatchReader batch_reader(*table);
+    std::shared_ptr<arrow::RecordBatch> batch;
+    while (true) {
+      ARROW_RETURN_NOT_OK(batch_reader.ReadNext(&batch));
+      if (batch == nullptr) break;
+      batches.push_back(batch);
+    }
+
+    return batches;
   }
 };
 

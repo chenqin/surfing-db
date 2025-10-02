@@ -16,6 +16,7 @@
 #include <unordered_map>
 #include <thread>
 #include "meta/thrift_arrow_lite.h"
+#include "simd_utils.h"  // SIMD optimizations
 
 using apache::thrift::protocol::TBinaryProtocol;
 using apache::thrift::protocol::TType;
@@ -403,11 +404,14 @@ Java_com_pinterest_drsquirrel_jni_NativeThriftDecoder_decode(
                         const uint8_t* p = mem->borrow(nullptr, &want);
                         if (p && want >= total) {
                           cb.l_i32.reserve(cb.l_i32.size() + sz);
-                          for (uint32_t j = 0; j < sz; ++j) {
-                            uint32_t be = *reinterpret_cast<const uint32_t*>(p + j * 4);
-                            uint32_t le = __builtin_bswap32(be);
-                            cb.l_i32.push_back(static_cast<int32_t>(le));
-                          }
+                          size_t base_idx = cb.l_i32.size();
+                          cb.l_i32.resize(base_idx + sz);
+                          // SIMD byte swap for bulk i32 array
+                          surfing::simd::bswap32_bulk(
+                            reinterpret_cast<const uint32_t*>(p),
+                            reinterpret_cast<uint32_t*>(cb.l_i32.data() + base_idx),
+                            sz
+                          );
                           cb.valid.push_back(1);
                           cb.l_off.push_back(cb.l_off.back() + static_cast<int32_t>(sz));
                           mem->consume(total);
@@ -444,11 +448,18 @@ Java_com_pinterest_drsquirrel_jni_NativeThriftDecoder_decode(
                         const uint8_t* p = mem->borrow(nullptr, &want);
                         if (p && want >= total) {
                           cb.l_i64.reserve(cb.l_i64.size() + sz);
+                          size_t base_idx = cb.l_i64.size();
+                          cb.l_i64.resize(base_idx + sz);
+#ifdef SURFING_AVX2
+                          // SIMD optimized bulk i64 parsing
+                          surfing::simd::parse_i64_bulk_avx2(p, cb.l_i64.data() + base_idx, sz);
+#else
+                          // Scalar fallback
                           for (uint32_t j = 0; j < sz; ++j) {
                             uint64_t be = *reinterpret_cast<const uint64_t*>(p + j * 8);
-                            uint64_t le = __builtin_bswap64(be);
-                            cb.l_i64.push_back(static_cast<int64_t>(le));
+                            cb.l_i64[base_idx + j] = static_cast<int64_t>(__builtin_bswap64(be));
                           }
+#endif
                           cb.valid.push_back(1);
                           cb.l_off.push_back(cb.l_off.back() + static_cast<int32_t>(sz));
                           mem->consume(total);

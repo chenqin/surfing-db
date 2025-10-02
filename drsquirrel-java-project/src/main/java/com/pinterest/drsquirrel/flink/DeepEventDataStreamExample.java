@@ -7,15 +7,20 @@ import com.pinterest.deep.bench.Geo;
 import com.pinterest.deep.bench.Meta;
 import com.pinterest.deep.bench.Region;
 import com.pinterest.deep.bench.Reading;
+import com.pinterest.drsquirrel.arrow.ArrowDeepEventDecoder;
+import com.pinterest.drsquirrel.arrow.DeepEventView;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.MapFunction;
+import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.source.datagen.DataGeneratorSource;
 import org.apache.flink.streaming.api.functions.source.datagen.SequenceGenerator;
-
+import org.apache.thrift.protocol.TBinaryProtocol;
+import org.apache.thrift.transport.TMemoryBuffer;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -24,13 +29,15 @@ import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * Minimal Flink DataStream job that generates DeepEvent records via the built-in datagen source
- * and exercises the generated Thrift stub inside subsequent map functions.
+ * Flink DataStream job showing how to feed Thrift payloads into surfingthriftjni and expose
+ * Arrow-backed DeepEvent views to downstream operators.
  */
 public final class DeepEventDataStreamExample {
 
   private static final int DEFAULT_EVENTS = 10_000;
   private static final long DEFAULT_EVENTS_PER_SECOND = 5_000L;
+  private static final String THRIFT_PATH = "src/bench/deep_event.thrift";
+  private static final String THRIFT_STRUCT = "DeepEvent";
 
   public static void main(String[] args) throws Exception {
     int totalEvents = Integer.parseInt(System.getProperty(
@@ -47,32 +54,62 @@ public final class DeepEventDataStreamExample {
         totalEvents,
         rate);
 
-    DataStream<DeepEvent> events = env
-        .fromSource(source, WatermarkStrategy.noWatermarks(), "deep-event-datagen")
-        .map(new BuildDeepEvent(), "build-deep-event");
+    DataStream<String> summaries = env
+        .addSource(source, "deep-event-datagen")
+        .map(new DeepEventThriftEncoder()).name("encode-deep-event")
+        .map(new ArrowDeepEventDecoder(THRIFT_PATH, THRIFT_STRUCT)).name("arrow-decode")
+        .map(new SummarizeDeepEvent()).name("summaries");
 
-    events
-        .map(new SummarizeDeepEvent(), "summaries")
-        .print();
+    summaries.print();
 
-    env.execute("DeepEvent datagen DataStream");
+    env.execute("DeepEvent datagen (Arrow-backed)");
   }
 
-  private static final class BuildDeepEvent implements MapFunction<Long, DeepEvent> {
+  /** Encodes synthetic DeepEvent payloads as Thrift binary frames. */
+  private static final class DeepEventThriftEncoder extends RichMapFunction<Long, byte[]> {
     @Override
-    public DeepEvent map(Long id) {
+    public byte[] map(Long id) throws Exception {
+      DeepEvent event = DeepEventPayloadFixtures.buildPojo(id);
+      TMemoryBuffer buffer = new TMemoryBuffer(4096);
+      TBinaryProtocol proto = new TBinaryProtocol(buffer);
+      event.write(proto);
+      return java.util.Arrays.copyOf(buffer.getArray(), buffer.length());
+    }
+  }
+
+  /** Summarises Arrow-backed DeepEvent views and releases underlying buffers. */
+  private static final class SummarizeDeepEvent implements MapFunction<DeepEventView, String> {
+    @Override
+    public String map(DeepEventView view) throws Exception {
+      try (DeepEventView v = view) {
+        int readings = v.readings() == null ? 0 : v.readings().size();
+        String region = v.meta() != null && v.meta().labels != null
+            ? v.meta().labels.getOrDefault("region", "n/a")
+            : "n/a";
+        return String.format("event_id=%d source=%s readings=%d region=%s",
+            v.eventId(),
+            v.source(),
+            readings,
+            region);
+      }
+    }
+  }
+
+  /** Reusable fixture helpers mirrored from the JNI benchmark generator. */
+  private static final class DeepEventPayloadFixtures {
+    private static DeepEvent buildPojo(long id) {
       ThreadLocalRandom rnd = ThreadLocalRandom.current();
       DeepEvent event = new DeepEvent();
       event.event_id = 1_000_000L + id;
       event.source = "flink-src-" + (id % 16);
       event.metrics = buildMetrics(rnd);
       event.label_ids = buildLabelIds(rnd);
-      event.counts_by_key = DeepEventPayloadFixtures.buildCountsByKey();
-      event.meta = DeepEventPayloadFixtures.buildMeta();
-      event.readings = DeepEventPayloadFixtures.buildReadings(id, rnd);
-      event.bundles = DeepEventPayloadFixtures.buildBundles(id, rnd);
-      event.attr_maps = DeepEventPayloadFixtures.buildAttrMaps();
-      event.geo = DeepEventPayloadFixtures.buildGeo();
+      event.counts_by_key = buildCountsByKey();
+      event.meta = buildMeta();
+      event.readings = buildReadings(id, rnd);
+      event.bundles = buildBundles(id, rnd);
+      event.attr_maps = buildAttrMaps();
+      event.geo = buildGeo();
       return event;
     }
 
@@ -94,31 +131,24 @@ public final class DeepEventDataStreamExample {
       for (int i = 0; i < size; i++) set.add(rnd.nextLong(1_000_000L));
       return set;
     }
-  }
 
-  private static final class SummarizeDeepEvent implements MapFunction<DeepEvent, String> {
-    @Override
-    public String map(DeepEvent value) {
-      int readings = value.readings == null ? 0 : value.readings.size();
-      String region = value.meta != null && value.meta.region != null ? value.meta.region.name : "n/a";
-      return String.format("event_id=%d source=%s readings=%d region=%s",
-          value.event_id,
-          value.source,
-          readings,
-          region);
+    private static Map<String, List<Long>> buildCountsByKey() {
+      Map<String, List<Long>> map = new HashMap<>();
+      map.put("foo", java.util.Arrays.asList(1L, 2L, 3L));
+      map.put("bar", Collections.singletonList(42L));
+      return map;
     }
-  }
 
-  private static final class DeepEventPayloadFixtures {
     private static Meta buildMeta() {
       Meta meta = new Meta();
-      meta.version = 1;
-      meta.region = new Region();
-      meta.region.name = "na";
-      meta.region.country = "US";
-      meta.region.lat = 37.7749;
-      meta.region.lon = -122.4194;
-      meta.created_at_ms = Instant.now().toEpochMilli();
+      Map<String, String> labels = new HashMap<>();
+      labels.put("region", "na");
+      labels.put("env", "prod");
+      meta.labels = labels;
+      Attr attr = new Attr();
+      attr.key = "k";
+      attr.val = "v";
+      meta.kvs = Collections.singletonList(attr);
       return meta;
     }
 
@@ -128,8 +158,9 @@ public final class DeepEventDataStreamExample {
       for (int i = 0; i < count; i++) {
         Reading r = new Reading();
         r.ts = Instant.now().toEpochMilli() - i * 1_000L;
-        r.metric = "m" + i;
         r.value = rnd.nextDouble(0.0, 100.0);
+        r.notes = new ArrayList<>();
+        r.notes.add("note_" + i);
         readings.add(r);
       }
       return readings;
@@ -138,40 +169,32 @@ public final class DeepEventDataStreamExample {
     private static Map<String, Bundle> buildBundles(long id, ThreadLocalRandom rnd) {
       Map<String, Bundle> bundles = new HashMap<>();
       Bundle b = new Bundle();
-      b.bundle_id = "b" + id;
-      b.weight = rnd.nextDouble(1.0, 10.0);
-      bundles.put(b.bundle_id, b);
+      b.items = buildReadings(id, rnd);
+      Map<String, List<String>> extras = new HashMap<>();
+      extras.put("extra", Collections.singletonList("val"));
+      b.extras = extras;
+      bundles.put("bundle-" + id, b);
       return bundles;
     }
 
     private static List<Map<String, List<Attr>>> buildAttrMaps() {
-      List<Map<String, List<Attr>>> outer = new ArrayList<>();
       Map<String, List<Attr>> inner = new HashMap<>();
-      inner.put("keys", java.util.Collections.singletonList(buildAttr("k", "v")));
-      outer.add(inner);
-      return outer;
-    }
-
-    private static Map<String, List<Long>> buildCountsByKey() {
-      Map<String, List<Long>> map = new HashMap<>();
-      map.put("foo", java.util.Arrays.asList(1L, 2L, 3L));
-      map.put("bar", java.util.Collections.singletonList(42L));
-      return map;
+      Attr attr = new Attr();
+      attr.key = "akey";
+      attr.val = "aval";
+      inner.put("attrs", Collections.singletonList(attr));
+      return Collections.singletonList(inner);
     }
 
     private static Geo buildGeo() {
       Geo geo = new Geo();
       geo.lat = 34.0522;
       geo.lon = -118.2437;
-      geo.city = "LA";
+      Region region = new Region();
+      region.country = "US";
+      region.city = "LA";
+      geo.region = region;
       return geo;
-    }
-
-    private static Attr buildAttr(String key, String value) {
-      Attr attr = new Attr();
-      attr.key = key;
-      attr.val = value;
-      return attr;
     }
   }
 

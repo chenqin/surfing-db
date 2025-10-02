@@ -13,6 +13,8 @@
     <maven.compiler.source>8</maven.compiler.source>
     <maven.compiler.target>8</maven.compiler.target>
     <arrow.version>12.0.0</arrow.version>
+    <parquet.version>1.13.1</parquet.version>
+    <hadoop.version>3.3.4</hadoop.version>
     <!-- Build native lib within this module -->
     <native.lib.dir>${project.build.directory}/nativebuild</native.lib.dir>
     <!-- OS/arch detection for natives jar (provided by os-maven-plugin) -->
@@ -54,6 +56,44 @@
       <groupId>org.apache.thrift</groupId>
       <artifactId>libthrift</artifactId>
       <version>0.6.1</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-log4j12</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <!-- Parquet dependencies -->
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-arrow</artifactId>
+      <version>${parquet.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-hadoop</artifactId>
+      <version>${parquet.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-common</artifactId>
+      <version>${hadoop.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-log4j12</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>log4j</groupId>
+          <artifactId>log4j</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-mapreduce-client-core</artifactId>
+      <version>${hadoop.version}</version>
       <exclusions>
         <exclusion>
           <groupId>org.slf4j</groupId>
