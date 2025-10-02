@@ -67,27 +67,7 @@
       <artifactId>arrow-vector</artifactId>
       <version>${arrow.version}</version>
     </dependency>
-    <!-- Use parquet-avro and arrow-vector for writing Parquet via Avro fallback to avoid missing arrow-parquet artifact -->
-    <dependency>
-      <groupId>org.apache.parquet</groupId>
-      <artifactId>parquet-avro</artifactId>
-      <version>1.13.1</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-common</artifactId>
-      <version>3.3.4</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-client</artifactId>
-      <version>3.3.4</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.parquet</groupId>
-      <artifactId>parquet-hadoop</artifactId>
-      <version>1.13.1</version>
-    </dependency>
+    <!-- Parquet support is now included in surfingthriftjni module -->
     <dependency>
       <groupId>org.apache.arrow</groupId>
       <artifactId>arrow-memory-core</artifactId>
@@ -141,6 +121,12 @@
       <artifactId>spark-sql_${scala.binary.version}</artifactId>
       <version>3.2.4</version>
       <scope>provided</scope>
+    </dependency>
+    <!-- Parquet Avro for ThriftToParquet tool -->
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-avro</artifactId>
+      <version>1.13.1</version>
     </dependency>
   </dependencies>
   <build>

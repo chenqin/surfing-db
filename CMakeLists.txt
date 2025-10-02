@@ -385,6 +385,21 @@ add_test(NAME ThriftParserTests_list COMMAND ThriftParserTests --gtest_list_test
 add_test(NAME ThriftParserTests_run COMMAND ThriftParserTests)
 set_tests_properties(ThriftParserTests_run PROPERTIES WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
+# Parquet folder read/write tests
+add_executable(ParquetFolderTests
+    ${MATCHA_SRC}/table/test/TestParquetFolder.cpp)
+target_link_libraries(ParquetFolderTests
+    PRIVATE surfingdb_core
+    PRIVATE ${ARROW_LIBRARY}
+    PRIVATE ${PARQUET_LIBRARY}
+    PRIVATE GTest::gtest_main
+    PRIVATE GTest::gtest)
+gtest_discover_tests(ParquetFolderTests
+  DISCOVERY_MODE PRE_TEST
+)
+add_test(NAME ParquetFolderTests_run COMMAND ParquetFolderTests)
+set_tests_properties(ParquetFolderTests_run PROPERTIES LABELS "unit;parquet")
+
 # -----------------------------
 # Tools: payload generator for JNI decode benchmark
 # -----------------------------
@@ -395,11 +410,20 @@ add_executable(GenMabsPayloads
 target_link_libraries(GenMabsPayloads PRIVATE ${THRIFT_LINK_LIBS})
 
 # Large payloads generator
-add_executable(GenMabsPayloadsLarge 
+add_executable(GenMabsPayloadsLarge
     ${MATCHA_SRC}/meta/tools/gen_mabs_payloads_large.cpp
     ${MATCHA_SRC}/mabs/mabs_types.cpp
     ${MATCHA_SRC}/mabs/mabs_constants.cpp)
 target_link_libraries(GenMabsPayloadsLarge PRIVATE ${THRIFT_LINK_LIBS})
+
+# Parquet folder command-line tool
+add_executable(parquet_folder_tool
+    ${MATCHA_SRC}/table/tools/parquet_folder_tool.cpp)
+target_link_libraries(parquet_folder_tool
+    PRIVATE surfingdb_core
+    PRIVATE ${ARROW_LIBRARY}
+    PRIVATE ${PARQUET_LIBRARY}
+    PRIVATE ${GLOG_LIBRARY})
 
 # -----------------------------
 # MPI Tests (optional)
