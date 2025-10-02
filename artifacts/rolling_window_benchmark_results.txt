@@ -1,0 +1,635 @@
+================================================================
+CUDA Moving Average - Rolling Window Benchmark Suite
+================================================================
+NVIDIA GeForce RTX 3060, 570.172.08, 12288 MiB
+================================================================
+
+Running 13 benchmark configurations...
+
+----------------------------------------------------------------
+Configuration: 100000 arrays × 100 floats, window=5
+----------------------------------------------------------------
+================================================================
+CUDA Moving Average Benchmark
+================================================================
+Initializing...
+Generating 10000000 random floats...
+Data generation: 0.0542977 sec
+
+Running CPU benchmark...
+CPU time: 0.0271566 sec
+
+Running GPU benchmark (simple kernel)...
+GPU time: 0.364849 sec
+
+Running GPU benchmark (optimized kernel)...
+GPU optimized time: 0.0180257 sec
+
+Verifying results...
+
+================================================================
+GPU Moving Average Benchmark Results
+================================================================
+Dataset:
+  Arrays:                100000
+  Array size:               100 floats
+  Window size:                5
+  Total elements:      10000000
+  Memory:                 38.15 MB
+
+Performance:
+  CPU time:               0.027 sec
+  GPU time:               0.365 sec
+  GPU optimized:          0.018 sec
+
+Speedup:
+  GPU vs CPU:              0.07x
+  GPU-Opt vs CPU:          1.51x
+
+Throughput:
+  CPU:                   368.23 M elements/sec
+  GPU:                    27.41 M elements/sec
+  GPU optimized:         554.76 M elements/sec
+
+Verification:      PASSED ✓
+================================================================
+
+----------------------------------------------------------------
+Configuration: 100000 arrays × 100 floats, window=10
+----------------------------------------------------------------
+================================================================
+CUDA Moving Average Benchmark
+================================================================
+Initializing...
+Generating 10000000 random floats...
+Data generation: 0.0548097 sec
+
+Running CPU benchmark...
+CPU time: 0.0327957 sec
+
+Running GPU benchmark (simple kernel)...
+GPU time: 0.209741 sec
+
+Running GPU benchmark (optimized kernel)...
+GPU optimized time: 0.0202886 sec
+
+Verifying results...
+
+================================================================
+GPU Moving Average Benchmark Results
+================================================================
+Dataset:
+  Arrays:                100000
+  Array size:               100 floats
+  Window size:               10
+  Total elements:      10000000
+  Memory:                 38.15 MB
+
+Performance:
+  CPU time:               0.033 sec
+  GPU time:               0.210 sec
+  GPU optimized:          0.020 sec
+
+Speedup:
+  GPU vs CPU:              0.16x
+  GPU-Opt vs CPU:          1.62x
+
+Throughput:
+  CPU:                   304.92 M elements/sec
+  GPU:                    47.68 M elements/sec
+  GPU optimized:         492.89 M elements/sec
+
+Verification:      PASSED ✓
+================================================================
+
+----------------------------------------------------------------
+Configuration: 100000 arrays × 100 floats, window=20
+----------------------------------------------------------------
+================================================================
+CUDA Moving Average Benchmark
+================================================================
+Initializing...
+Generating 10000000 random floats...
+Data generation: 0.0546002 sec
+
+Running CPU benchmark...
+CPU time: 0.0496994 sec
+
+Running GPU benchmark (simple kernel)...
+GPU time: 0.186925 sec
+
+Running GPU benchmark (optimized kernel)...
+GPU optimized time: 0.0194061 sec
+
+Verifying results...
+
+================================================================
+GPU Moving Average Benchmark Results
+================================================================
+Dataset:
+  Arrays:                100000
+  Array size:               100 floats
+  Window size:               20
+  Total elements:      10000000
+  Memory:                 38.15 MB
+
+Performance:
+  CPU time:               0.050 sec
+  GPU time:               0.187 sec
+  GPU optimized:          0.019 sec
+
+Speedup:
+  GPU vs CPU:              0.27x
+  GPU-Opt vs CPU:          2.56x
+
+Throughput:
+  CPU:                   201.21 M elements/sec
+  GPU:                    53.50 M elements/sec
+  GPU optimized:         515.30 M elements/sec
+
+Verification:      PASSED ✓
+================================================================
+
+----------------------------------------------------------------
+Configuration: 100000 arrays × 100 floats, window=50
+----------------------------------------------------------------
+================================================================
+CUDA Moving Average Benchmark
+================================================================
+Initializing...
+Generating 10000000 random floats...
+Data generation: 0.0623796 sec
+
+Running CPU benchmark...
+CPU time: 0.119593 sec
+
+Running GPU benchmark (simple kernel)...
+GPU time: 0.234794 sec
+
+Running GPU benchmark (optimized kernel)...
+GPU optimized time: 0.0163571 sec
+
+Verifying results...
+
+================================================================
+GPU Moving Average Benchmark Results
+================================================================
+Dataset:
+  Arrays:                100000
+  Array size:               100 floats
+  Window size:               50
+  Total elements:      10000000
+  Memory:                 38.15 MB
+
+Performance:
+  CPU time:               0.120 sec
+  GPU time:               0.235 sec
+  GPU optimized:          0.016 sec
+
+Speedup:
+  GPU vs CPU:              0.51x
+  GPU-Opt vs CPU:          7.31x
+
+Throughput:
+  CPU:                    83.62 M elements/sec
+  GPU:                    42.59 M elements/sec
+  GPU optimized:         611.36 M elements/sec
+
+Verification:      PASSED ✓
+================================================================
+
+----------------------------------------------------------------
+Configuration: 500000 arrays × 50 floats, window=10
+----------------------------------------------------------------
+================================================================
+CUDA Moving Average Benchmark
+================================================================
+Initializing...
+Generating 25000000 random floats...
+Data generation: 0.134319 sec
+
+Running CPU benchmark...
+CPU time: 0.0825499 sec
+
+Running GPU benchmark (simple kernel)...
+GPU time: 0.194943 sec
+
+Running GPU benchmark (optimized kernel)...
+GPU optimized time: 0.0368132 sec
+
+Verifying results...
+
+================================================================
+GPU Moving Average Benchmark Results
+================================================================
+Dataset:
+  Arrays:                500000
+  Array size:                50 floats
+  Window size:               10
+  Total elements:      25000000
+  Memory:                 95.37 MB
+
+Performance:
+  CPU time:               0.083 sec
+  GPU time:               0.195 sec
+  GPU optimized:          0.037 sec
+
+Speedup:
+  GPU vs CPU:              0.42x
+  GPU-Opt vs CPU:          2.24x
+
+Throughput:
+  CPU:                   302.85 M elements/sec
+  GPU:                   128.24 M elements/sec
+  GPU optimized:         679.11 M elements/sec
+
+Verification:      PASSED ✓
+================================================================
+
+----------------------------------------------------------------
+Configuration: 500000 arrays × 100 floats, window=10
+----------------------------------------------------------------
+================================================================
+CUDA Moving Average Benchmark
+================================================================
+Initializing...
+Generating 50000000 random floats...
+Data generation: 0.289176 sec
+
+Running CPU benchmark...
+CPU time: 0.180856 sec
+
+Running GPU benchmark (simple kernel)...
+GPU time: 0.339205 sec
+
+Running GPU benchmark (optimized kernel)...
+GPU optimized time: 0.0888835 sec
+
+Verifying results...
+
+================================================================
+GPU Moving Average Benchmark Results
+================================================================
+Dataset:
+  Arrays:                500000
+  Array size:               100 floats
+  Window size:               10
+  Total elements:      50000000
+  Memory:                190.73 MB
+
+Performance:
+  CPU time:               0.181 sec
+  GPU time:               0.339 sec
+  GPU optimized:          0.089 sec
+
+Speedup:
+  GPU vs CPU:              0.53x
+  GPU-Opt vs CPU:          2.03x
+
+Throughput:
+  CPU:                   276.46 M elements/sec
+  GPU:                   147.40 M elements/sec
+  GPU optimized:         562.53 M elements/sec
+
+Verification:      PASSED ✓
+================================================================
+
+----------------------------------------------------------------
+Configuration: 500000 arrays × 200 floats, window=10
+----------------------------------------------------------------
+================================================================
+CUDA Moving Average Benchmark
+================================================================
+Initializing...
+Generating 100000000 random floats...
+Data generation: 0.556417 sec
+
+Running CPU benchmark...
+CPU time: 0.349731 sec
+
+Running GPU benchmark (simple kernel)...
+GPU time: 0.500088 sec
+
+Running GPU benchmark (optimized kernel)...
+GPU optimized time: 0.144964 sec
+
+Verifying results...
+
+================================================================
+GPU Moving Average Benchmark Results
+================================================================
+Dataset:
+  Arrays:                500000
+  Array size:               200 floats
+  Window size:               10
+  Total elements:     100000000
+  Memory:                381.47 MB
+
+Performance:
+  CPU time:               0.350 sec
+  GPU time:               0.500 sec
+  GPU optimized:          0.145 sec
+
+Speedup:
+  GPU vs CPU:              0.70x
+  GPU-Opt vs CPU:          2.41x
+
+Throughput:
+  CPU:                   285.93 M elements/sec
+  GPU:                   199.96 M elements/sec
+  GPU optimized:         689.83 M elements/sec
+
+Verification:      PASSED ✓
+================================================================
+
+----------------------------------------------------------------
+Configuration: 500000 arrays × 500 floats, window=10
+----------------------------------------------------------------
+================================================================
+CUDA Moving Average Benchmark
+================================================================
+Initializing...
+Generating 250000000 random floats...
+Data generation: 1.38279 sec
+
+Running CPU benchmark...
+CPU time: 0.839681 sec
+
+Running GPU benchmark (simple kernel)...
+GPU time: 0.971406 sec
+
+Running GPU benchmark (optimized kernel)...
+GPU optimized time: 0.357828 sec
+
+Verifying results...
+
+================================================================
+GPU Moving Average Benchmark Results
+================================================================
+Dataset:
+  Arrays:                500000
+  Array size:               500 floats
+  Window size:               10
+  Total elements:     250000000
+  Memory:                953.67 MB
+
+Performance:
+  CPU time:               0.840 sec
+  GPU time:               0.971 sec
+  GPU optimized:          0.358 sec
+
+Speedup:
+  GPU vs CPU:              0.86x
+  GPU-Opt vs CPU:          2.35x
+
+Throughput:
+  CPU:                   297.73 M elements/sec
+  GPU:                   257.36 M elements/sec
+  GPU optimized:         698.66 M elements/sec
+
+Verification:      PASSED ✓
+================================================================
+
+----------------------------------------------------------------
+Configuration: 1000000 arrays × 100 floats, window=10
+----------------------------------------------------------------
+================================================================
+CUDA Moving Average Benchmark
+================================================================
+Initializing...
+Generating 100000000 random floats...
+Data generation: 0.539347 sec
+
+Running CPU benchmark...
+CPU time: 0.338757 sec
+
+Running GPU benchmark (simple kernel)...
+GPU time: 0.432569 sec
+
+Running GPU benchmark (optimized kernel)...
+GPU optimized time: 0.162696 sec
+
+Verifying results...
+
+================================================================
+GPU Moving Average Benchmark Results
+================================================================
+Dataset:
+  Arrays:               1000000
+  Array size:               100 floats
+  Window size:               10
+  Total elements:     100000000
+  Memory:                381.47 MB
+
+Performance:
+  CPU time:               0.339 sec
+  GPU time:               0.433 sec
+  GPU optimized:          0.163 sec
+
+Speedup:
+  GPU vs CPU:              0.78x
+  GPU-Opt vs CPU:          2.08x
+
+Throughput:
+  CPU:                   295.20 M elements/sec
+  GPU:                   231.18 M elements/sec
+  GPU optimized:         614.65 M elements/sec
+
+Verification:      PASSED ✓
+================================================================
+
+----------------------------------------------------------------
+Configuration: 2000000 arrays × 100 floats, window=10
+----------------------------------------------------------------
+================================================================
+CUDA Moving Average Benchmark
+================================================================
+Initializing...
+Generating 200000000 random floats...
+Data generation: 1.12361 sec
+
+Running CPU benchmark...
+CPU time: 0.672496 sec
+
+Running GPU benchmark (simple kernel)...
+GPU time: 0.696809 sec
+
+Running GPU benchmark (optimized kernel)...
+GPU optimized time: 0.222884 sec
+
+Verifying results...
+
+================================================================
+GPU Moving Average Benchmark Results
+================================================================
+Dataset:
+  Arrays:               2000000
+  Array size:               100 floats
+  Window size:               10
+  Total elements:     200000000
+  Memory:                762.94 MB
+
+Performance:
+  CPU time:               0.672 sec
+  GPU time:               0.697 sec
+  GPU optimized:          0.223 sec
+
+Speedup:
+  GPU vs CPU:              0.97x
+  GPU-Opt vs CPU:          3.02x
+
+Throughput:
+  CPU:                   297.40 M elements/sec
+  GPU:                   287.02 M elements/sec
+  GPU optimized:         897.33 M elements/sec
+
+Verification:      PASSED ✓
+================================================================
+
+----------------------------------------------------------------
+Configuration: 5000000 arrays × 100 floats, window=10
+----------------------------------------------------------------
+================================================================
+CUDA Moving Average Benchmark
+================================================================
+Initializing...
+Generating 500000000 random floats...
+Data generation: 2.73165 sec
+
+Running CPU benchmark...
+CPU time: 1.67493 sec
+
+Running GPU benchmark (simple kernel)...
+GPU time: 1.34103 sec
+
+Running GPU benchmark (optimized kernel)...
+GPU optimized time: 0.689593 sec
+
+Verifying results...
+
+================================================================
+GPU Moving Average Benchmark Results
+================================================================
+Dataset:
+  Arrays:               5000000
+  Array size:               100 floats
+  Window size:               10
+  Total elements:     500000000
+  Memory:               1907.35 MB
+
+Performance:
+  CPU time:               1.675 sec
+  GPU time:               1.341 sec
+  GPU optimized:          0.690 sec
+
+Speedup:
+  GPU vs CPU:              1.25x
+  GPU-Opt vs CPU:          2.43x
+
+Throughput:
+  CPU:                   298.52 M elements/sec
+  GPU:                   372.85 M elements/sec
+  GPU optimized:         725.07 M elements/sec
+
+Verification:      PASSED ✓
+================================================================
+
+----------------------------------------------------------------
+Configuration: 100000 arrays × 1000 floats, window=10
+----------------------------------------------------------------
+================================================================
+CUDA Moving Average Benchmark
+================================================================
+Initializing...
+Generating 100000000 random floats...
+Data generation: 0.559426 sec
+
+Running CPU benchmark...
+CPU time: 0.346891 sec
+
+Running GPU benchmark (simple kernel)...
+GPU time: 0.483553 sec
+
+Running GPU benchmark (optimized kernel)...
+GPU optimized time: 0.156802 sec
+
+Verifying results...
+
+================================================================
+GPU Moving Average Benchmark Results
+================================================================
+Dataset:
+  Arrays:                100000
+  Array size:              1000 floats
+  Window size:               10
+  Total elements:     100000000
+  Memory:                381.47 MB
+
+Performance:
+  CPU time:               0.347 sec
+  GPU time:               0.484 sec
+  GPU optimized:          0.157 sec
+
+Speedup:
+  GPU vs CPU:              0.72x
+  GPU-Opt vs CPU:          2.21x
+
+Throughput:
+  CPU:                   288.28 M elements/sec
+  GPU:                   206.80 M elements/sec
+  GPU optimized:         637.75 M elements/sec
+
+Verification:      PASSED ✓
+================================================================
+
+----------------------------------------------------------------
+Configuration: 50000 arrays × 2000 floats, window=20
+----------------------------------------------------------------
+================================================================
+CUDA Moving Average Benchmark
+================================================================
+Initializing...
+Generating 100000000 random floats...
+Data generation: 0.550337 sec
+
+Running CPU benchmark...
+CPU time: 0.49713 sec
+
+Running GPU benchmark (simple kernel)...
+GPU time: 0.551812 sec
+
+Running GPU benchmark (optimized kernel)...
+GPU optimized time: 0.140468 sec
+
+Verifying results...
+
+================================================================
+GPU Moving Average Benchmark Results
+================================================================
+Dataset:
+  Arrays:                 50000
+  Array size:              2000 floats
+  Window size:               20
+  Total elements:     100000000
+  Memory:                381.47 MB
+
+Performance:
+  CPU time:               0.497 sec
+  GPU time:               0.552 sec
+  GPU optimized:          0.140 sec
+
+Speedup:
+  GPU vs CPU:              0.90x
+  GPU-Opt vs CPU:          3.54x
+
+Throughput:
+  CPU:                   201.15 M elements/sec
+  GPU:                   181.22 M elements/sec
+  GPU optimized:         711.91 M elements/sec
+
+Verification:      PASSED ✓
+================================================================
+
+================================================================
+Benchmark suite completed!
+================================================================
