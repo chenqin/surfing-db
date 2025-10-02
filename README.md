@@ -4,20 +4,30 @@ Surfing DB is a performance lab for moving complex Thrift payloads into Apache A
 
 ## Highlights
 - **Nested Thrift ⇢ Arrow at speed** – JNI bridge (`surfingthriftjni`) decodes deeply nested payloads (e.g. `DeepEvent`) into Arrow `VectorSchemaRoot`s with SIMD-aware native code and Java fallbacks.
+- **GPU acceleration with CUDA** – Native CUDA kernels deliver 2-13x speedup for moving average computations. Optimized shared memory usage achieves **13.51x** speedup on large windows (RTX 3060). See [SIMD_OPTIMIZATIONS.md](SIMD_OPTIMIZATIONS.md) for details.
 - **MPI shuffle & cogroup primitives** – one-sided RMA or two-sided send/recv data movers balance thousands of Arrow RecordBatches across ranks with optional Thrift ingest.
 - **End-to-end benchmarks** – repeatable runners contrast JNI vs Java decode, throttle multi-rank shuffle/cogroup, and emit size + throughput summaries for easy regression tracking.
 - **Automatic memory management** – Configurable disk spilling prevents OOM errors when processing large datasets. Supports multi-directory spilling for 2-4x I/O throughput. See [MEMORY_MANAGEMENT.md](MEMORY_MANAGEMENT.md) for details.
 
 ## Quick Start
+
+### Standard Build
 ```bash
 ./scripts/build_install.sh          # C++ libraries, Arrow deps (APT or source)
-cmake --build build                 # native targets, including JNI library
-mvn clean install -DskipTests       # Build all Java modules (surfingthriftjni, drsquirrel-java)
-```
-Run validation:
-```bash
 ./scripts/run_tests.sh              # C++ tests, MPI tests, Java tests
 ```
+
+### GPU-Accelerated Build
+```bash
+./scripts/build_install.sh --with-cuda --with-rapids  # Install CUDA + RAPIDS
+./build/cuda/moving_average_benchmark 1000000 100 1024  # 13.51x GPU speedup
+./scripts/run_rapids_moving_avg.sh                     # Full benchmark suite
+```
+
+**GPU Requirements:**
+- NVIDIA GPU with CUDA support (tested on RTX 3060)
+- CUDA Toolkit 12.2+ (auto-installed with `--with-cuda`)
+- Apache Spark 3.5+ (optional, for RAPIDS demos)
 
 > **Note:** All Java modules are now compatible with Arrow 12.0. The build system handles JNI library compilation and dependency management automatically.
 
