@@ -39,16 +39,14 @@ node::node(int* argc, char*** argv, std::string jar) {
   MPI_Comm_size(MPI_COMM_WORLD, &this->world);
   MPI_Comm_rank(MPI_COMM_WORLD, &this->rank);
   MPI_Get_processor_name(processor_name, &name_len);
-  
-  omp_set_num_threads(4);
-
   processor = std::string(processor_name);
   MPI_Info_create(&info);
   CHECK(MPI_Info_set(info, "no_locks", "true") == 0);
 
   std::cout << processor << " on " << rank << std::endl;
   stage = 0;
-  LOG(INFO) << "cluster size " << world << " node rank " << rank << " alias " << processor << " total threads " << omp_get_num_threads();
+  LOG(INFO) << "cluster size " << world << " node rank " << rank << " alias "
+            << processor;
   trainer = 0;
 
   MPI_Comm_split(MPI_COMM_WORLD, trainer, rank, &role_comm);

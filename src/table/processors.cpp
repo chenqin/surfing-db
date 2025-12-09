@@ -109,9 +109,6 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle_one_side(
     std::string filedname, std::function<size_t(size_t, int, int)> partitioner,
     int rank, int world) {
   auto start = MPI_Wtime();
-  MPI_Request gets[world];
-  MPI_Status statuses[world];
-
   size_t send_to_vec[world];
   size_t recv_from_vec[world];
   MPI_Win window;
@@ -140,7 +137,6 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle_one_side(
   // mpi_get
   size_t recv_from_vec_offset[world];
   start = MPI_Wtime();
-#pragma omp parallel for 
   for (int j = 0; j < world; j++) {
     auto send_to_dest_table =
         utils::group_two(batches, filedname, partitioner, j, rank, world);
@@ -162,7 +158,6 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle_one_side(
     auto buffer = utils::serialize(send_to_dest_table);
     // store data get pulled from rank j to send_buffers[j]
     send_buffers[j] = buffer;
-#pragma omp critical
     local_org_row += send_to_dest_table->num_rows();
   }
 
@@ -202,6 +197,13 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle_one_side(
   start = MPI_Wtime();
   auto window_buffer = arrow::ConcatenateBuffers(send_buffers).ValueOrDie();
   CHECK_EQ(total_bytes, window_buffer->size());
+  // Nothing to exchange; return empty batch.
+  if (total_bytes == 0) {
+    LOG(INFO) << "[rank " << rank << "/" << world
+              << "] shuffle_one_side has no data to exchange";
+    return arrow::RecordBatch::Make(schema, 0,
+                                     std::vector<std::shared_ptr<arrow::Array>>{});
+  }
   double concat_elapsed = MPI_Wtime() - start;
   LOG(INFO) << "[rank " << rank << "/" << world
             << "] concatenated send buffers (" << total_bytes
@@ -234,12 +236,10 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle_one_side(
 
   arrow::RecordBatchVector arrow_tables;
   start = MPI_Wtime();
-#pragma omp parallel for 
   for (int i = 0; i < world; i++) {
     if (i == rank || recv_from_vec[i] == 0) continue;
     auto _buffer = recv_buffers[i];
     auto arrow_table = utils::deserialize(_buffer, schema);
-#pragma omp critical
     arrow_tables.push_back(arrow_table);
   }
 
@@ -302,11 +302,10 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle_two_side(
     const arrow::RecordBatchVector& batches,
     std::string filedname, std::function<size_t(size_t, int, int)> partitioner,
     int rank, int world) {
+  size_t send_to_vec[world], recv_from_vec[world];
   MPI_Request sends[world];
   MPI_Request recvs[world];
   MPI_Status statuses[world];
-
-  size_t send_to_vec[world], recv_from_vec[world];
   std::vector<std::shared_ptr<arrow::Buffer>> send_buffers(world);
 
   int total_batches = 0;
@@ -339,17 +338,13 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle_two_side(
 
   auto schema = batches[0]->schema();
   phase_start = MPI_Wtime();
-#pragma omp parallel for 
   for (int j = 0; j < world; j++) {
     auto send_to_dest_table =
         utils::group_two(batches, filedname, partitioner, j, rank, world);
     CHECK(send_to_dest_table->Validate().ok());
     auto buffer = utils::serialize(send_to_dest_table);
-#pragma omp critical
-{
     send_buffers[j] = buffer;
     send_to_vec[j] = buffer->size();
-}
   }
 
   double partition_elapsed = MPI_Wtime() - phase_start;
@@ -418,14 +413,12 @@ std::shared_ptr<arrow::RecordBatch> processors::shuffle_two_side(
 
   arrow::RecordBatchVector arrow_tables;
   phase_start = MPI_Wtime();
-#pragma omp parallel for 
   for (int i = 0; i < world; i++) {
     if (recv_from_vec[i] > 0) {
       auto _buffer = arrow::SliceBuffer(
           recv_buffer, tranfer_bytes_rank_index[i], recv_from_vec[i]);
       auto arrow_table = utils::deserialize(_buffer, schema);
       CHECK(arrow_table->Validate().ok());
-#pragma omp critical
       arrow_tables.push_back(arrow_table);
     }
   }

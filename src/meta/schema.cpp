@@ -193,25 +193,22 @@ bool mschema::containField(Field field) {
 }
 
 MPI_Datatype* mschema::schemaMPIType() {
-#pragma omp critical
-  {
-    if (!_type_set) {
-      _type_set = true;
+  if (!_type_set) {
+    _type_set = true;
 
-      for (size_t i = 0; i < fields.size(); i++) {
-        auto f = fields.at(i);
-        MPI_Datatype type;
-        int blocklength;
-        MPI_Aint displ;
-        blocklength = SchemaUtils::getFieldSize(f);
-        displ = _size - SchemaUtils::getFieldSize(f);
-        MPI_Type_vector(1, blocklength, displ, MPI_CHAR, &type);
-        MPI_Type_commit(&type);
-        _field_types->insert({ f, type });
-      }
-      MPI_Type_contiguous(_size, MPI_CHAR, &_row_type);
-      MPI_Type_commit(&_row_type);
+    for (size_t i = 0; i < fields.size(); i++) {
+      auto f = fields.at(i);
+      MPI_Datatype type;
+      int blocklength;
+      MPI_Aint displ;
+      blocklength = SchemaUtils::getFieldSize(f);
+      displ = _size - SchemaUtils::getFieldSize(f);
+      MPI_Type_vector(1, blocklength, displ, MPI_CHAR, &type);
+      MPI_Type_commit(&type);
+      _field_types->insert({ f, type });
     }
+    MPI_Type_contiguous(_size, MPI_CHAR, &_row_type);
+    MPI_Type_commit(&_row_type);
   }
   return &_row_type;
 }

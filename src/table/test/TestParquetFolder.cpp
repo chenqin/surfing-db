@@ -3,6 +3,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <arrow/testing/gtest_util.h>
 #include <filesystem>
 #include "../utils.h"
 

@@ -2,6 +2,13 @@
 .vscode
 cmake-build-debug
 build
+cmake/
+.deps/
+**/__pycache__/
+replay_pid*.log
+hs_err_pid*.log
+java.80s-*
+build/examples/fake-cogroup-out/
 
 */.idea/*
 surfing-db-java/target

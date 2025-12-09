@@ -125,6 +125,10 @@ IFACE_OPT="--mca btl_tcp_if_exclude lo,docker0"
 if [[ -n "${IFACE}" ]]; then
   IFACE_OPT="--mca btl_tcp_if_include ${IFACE}"
 fi
+# Allow overriding transport to avoid UCX issues (e.g., force TCP)
+MPIRUN_EXTRA_OPTS=${MPIRUN_EXTRA_OPTS:-"--mca pml ob1 --mca btl tcp,self --mca mtl ^ofi --mca coll ^hcoll"}
+# Allow passing extra JVM flags for debugging (e.g., -Xint)
+JAVA_EXTRA_OPTS=${JAVA_EXTRA_OPTS:-}
 
 if [[ "$USE_THRIFT" == "1" ]]; then
   echo "[+] Running fake-cogroup-app np=$NP mode=$MODE thrift_struct=$THRIFT_STRUCT key=$KEY_FIELD left=$PAYLOAD_LEFT right=${PAYLOAD_RIGHT:-reuse} iters=$ITERS out=$OUT_DIR sort-by='${SORT_BY}' iface='${IFACE}'"
@@ -134,8 +138,8 @@ fi
 export LD_LIBRARY_PATH="$BUILD_DIR:${LD_LIBRARY_PATH:-}"
 
 mpiexec -np "$NP" --use-hwthread-cpus --oversubscribe --map-by core --bind-to core \
-  ${IFACE_OPT} \
-  java -Djava.library.path="$BUILD_DIR" \
+  ${IFACE_OPT} ${MPIRUN_EXTRA_OPTS} \
+  java ${JAVA_EXTRA_OPTS} -Djava.library.path="$BUILD_DIR" \
        -cp "$FAT_JAR:$EX_JAR" \
        com.example.fakecogroup.Main \
        --mode "$MODE" --rows "$ROWS" --iters "$ITERS" --out "$OUT_DIR" ${SORT_BY:+--sort-by "$SORT_BY"}

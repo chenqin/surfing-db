@@ -19,7 +19,6 @@ set_target_properties(${META} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_link_libraries(${META}
         PUBLIC Threads::Threads
         PUBLIC MPI::MPI_CXX
-        PUBLIC OpenMP::OpenMP_CXX
         PUBLIC ${GLOG_LIBRARY}
         PUBLIC ${ARROW_LIBRARY}
         PRIVATE ${JNI_LIBRARIES}

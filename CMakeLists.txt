@@ -37,6 +37,14 @@ else()
   set(THRIFT_LINK_LIBS ${THRIFT_LIBRARIES})
   include_directories(${THRIFT_INCLUDE_DIRS})
 endif()
+# Some targets depend on a CMake target named "thrift". Create a stub if the
+# package did not provide one so add_dependencies() still works.
+if(NOT TARGET thrift)
+  add_custom_target(thrift)
+  if(TARGET Thrift::thrift)
+    add_dependencies(thrift Thrift::thrift)
+  endif()
+endif()
 find_package(GTest REQUIRED)
 
 if(APPLE)
@@ -204,19 +212,6 @@ set(CMAKE_CXX_FLAGS ${NCFLAGS})
 set(CMAKE_CXX_FLAGS_DEBUG "-g -DNDBG")
 set(CMAKE_CXX_FLAGS_RELEASE ${NCFLAGS_RELEASE})
 
-find_package(OpenMP REQUIRED)
-IF (OPENMP_FOUND)
-    SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
-    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-ENDIF ()
-if (NOT TARGET OpenMP::OpenMP_CXX)
-    add_library(OpenMP_TARGET INTERFACE)
-    add_library(OpenMP::OpenMP_CXX ALIAS OpenMP_TARGET)
-    target_compile_options(OpenMP_TARGET INTERFACE ${OpenMP_CXX_FLAGS})
-    find_package(Threads REQUIRED)
-    target_link_libraries(OpenMP_TARGET INTERFACE Threads::Threads)
-    target_link_libraries(OpenMP_TARGET INTERFACE ${OpenMP_CXX_FLAGS})
-endif ()
 find_package(MPI REQUIRED)
 set(ENV{MPI_HOSTS} ${PROJECT_SOURCE_DIR}/host_file)
 
@@ -396,9 +391,12 @@ target_link_libraries(ParquetFolderTests
     PRIVATE GTest::gtest)
 gtest_discover_tests(ParquetFolderTests
   DISCOVERY_MODE PRE_TEST
+  PROPERTIES RESOURCE_LOCK "parquet_folder_tests"
 )
 add_test(NAME ParquetFolderTests_run COMMAND ParquetFolderTests)
 set_tests_properties(ParquetFolderTests_run PROPERTIES LABELS "unit;parquet")
+# Parquet folder tests share a temp directory; prevent parallel runs from racing.
+set_tests_properties(ParquetFolderTests_run PROPERTIES RESOURCE_LOCK "parquet_folder_tests")
 
 # -----------------------------
 # Tools: payload generator for JNI decode benchmark

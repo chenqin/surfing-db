@@ -105,13 +105,8 @@ arrow::Result<std::shared_ptr<arrow::RecordBatch>> ReadParquetFolderInternal(
 
   // No spilling needed - combine in memory
   ARROW_ASSIGN_OR_RAISE(auto table, arrow::Table::FromRecordBatches(batches));
-  ARROW_ASSIGN_OR_RAISE(auto combined_batches, table->CombineChunksToBatches());
-
-  if (combined_batches.empty()) {
-    return arrow::Status::Invalid("Failed to combine batches");
-  }
-
-  return combined_batches[0];
+  ARROW_ASSIGN_OR_RAISE(auto combined_batch, table->CombineChunksToBatch());
+  return combined_batch;
 }
 
 // Write Arrow RecordBatch to Parquet folder (multiple files)

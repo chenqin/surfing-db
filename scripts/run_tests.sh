@@ -23,7 +23,7 @@ export CTEST_OUTPUT_ON_FAILURE=1
 pushd "${BUILD_DIR}" >/dev/null
 
 echo "[+] Running C++ unit tests"
-ctest -j"$(nproc)" -R SurfingDbTests
+ctest -j"$(nproc)"
 
 if [ "$RUN_MPI" = "1" ]; then
   echo "[+] Running MPI shuffle tests (np=2,4)"
