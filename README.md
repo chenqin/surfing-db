@@ -30,6 +30,7 @@ Surfing DB is a performance lab for moving complex Thrift payloads into Apache A
 - Apache Spark 3.5+ (optional, for RAPIDS demos)
 
 > **Note:** All Java modules are now compatible with Arrow 12.0. The build system handles JNI library compilation and dependency management automatically.
+> **JDK:** Scripts default to JDK 11 (bundled under `.jdks/jdk-11.0.2` if present). JDK 8 remains supported for builds, but MPI Java runners should use JDK 11 for stability.
 
 ## Key Workloads
 ### 1. DeepEvent JNI Benchmark
@@ -52,6 +53,22 @@ mpiexec -np 4 java -Djava.library.path=$PWD/build \
   -cp drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar \
   com.pinterest.drsquirrel.jni.JniCogroupLoadRunner --two
 ```
+**Scripted runners (preferred) with stable JVM + OpenMPI flags:**
+```bash
+# One-sided (RMA) shuffle: 1M rows/rank, 12 ranks, 10 iters
+JAVA_EXTRA_OPTS="-Xint -XX:-TieredCompilation \
+  -XX:CompileCommand=exclude,java/util/Formatter$FormatSpecifier.localizedMagnitude \
+  -XX:CompileCommand=exclude,java/util/Formatter$FormatSpecifier.appendJustified \
+  -XX:CompileCommand=exclude,java/lang/ThreadLocal.get -Xrs" \
+MPIRUN_EXTRA_OPTS="--mca pml ob1 --mca btl tcp,self --mca mtl ^ofi --mca coll ^hcoll" \
+scripts/run_fake_cogroup_example.sh --np 12 --mode one --rows 1000000 --iters 10
+
+# Two-sided shuffle: 1M rows/rank, 12 ranks, 10 iters
+JAVA_EXTRA_OPTS="..." MPIRUN_EXTRA_OPTS="..." \
+scripts/run_fake_cogroup_example.sh --np 12 --mode two --rows 1000000 --iters 10
+```
+Recent runs (JDK 11) completed without segfaults: one-sided best ~8.74s for 24M rows (~2.75M rows/s); two-sided best ~8.61s for 24M rows (~2.78M rows/s). Larger two-sided run at 2M rows/rank finished in ~17.67s for 48M rows (~2.68M rows/s).
+
 Use Thrift inputs:
 ```bash
 mpiexec -np 4 java -Djava.library.path=$PWD/build \
