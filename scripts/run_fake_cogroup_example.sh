@@ -15,6 +15,11 @@ set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/.." && pwd)
 BUILD_DIR="$ROOT/build"
+JAVA_HOME_DEFAULT="$ROOT/.jdks/jdk-11.0.2"
+if [ -d "$JAVA_HOME_DEFAULT" ]; then
+  export JAVA_HOME="$JAVA_HOME_DEFAULT"
+  export PATH="$JAVA_HOME/bin:$PATH"
+fi
 
 NP=2
 MODE=one

@@ -45,19 +45,25 @@ if [ "${USE_SUDO}" = "0" ]; then
   SUDO=""
 fi
 
+JAVA_HOME_DEFAULT="${PWD}/.jdks/jdk-11.0.2"
+if [ -d "$JAVA_HOME_DEFAULT" ]; then
+  export JAVA_HOME="$JAVA_HOME_DEFAULT"
+elif [ -d "/usr/lib/jvm/java-11-openjdk-amd64" ]; then
+  export JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
+else
+  export JAVA_HOME="/usr/lib/jvm/java-8-openjdk-amd64"
+fi
+export PATH="$JAVA_HOME/bin:$PATH"
+
 echo "[+] Installing system packages"
 ${SUDO} ${APT} update -y
 ${SUDO} ${APT} install -y \
   build-essential cmake ninja-build pkg-config git curl ca-certificates \
-  openjdk-8-jdk maven \
+  openjdk-11-jdk maven \
   libopenmpi-dev openmpi-bin \
   libssl-dev libboost-dev libgoogle-glog-dev \
   pybind11-dev libcurl4-openssl-dev zlib1g-dev libzstd-dev liblz4-dev libsnappy-dev libbrotli-dev \
   libthrift-dev librdkafka-dev flex bison
-
-
-export JAVA_HOME="/usr/lib/jvm/java-8-openjdk-amd64"
-export PATH="$JAVA_HOME/bin:$PATH"
 
 if [ "$USE_SYSTEM_ARROW" = "1" ] && [ "$BUILD_ARROW" = "0" ]; then
   echo "[+] Installing Arrow C++ from APT"

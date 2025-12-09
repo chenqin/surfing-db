@@ -39,6 +39,11 @@ fi
 popd >/dev/null
 
 echo "[+] Running Java tests"
+JAVA_HOME_DEFAULT="$(pwd)/.jdks/jdk-11.0.2"
+if [ -d "$JAVA_HOME_DEFAULT" ]; then
+  export JAVA_HOME="$JAVA_HOME_DEFAULT"
+  export PATH="$JAVA_HOME/bin:$PATH"
+fi
 # Ensure native JNI libs are discoverable for JNI tests
 export LD_LIBRARY_PATH="$(pwd)/build:${LD_LIBRARY_PATH:-}"
 mvn -q -f drsquirrel-java-project/pom.xml -Darrow.version=12.0.0 test
