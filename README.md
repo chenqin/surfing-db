@@ -51,7 +51,7 @@ High-cardinality join/load tests that optionally source Thrift payloads.
 ```bash
 mpiexec -np 4 java -Djava.library.path=$PWD/build \
   -cp drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar \
-  com.pinterest.drsquirrel.jni.JniCogroupLoadRunner --two
+  org.surfing.drsquirrel.jni.JniCogroupLoadRunner --two
 ```
 **Scripted runners (preferred) with stable JVM + OpenMPI flags:**
 ```bash
@@ -73,7 +73,7 @@ Use Thrift inputs:
 ```bash
 mpiexec -np 4 java -Djava.library.path=$PWD/build \
   -cp drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar \
-  com.pinterest.drsquirrel.jni.JniCogroupLoadRunner --two \
+  org.surfing.drsquirrel.jni.JniCogroupLoadRunner --two \
   --thrift-path src/bench/deep_event.thrift \
   --thrift-struct DeepEvent \
   --payload-left /tmp/deep_left.bin \
@@ -96,14 +96,14 @@ Demonstrates how to feed Flink's datagen source into the generated `DeepEvent` J
 mvn -q -f drsquirrel-java-project/pom.xml -Darrow.version=12.0.0 -DskipTests package
 FLINK_HOME=/path/to/flink \
   "$FLINK_HOME/bin/flink" run \
-  --class com.pinterest.drsquirrel.flink.DeepEventDataStreamExample \
+  --class org.surfing.drsquirrel.flink.DeepEventDataStreamExample \
   drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar
 ```
 Tune with JVM system properties, e.g. `-Ddeep.event.count=100000 -Ddeep.event.rate=20000` to control record count and generator rate.
 
 ## Tools & Integrations
 - **Thrift schema conversion** – `thrift2arrow` (C++) and `org.apache.thrift.ext.*` (Java) translate `.thrift` IDL into Arrow schemas / builders.
-- **Parquet / CSV dumps** – `com.pinterest.drsquirrel.tools.ThriftToParquet` converts Thrift payload batches with either Java or JNI decoder paths.
+- **Parquet / CSV dumps** – `org.surfing.drsquirrel.tools.ThriftToParquet` converts Thrift payload batches with either Java or JNI decoder paths.
 - **Parquet folder operations** – Read/write collections of Parquet files across C++, Java, and Python. See [PARQUET_FOLDER_USAGE.md](PARQUET_FOLDER_USAGE.md) for details.
 - **Spark RAPIDS & CUDA GPU acceleration** – `scripts/run_rapids_groupby.sh` showcases GPU-accelerated group-by on decoded Arrow columns. Native CUDA kernels (`src/cuda/moving_average_kernel.cu`) deliver 2-13x speedup for moving average computations with optimized shared memory usage. Run `./build/cuda/moving_average_benchmark 1000000 100 1024` for 13.51x speedup on large windows.
 - **Python shim** – `examples/python/cogroup_benchmark.py` drives the native processors through Arrow C Data using PyArrow (MPI optional).

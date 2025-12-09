@@ -56,7 +56,7 @@ drsquirrel-java-project/   # MPI/Flink workflows (unchanged)
 
 **Read Parquet Folder (Native)**
 ```java
-import com.pinterest.drsquirrel.jni.NativeParquetIO;
+import org.surfing.drsquirrel.jni.NativeParquetIO;
 
 try (BufferAllocator allocator = new RootAllocator()) {
     // Fast native read of all Parquet files
@@ -84,7 +84,7 @@ NativeParquetIO.writeParquetFolder(
 
 **Read with Java API**
 ```java
-import com.pinterest.surfing.parquet.ParquetFolderReader;
+import org.surfing.parquet.ParquetFolderReader;
 
 List<VectorSchemaRoot> roots = ParquetFolderReader.readFolder(
     "/path/to/folder", allocator
@@ -93,7 +93,7 @@ List<VectorSchemaRoot> roots = ParquetFolderReader.readFolder(
 
 **Write with Java API**
 ```java
-import com.pinterest.surfing.parquet.ParquetFolderWriter;
+import org.surfing.parquet.ParquetFolderWriter;
 
 ParquetFolderWriter.writeFolder(roots, "/path/to/output", "part");
 ```
@@ -113,7 +113,7 @@ ParquetFolderWriter.writeFolder(roots, "/path/to/output", "part");
 **Old dependency (removed):**
 ```xml
 <dependency>
-  <groupId>com.pinterest.surfing</groupId>
+  <groupId>org.surfing</groupId>
   <artifactId>surfing-parquet-java</artifactId>
   <version>1.0-SNAPSHOT</version>
 </dependency>
@@ -122,14 +122,14 @@ ParquetFolderWriter.writeFolder(roots, "/path/to/output", "part");
 **New dependency (use this):**
 ```xml
 <dependency>
-  <groupId>com.pinterest.surfing</groupId>
+  <groupId>org.surfing</groupId>
   <artifactId>surfingthriftjni</artifactId>
   <version>1.0-SNAPSHOT</version>
 </dependency>
 ```
 
 **Code changes:**
-- Package names remain the same: `com.pinterest.surfing.parquet.*`
+- Package names remain the same: `org.surfing.parquet.*`
 - All existing Java APIs work unchanged
 - **NEW**: You can now use `NativeParquetIO` for faster performance
 
@@ -316,7 +316,7 @@ mvn -f surfingthriftjni/pom.xml package
 # Run Java integration test
 java -Djava.library.path=surfingthriftjni/target/nativebuild \
      -cp surfingthriftjni/target/surfingthriftjni-1.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.pinterest.drsquirrel.jni.NativeParquetIO /path/to/test/data
+     org.surfing.drsquirrel.jni.NativeParquetIO /path/to/test/data
 ```
 
 ## Troubleshooting

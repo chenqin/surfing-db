@@ -21,7 +21,7 @@ surfing-db/
 
 ### 1. surfingthriftjni (Unified JNI Module)
 **Purpose:** Native Thrift→Arrow conversion + Parquet I/O with JNI
-**Group ID:** `com.pinterest.surfing`
+**Group ID:** `org.surfing`
 **Artifact ID:** `surfingthriftjni`
 **Dependencies:** Arrow, Parquet, Thrift, Hadoop, JNI
 
@@ -42,21 +42,21 @@ mvn -f surfingthriftjni/pom.xml clean package
 **APIs:**
 ```java
 // Thrift decoding (JNI)
-import com.pinterest.drsquirrel.jni.NativeThriftDecoder;
+import org.surfing.drsquirrel.jni.NativeThriftDecoder;
 
 // Parquet I/O (JNI - high performance)
-import com.pinterest.drsquirrel.jni.NativeParquetIO;
+import org.surfing.drsquirrel.jni.NativeParquetIO;
 
 // Parquet I/O (Java - compatibility)
-import com.pinterest.surfing.parquet.ParquetFolderReader;
-import com.pinterest.surfing.parquet.ParquetFolderWriter;
+import org.surfing.parquet.ParquetFolderReader;
+import org.surfing.parquet.ParquetFolderWriter;
 ```
 
 ---
 
 ### 2. drsquirrel-java-project (DEPRECATED INFO - surfing-parquet-java merged)
 ~~**Purpose:** Standalone Parquet folder operations~~
-~~**Group ID:** `com.pinterest.surfing`~~
+~~**Group ID:** `org.surfing`~~
 ~~**Artifact ID:** `surfing-parquet-java`~~
 
 **This module has been merged into `surfingthriftjni`.**
@@ -67,7 +67,7 @@ import com.pinterest.surfing.parquet.ParquetFolderWriter;
 
 **Usage:**
 ```java
-import com.pinterest.surfing.parquet.*;
+import org.surfing.parquet.*;
 
 // Read Parquet folder
 List<VectorSchemaRoot> roots = ParquetFolderReader.readFolder(
@@ -81,7 +81,7 @@ ParquetFolderWriter.writeFolder(roots, "/output/path");
 
 ### 3. drsquirrel-java-project
 **Purpose:** MPI/Flink workflows and benchmarks
-**Group ID:** `com.pinterest.drsquirrel`
+**Group ID:** `org.surfing.drsquirrel`
 **Artifact ID:** `drsquirrel-java`
 **Dependencies:**
 - `surfingthriftjni` (required)
@@ -181,20 +181,20 @@ mvn -f drsquirrel-java-project/pom.xml clean deploy
 
 **Old way (deprecated):**
 ```java
-import com.pinterest.drsquirrel.arrow.ParquetFolderReader;
-import com.pinterest.drsquirrel.arrow.ParquetFolderWriter;
+import org.surfing.drsquirrel.arrow.ParquetFolderReader;
+import org.surfing.drsquirrel.arrow.ParquetFolderWriter;
 ```
 
 **New way:**
 ```java
-import com.pinterest.surfing.parquet.ParquetFolderReader;
-import com.pinterest.surfing.parquet.ParquetFolderWriter;
+import org.surfing.parquet.ParquetFolderReader;
+import org.surfing.parquet.ParquetFolderWriter;
 ```
 
 **Maven dependency:**
 ```xml
 <dependency>
-  <groupId>com.pinterest.surfing</groupId>
+  <groupId>org.surfing</groupId>
   <artifactId>surfing-parquet-java</artifactId>
   <version>1.0-SNAPSHOT</version>
 </dependency>
@@ -258,8 +258,8 @@ jobs:
 **Issue:** `surfing-parquet-java` not found when building `drsquirrel-java`
 **Solution:** Build parent aggregator first: `mvn clean install`
 
-**Issue:** Old Parquet classes not found in `com.pinterest.drsquirrel.arrow`
-**Solution:** Update imports to `com.pinterest.surfing.parquet`
+**Issue:** Old Parquet classes not found in `org.surfing.drsquirrel.arrow`
+**Solution:** Update imports to `org.surfing.parquet`
 
 **Issue:** Want Parquet without all drsquirrel dependencies
 **Solution:** Use `surfing-parquet-java` standalone JAR directly

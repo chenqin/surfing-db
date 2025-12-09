@@ -29,13 +29,13 @@ if [ ! -f "$PAY_LARGE20K" ]; then
 fi
 
 echo "== Small payloads (array mode) =="
-java -Djava.library.path="$JNI_BUILD_DIR" -cp "$JAR" com.pinterest.drsquirrel.jni.JniDecodeBench "$PAY_SMALL" "$ROOT_DIR/src/mabs.thrift" MabsMetrics 7 | tee "$BUILD_DIR/bench_small_array.txt"
+java -Djava.library.path="$JNI_BUILD_DIR" -cp "$JAR" org.surfing.drsquirrel.jni.JniDecodeBench "$PAY_SMALL" "$ROOT_DIR/src/mabs.thrift" MabsMetrics 7 | tee "$BUILD_DIR/bench_small_array.txt"
 
 echo "\n== Large payloads (ByteBuffer mmap) =="
-java -Xmx3g -Djava.library.path="$JNI_BUILD_DIR" -cp "$JAR" com.pinterest.drsquirrel.jni.JniDecodeBench "$PAY_LARGE20K" "$ROOT_DIR/src/mabs.thrift" MabsMetrics 5 bb | tee "$BUILD_DIR/bench_large_bb.txt"
+java -Xmx3g -Djava.library.path="$JNI_BUILD_DIR" -cp "$JAR" org.surfing.drsquirrel.jni.JniDecodeBench "$PAY_LARGE20K" "$ROOT_DIR/src/mabs.thrift" MabsMetrics 5 bb | tee "$BUILD_DIR/bench_large_bb.txt"
 
 echo "\n== Large payloads (ByteBuffer pooled) =="
-java -Xmx3g -Djava.library.path="$JNI_BUILD_DIR" -cp "$JAR" com.pinterest.drsquirrel.jni.JniDecodeBench "$PAY_LARGE20K" "$ROOT_DIR/src/mabs.thrift" MabsMetrics 5 bbp | tee "$BUILD_DIR/bench_large_bbp.txt"
+java -Xmx3g -Djava.library.path="$JNI_BUILD_DIR" -cp "$JAR" org.surfing.drsquirrel.jni.JniDecodeBench "$PAY_LARGE20K" "$ROOT_DIR/src/mabs.thrift" MabsMetrics 5 bbp | tee "$BUILD_DIR/bench_large_bbp.txt"
 
 echo "\n== Summary =="
 small_jni=$(grep -m1 "^JNI Best:" "$BUILD_DIR/bench_small_array.txt" | sed 's/^JNI Best: //')

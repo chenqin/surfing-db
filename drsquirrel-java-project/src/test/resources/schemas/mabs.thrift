@@ -1,4 +1,4 @@
-namespace java com.pinterest.mabs_metrics.thrift
+namespace java org.surfing.mabs_metrics.thrift
 
 struct MabsMetrics {
   1: required i64 timestamp,

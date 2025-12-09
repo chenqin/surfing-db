@@ -92,8 +92,8 @@ if [[ "$DEEP_THRIFT" == "1" ]]; then
     PAYLOAD_RIGHT="$DEEP_DIR/deep_right.bin"
   fi
   echo "[+] Generating DeepEvent payloads ($DEEP_ROWS rows per file)"
-  java -cp "$FAT_JAR" com.pinterest.drsquirrel.bench.DeepEventGenerator "$PAYLOAD_LEFT" "$DEEP_ROWS" "$DEEP_LEFT_SEED"
-  java -cp "$FAT_JAR" com.pinterest.drsquirrel.bench.DeepEventGenerator "$PAYLOAD_RIGHT" "$DEEP_ROWS" "$DEEP_RIGHT_SEED"
+  java -cp "$FAT_JAR" org.surfing.drsquirrel.bench.DeepEventGenerator "$PAYLOAD_LEFT" "$DEEP_ROWS" "$DEEP_LEFT_SEED"
+  java -cp "$FAT_JAR" org.surfing.drsquirrel.bench.DeepEventGenerator "$PAYLOAD_RIGHT" "$DEEP_ROWS" "$DEEP_RIGHT_SEED"
   if [[ -z "$THRIFT_PATH" ]]; then
     THRIFT_PATH="$ROOT/src/bench/deep_event.thrift"
   fi

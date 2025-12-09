@@ -30,19 +30,19 @@ drsquirrel-java-project/   # MPI/Flink workflows (depends on above)
 ### 1. surfingthriftjni
 - **What:** Thrift → Arrow conversion with native JNI
 - **Dependencies:** Arrow, Thrift, JNI
-- **Artifact:** `com.pinterest.surfing:surfingthriftjni:1.0-SNAPSHOT`
+- **Artifact:** `org.surfing:surfingthriftjni:1.0-SNAPSHOT`
 - **Use when:** Converting Thrift payloads to Arrow
 
 ### 2. surfing-parquet-java (NEW)
 - **What:** Parquet folder read/write utilities
 - **Dependencies:** Arrow, Parquet, Hadoop (minimal)
-- **Artifact:** `com.pinterest.surfing:surfing-parquet-java:1.0-SNAPSHOT`
+- **Artifact:** `org.surfing:surfing-parquet-java:1.0-SNAPSHOT`
 - **Use when:** Working with Parquet files only
 
 ### 3. drsquirrel-java-project
 - **What:** MPI/Flink workflows and benchmarks
 - **Dependencies:** surfingthriftjni + optionally surfing-parquet-java
-- **Artifact:** `com.pinterest.drsquirrel:drsquirrel-java:1.0-SNAPSHOT`
+- **Artifact:** `org.surfing.drsquirrel:drsquirrel-java:1.0-SNAPSHOT`
 - **Use when:** Running full MPI/Flink pipelines
 
 ---
@@ -53,14 +53,14 @@ drsquirrel-java-project/   # MPI/Flink workflows (depends on above)
 
 **Old import (deprecated):**
 ```java
-import com.pinterest.drsquirrel.arrow.ParquetFolderReader;
-import com.pinterest.drsquirrel.arrow.ParquetFolderWriter;
+import org.surfing.drsquirrel.arrow.ParquetFolderReader;
+import org.surfing.drsquirrel.arrow.ParquetFolderWriter;
 ```
 
 **New import:**
 ```java
-import com.pinterest.surfing.parquet.ParquetFolderReader;
-import com.pinterest.surfing.parquet.ParquetFolderWriter;
+import org.surfing.parquet.ParquetFolderReader;
+import org.surfing.parquet.ParquetFolderWriter;
 ```
 
 **API is identical** - only package changed!
@@ -70,7 +70,7 @@ import com.pinterest.surfing.parquet.ParquetFolderWriter;
 **Old way:**
 ```xml
 <dependency>
-  <groupId>com.pinterest.drsquirrel</groupId>
+  <groupId>org.surfing.drsquirrel</groupId>
   <artifactId>drsquirrel-java</artifactId>
   <version>1.0-SNAPSHOT</version>
 </dependency>
@@ -80,7 +80,7 @@ This pulls in Flink, Spark, Kafka, etc. even if you only need Parquet!
 **New way (Parquet only):**
 ```xml
 <dependency>
-  <groupId>com.pinterest.surfing</groupId>
+  <groupId>org.surfing</groupId>
   <artifactId>surfing-parquet-java</artifactId>
   <version>1.0-SNAPSHOT</version>
 </dependency>
@@ -181,7 +181,7 @@ Use Parquet utilities in other projects without pulling in MPI/Flink/Spark!
 ```xml
 <!-- In your other project -->
 <dependency>
-  <groupId>com.pinterest.surfing</groupId>
+  <groupId>org.surfing</groupId>
   <artifactId>surfing-parquet-java</artifactId>
   <version>1.0.0</version>
 </dependency>
@@ -199,7 +199,7 @@ Use Parquet utilities in other projects without pulling in MPI/Flink/Spark!
 ### For Parquet-only users
 ⚠️ **Action required:**
 1. Update Maven dependency to `surfing-parquet-java`
-2. Update imports: `com.pinterest.drsquirrel.arrow` → `com.pinterest.surfing.parquet`
+2. Update imports: `org.surfing.drsquirrel.arrow` → `org.surfing.parquet`
 3. Rebuild
 
 ---
@@ -254,7 +254,7 @@ A: Recommended but not required. See `scripts/build_java_modules.sh` for new app
 
 1. Read [MODULAR_BUILD.md](MODULAR_BUILD.md) for detailed module documentation
 2. Update your Maven dependencies if using Parquet
-3. Update imports: `com.pinterest.drsquirrel.arrow` → `com.pinterest.surfing.parquet`
+3. Update imports: `org.surfing.drsquirrel.arrow` → `org.surfing.parquet`
 4. Rebuild: `mvn clean install`
 5. Test your code
 

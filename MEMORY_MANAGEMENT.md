@@ -71,8 +71,8 @@ export SURFING_ENABLE_SPILLING=1
 ### Java Configuration API
 
 ```java
-import com.pinterest.surfing.config.MemoryConfig;
-import com.pinterest.surfing.config.MemoryConfig.LoadBalancing;
+import org.surfing.config.MemoryConfig;
+import org.surfing.config.MemoryConfig.LoadBalancing;
 
 // Option 1: Builder pattern with single directory
 MemoryConfig config = MemoryConfig.builder()
@@ -141,8 +141,8 @@ SpillManager spill_manager(config);
 ### Example 1: Processing Large Parquet Files
 
 ```java
-import com.pinterest.drsquirrel.jni.NativeParquetIO;
-import com.pinterest.surfing.config.MemoryConfig;
+import org.surfing.drsquirrel.jni.NativeParquetIO;
+import org.surfing.config.MemoryConfig;
 import org.apache.arrow.memory.RootAllocator;
 
 // Configure memory limit
@@ -168,7 +168,7 @@ try (RootAllocator allocator = new RootAllocator()) {
 ### Example 2: Thrift Decoding with Spilling
 
 ```java
-import com.pinterest.drsquirrel.jni.NativeThriftDecoder;
+import org.surfing.drsquirrel.jni.NativeThriftDecoder;
 
 // Configure for large Thrift payloads
 MemoryConfig.builder()
@@ -215,8 +215,8 @@ devConfig.apply();
 ### Example 4: Multi-Directory Spilling for I/O Distribution
 
 ```java
-import com.pinterest.surfing.config.MemoryConfig;
-import com.pinterest.surfing.config.MemoryConfig.LoadBalancing;
+import org.surfing.config.MemoryConfig;
+import org.surfing.config.MemoryConfig.LoadBalancing;
 
 // Distribute spill files across multiple disks for better I/O performance
 MemoryConfig config = MemoryConfig.builder()
@@ -520,7 +520,7 @@ public class CustomSpillConfig {
 ### Monitoring Memory Usage
 
 ```java
-import com.pinterest.surfing.config.MemoryConfig;
+import org.surfing.config.MemoryConfig;
 
 public class MemoryMonitor {
     public static void printConfig() {

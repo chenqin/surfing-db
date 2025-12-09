@@ -53,7 +53,7 @@ if [ "$RUN_MPI" = "1" ]; then
   mvn -q -f drsquirrel-java-project/pom.xml -Darrow.version=12.0.0 -DskipTests package
   JAR="drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar"
   if [ -f "$JAR" ]; then
-    mpiexec -np 2 java -Djava.library.path="$(pwd)/build" -cp "$JAR" com.pinterest.drsquirrel.jni.JniFlinkJobWatcherRunner || true
+    mpiexec -np 2 java -Djava.library.path="$(pwd)/build" -cp "$JAR" org.surfing.drsquirrel.jni.JniFlinkJobWatcherRunner || true
   else
     echo "[i] JNI runner jar not found; skipping MPI Java test"
   fi

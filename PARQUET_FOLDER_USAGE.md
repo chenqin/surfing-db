@@ -73,7 +73,7 @@ The utilities are now in a standalone `surfing-parquet-java` module with minimal
 
 ```xml
 <dependency>
-  <groupId>com.pinterest.surfing</groupId>
+  <groupId>org.surfing</groupId>
   <artifactId>surfing-parquet-java</artifactId>
   <version>1.0-SNAPSHOT</version>
 </dependency>
@@ -88,7 +88,7 @@ mvn clean install
 
 ### Reading a Parquet Folder
 ```java
-import com.pinterest.surfing.parquet.ParquetFolderReader;
+import org.surfing.parquet.ParquetFolderReader;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
 
@@ -111,7 +111,7 @@ try (BufferAllocator allocator = new RootAllocator()) {
 
 ### Writing to a Parquet Folder
 ```java
-import com.pinterest.surfing.parquet.ParquetFolderWriter;
+import org.surfing.parquet.ParquetFolderWriter;
 
 List<VectorSchemaRoot> roots = /* your data */;
 
@@ -151,11 +151,11 @@ System.out.println("Total rows: " + totalRows);
 ```bash
 # Read a folder
 java -cp surfing-parquet-java/target/surfing-parquet-java-1.0-SNAPSHOT-jar-with-dependencies.jar \
-  com.pinterest.surfing.parquet.ParquetFolderReader /path/to/folder
+  org.surfing.parquet.ParquetFolderReader /path/to/folder
 
 # Write sample data
 java -cp surfing-parquet-java/target/surfing-parquet-java-1.0-SNAPSHOT-jar-with-dependencies.jar \
-  com.pinterest.surfing.parquet.ParquetFolderWriter /path/to/output
+  org.surfing.parquet.ParquetFolderWriter /path/to/output
 ```
 
 ## Python API

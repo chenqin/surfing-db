@@ -3,7 +3,7 @@
 Minimal Java API for the native Thrift → Arrow JNI bridge.
 
 - Native library target: `libsurfingthriftjni.so` (built by this module under `target/nativebuild` and packaged into a platform-specific natives JAR)
-- Java wrapper: `com.pinterest.drsquirrel.jni.NativeThriftDecoder`
+- Java wrapper: `org.surfing.drsquirrel.jni.NativeThriftDecoder`
 - Converter API (pure Java fallback):
   - `org.apache.thrift.ext.ThriftToArrowConverter`
   - `org.apache.thrift.ext.GenericThriftToArrowConverter`
@@ -46,7 +46,7 @@ java -Djava.library.path=$(pwd)/surfingthriftjni/target/nativebuild \
 
 Notes
 - If the native library is not present, only the pure Java converter path will work.
-- Package note: this module defines `com.pinterest.drsquirrel.jni.NativeThriftDecoder` and
+- Package note: this module defines `org.surfing.drsquirrel.jni.NativeThriftDecoder` and
   `org.apache.thrift.ext.*`, which also exist in `drsquirrel-java-project`. Do not put both
   jars on the same classpath; prefer one or the other per application.
 

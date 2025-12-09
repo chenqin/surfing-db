@@ -29,12 +29,12 @@ fi
 # Generate DeepEvent payloads (small & large) if absent or forced.
 if [ ! -f "$SMALL_PAYLOAD" ] || [ "$FORCE_REGEN" = "1" ]; then
   echo "Generating DeepEvent small payload: $SMALL_PAYLOAD ($SMALL_ROWS rows)"
-  java -cp "$JAR" com.pinterest.deep.bench.DeepEventPayloadGenerator "$SMALL_PAYLOAD" "$SMALL_ROWS" small
+  java -cp "$JAR" org.surfing.deep.bench.DeepEventPayloadGenerator "$SMALL_PAYLOAD" "$SMALL_ROWS" small
 fi
 
 if [ ! -f "$LARGE_PAYLOAD" ] || [ "$FORCE_REGEN" = "1" ]; then
   echo "Generating DeepEvent large payload: $LARGE_PAYLOAD ($LARGE_ROWS rows)"
-  java -cp "$JAR" com.pinterest.deep.bench.DeepEventPayloadGenerator "$LARGE_PAYLOAD" "$LARGE_ROWS" large
+  java -cp "$JAR" org.surfing.deep.bench.DeepEventPayloadGenerator "$LARGE_PAYLOAD" "$LARGE_ROWS" large
 fi
 
 export LD_LIBRARY_PATH="$JNI_BUILD_DIR:${LD_LIBRARY_PATH:-}"
@@ -42,19 +42,19 @@ export LD_LIBRARY_PATH="$JNI_BUILD_DIR:${LD_LIBRARY_PATH:-}"
 echo "== DeepEvent small payloads (array mode) =="
 java -Djava.library.path="$JNI_BUILD_DIR" \
   -cp "$JAR" \
-  com.pinterest.drsquirrel.jni.JniDecodeBench \
+  org.surfing.drsquirrel.jni.JniDecodeBench \
   "$SMALL_PAYLOAD" "$THRIFT_SCHEMA" DeepEvent "$SMALL_ITERS" array | tee "$SMALL_OUT"
 
 echo "\n== DeepEvent large payloads (ByteBuffer mmap) =="
 java -Xmx3g -Djava.library.path="$JNI_BUILD_DIR" \
   -cp "$JAR" \
-  com.pinterest.drsquirrel.jni.JniDecodeBench \
+  org.surfing.drsquirrel.jni.JniDecodeBench \
   "$LARGE_PAYLOAD" "$THRIFT_SCHEMA" DeepEvent "$LARGE_ITERS" bb | tee "$LARGE_BB_OUT"
 
 echo "\n== DeepEvent large payloads (ByteBuffer pooled) =="
 java -Xmx3g -Djava.library.path="$JNI_BUILD_DIR" \
   -cp "$JAR" \
-  com.pinterest.drsquirrel.jni.JniDecodeBench \
+  org.surfing.drsquirrel.jni.JniDecodeBench \
   "$LARGE_PAYLOAD" "$THRIFT_SCHEMA" DeepEvent "$LARGE_ITERS" bbp | tee "$LARGE_BBP_OUT"
 
 echo "\n== Summary =="

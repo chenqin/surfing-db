@@ -198,7 +198,7 @@ mvn -f surfingthriftjni/pom.xml test-compile
 # Run SIMD benchmark
 java -Djava.library.path=surfingthriftjni/target/nativebuild \
      -cp surfingthriftjni/target/test-classes:surfingthriftjni/target/surfingthriftjni-1.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.pinterest.drsquirrel.jni.SIMDBenchmark /path/to/parquet/folder
+     org.surfing.drsquirrel.jni.SIMDBenchmark /path/to/parquet/folder
 ```
 
 Expected output:

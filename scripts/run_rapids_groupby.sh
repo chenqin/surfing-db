@@ -25,6 +25,6 @@ fi
   --conf spark.rapids.sql.enabled=true \
   --conf spark.rapids.sql.explain=NOT_ON_GPU \
   --conf spark.rapids.sql.csvReader.enabled=true \
-  --class com.pinterest.drsquirrel.spark.RapidsGroupBy \
+  --class org.surfing.drsquirrel.spark.RapidsGroupBy \
   "$JAR" "$INPUT"
 

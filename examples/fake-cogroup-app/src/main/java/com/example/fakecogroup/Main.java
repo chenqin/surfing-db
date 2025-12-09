@@ -1,7 +1,7 @@
 package com.example.fakecogroup;
 
-import com.pinterest.drsquirrel.jni.CogroupInputFactory;
-import com.pinterest.drsquirrel.jni.NativeProcessors;
+import org.surfing.drsquirrel.jni.CogroupInputFactory;
+import org.surfing.drsquirrel.jni.NativeProcessors;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;

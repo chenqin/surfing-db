@@ -1,6 +1,6 @@
 // Deeply nested, sophisticated schema for Arrow/Thrift conversion benchmarking
 
-namespace java com.pinterest.deep.bench
+namespace java org.surfing.deep.bench
 
 struct Attr {
   1: string key,

@@ -93,7 +93,7 @@ async def submit_task(
     # Build mpiexec command
     java = "java"
     cp = jar
-    runner = "com.pinterest.drsquirrel.jni.McpWorkerRunner"
+    runner = "org.surfing.drsquirrel.jni.McpWorkerRunner"
     encoded = base64.b64encode(json.dumps(task).encode()).decode()
     json_arg = f"json:{encoded}"
 

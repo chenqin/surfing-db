@@ -65,13 +65,13 @@ JAVA_JAR="$ROOT_DIR/drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-
 if [ -f "$JAVA_JAR" ]; then
     echo "Writing sample Parquet files with Java..."
     java -cp "$JAVA_JAR" \
-        com.pinterest.drsquirrel.arrow.ParquetFolderWriter \
+        org.surfing.drsquirrel.arrow.ParquetFolderWriter \
         "$TEST_OUTPUT/java"
 
     echo ""
     echo "Reading Parquet files with Java..."
     java -cp "$JAVA_JAR" \
-        com.pinterest.drsquirrel.arrow.ParquetFolderReader \
+        org.surfing.drsquirrel.arrow.ParquetFolderReader \
         "$TEST_OUTPUT/java"
 else
     echo "Java JAR not built. Run: mvn -q -f drsquirrel-java-project/pom.xml package"

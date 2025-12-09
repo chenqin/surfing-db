@@ -2,7 +2,7 @@
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>com.pinterest.surfing</groupId>
+  <groupId>org.surfing</groupId>
   <artifactId>surfingthriftjni</artifactId>
   <version>1.0-SNAPSHOT</version>
   <name>surfingthriftjni</name>
@@ -370,11 +370,11 @@ set -euo pipefail; \
 JAR="${project.build.directory}/${project.artifactId}-${project.version}-jar-with-dependencies.jar"; \
 export LD_LIBRARY_PATH="${native.lib.dir}:${LD_LIBRARY_PATH:-}"; \
 echo "== Small payloads (array mode) =="; \
-java -Djava.library.path="${native.lib.dir}" -cp "$JAR" com.pinterest.drsquirrel.jni.JniDecodeBench "${payload.small}" "${thrift.path}" MabsMetrics 7 | tee "${bench.small}"; \
+java -Djava.library.path="${native.lib.dir}" -cp "$JAR" org.surfing.jni.JniDecodeBench "${payload.small}" "${thrift.path}" MabsMetrics 7 | tee "${bench.small}"; \
 echo "\n== Large payloads (ByteBuffer mmap) =="; \
-java -Xmx3g -Djava.library.path="${native.lib.dir}" -cp "$JAR" com.pinterest.drsquirrel.jni.JniDecodeBench "${payload.large}" "${thrift.path}" MabsMetrics 5 bb | tee "${bench.large.bb}"; \
+java -Xmx3g -Djava.library.path="${native.lib.dir}" -cp "$JAR" org.surfing.jni.JniDecodeBench "${payload.large}" "${thrift.path}" MabsMetrics 5 bb | tee "${bench.large.bb}"; \
 echo "\n== Large payloads (ByteBuffer pooled) =="; \
-java -Xmx3g -Djava.library.path="${native.lib.dir}" -cp "$JAR" com.pinterest.drsquirrel.jni.JniDecodeBench "${payload.large}" "${thrift.path}" MabsMetrics 5 bbp | tee "${bench.large.bbp}"; \
+java -Xmx3g -Djava.library.path="${native.lib.dir}" -cp "$JAR" org.surfing.jni.JniDecodeBench "${payload.large}" "${thrift.path}" MabsMetrics 5 bbp | tee "${bench.large.bbp}"; \
 small_jni=$(grep -m1 "^JNI Best:" "${bench.small}" | sed 's/^JNI Best: //'); \
 small_java=$(grep -m1 "^Java Best:" "${bench.small}" | sed 's/^Java Best: //'); \
 bb_jni=$(grep -m1 "^JNI Best:" "${bench.large.bb}" | sed 's/^JNI Best: //'); \

@@ -1,7 +1,7 @@
 // Thrift structure for sending MABS
 // (Metrics Aggregation by Service) messages
 
-namespace java com.pinterest.mabs_metrics.thrift
+namespace java org.surfing.mabs_metrics.thrift
 
 struct MabsMetrics {
 

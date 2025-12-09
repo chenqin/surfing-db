@@ -151,10 +151,10 @@ mvn -q -f drsquirrel-java-project/pom.xml package
 JAR=drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar
 
 # Write sample files
-java -cp $JAR com.pinterest.drsquirrel.arrow.ParquetFolderWriter /tmp/test
+java -cp $JAR org.surfing.drsquirrel.arrow.ParquetFolderWriter /tmp/test
 
 # Read files
-java -cp $JAR com.pinterest.drsquirrel.arrow.ParquetFolderReader /tmp/test
+java -cp $JAR org.surfing.drsquirrel.arrow.ParquetFolderReader /tmp/test
 ```
 
 ### Python CLI

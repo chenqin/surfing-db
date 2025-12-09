@@ -18,7 +18,7 @@
   <dependencies>
     <!-- JNI wrapper + depends transitively on Arrow -->
     <dependency>
-      <groupId>com.pinterest.drsquirrel</groupId>
+      <groupId>org.surfing</groupId>
       <artifactId>drsquirrel-java</artifactId>
       <version>1.0-SNAPSHOT</version>
     </dependency>

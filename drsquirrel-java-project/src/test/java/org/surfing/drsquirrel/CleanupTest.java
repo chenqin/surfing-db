@@ -1,0 +1,400 @@
+package org.surfing.drsquirrel;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.surfing.drsquirrel.parsers.DrSquirrelUtils;
+import org.surfing.drsquirrel.schema.FlinkMetric;
+import org.surfing.drsquirrel.schema.FlinkMetricType;
+import org.surfing.drsquirrel.schema.RawLog;
+import org.surfing.drsquirrel.schema.State;
+import junit.framework.Assert;
+import junit.framework.Test;
+import junit.framework.TestCase;
+import junit.framework.TestSuite;
+import org.apache.arrow.memory.ArrowBuf;
+import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.memory.RootAllocator;
+import org.apache.arrow.vector.BigIntVector;
+import org.apache.arrow.vector.FieldVector;
+import org.apache.arrow.vector.VarCharVector;
+import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.complex.MapVector;
+import org.apache.arrow.vector.complex.impl.UnionMapWriter;
+import org.apache.arrow.vector.holders.VarCharHolder;
+import org.apache.arrow.vector.util.Text;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.List;
+
+/**
+ * Unit test for simple App.
+ */
+public class CleanupTest
+    extends TestCase
+{
+    /**
+     * Create the test case
+     *
+     * @param testName name of the test case
+     */
+    public CleanupTest(String testName )
+    {
+        super( testName );
+    }
+
+    /**
+     * @return the suite of tests being tested
+     */
+    public static Test suite()
+    {
+        return new TestSuite( CleanupTest.class );
+    }
+    protected static final BufferAllocator allocator = new RootAllocator();
+
+    String metric_str = "{\"timestamp\": 1680480831430, \"host\": \"xenon-prod-001-20220810-dpp-worker-prod-0a02070a\", \"metricName\": \"flink.operator._t_host.xenon-prod-001-20220810-dpp-worker-prod-0a02070a_ec2_pin220_com._t_tm_id.container_1661534748548_105064_01_000025._t_job_id.ebcdb5d6a8e6a51abc2e9c4d34f9508b._t_job_name.K8sAuditStreamExample-prod._t_operator_id.7df19f87deec5680128845fd9a6ca18d._t_operator_name.Flat Map._t_subtask_index.10._t_objectName.tcp--evaluationjob--yzjze390-master-0.k8s_event_object\", \"metricValue\": \"1\" }";
+    String log_str = "unknown xenon-canary-001-20220810-dpp-worker-prod-0a020529 application_1661534748548_105064 container_1661534748548_105064_01_000003 2023-04-03 00:18:40 WARN  org.surfing.tcpconsole.stream.V1JsonObjectSchema:28- Deserialization failed for log: {\"kind\":\"Event\",\"apiVersion\":\"audit.k8s.io/v1\",\"level\":\"RequestResponse\",\"auditID\":\"891f2d4b-dc9d-473e-96ca-8e757d926636\",\"stage\":\"ResponseComplete\",\"requestURI\":\"/apis/pinterest.com/v1/pinterestjobsets\",\"verb\":\"list\",\"user\":{\"username\":\"system:serviceaccount:default:job-submission-service\",\"uid\":\"667537b4-dc39-4e9b-8005-6fdd6b64e402\",\"groups\":[\"system:serviceaccounts\",\"system:serviceaccounts:default\",\"system:authenticated\"]},\"sourceIPs\":[\"10.12.79.1\"],\"userAgent\":\"okhttp/3.9.0\",\"objectRef\":{\"resource\":\"pinterestjobsets\",\"apiGroup\":\"pinterest.com\",\"apiVersion\":\"v1\"},\"responseStatus\":{\"metadata\":{},\"code\":200},\"responseObject\":{\"apiVersion\":\"pinterest.com/v1\",\"items\":[{\"apiVersion\":\"pinterest.com/v1\",\"kind\":\"PinterestJobSet\",\"metadata\":{\"annotations\":{\"pinterest.com/fgac_username\":\"chiaweichen\",\"pinterest.com/identity\":\"nimbus.cmp-test.k8s.aws-us-east-1.k8s-use1-prod-shared-001.pinterestjobset.scale-test1\",\"pinterest.com/nimbusuuid\":\"832bb7c4-c80e-48f5-8d34-11eaf4421544\",\"pinterest.com/spiffe_id\":\"spiffe://pin220.com/k8s/cmp-test/scale-test1\",\"workload.fed.pinterest.com/clusters\":\"fed-k8s-use1-prod-shared-001-1d\"},\"creationTimestamp\":\"2021-11-01T16:58:08Z\",\"generation\":2,\"labels\":{\"kubefed.io/managed\":\"true\"},\"name\":\"scale-test1\",\"namespace\":\"cmp-test\",\"resourceVersion\":\"813141366\",\"selfLink\":\"/apis/pinterest.com/v1/namespaces/cmp-test/pinterestjobsets/scale-test1\",\"uid\":\"e9b2a384-3cd9-4833-a77d-78a0f1091f16\"},\"spec\":{\"build\":{\"commit\":\"\",\"name\":\"\"},\"replicas\":1,\"sidecarconfig\":{},\"sidecarversions\":{\"envoy-endpoint-register-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sox-traffic-envoy-endpoint-register:65a8fcedef942eaebbf52ba079503acebd1cc2f3\"},\"envoy-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sox-traffic-envoy:d0db6618ab90689f454nkim xenon-prod-001-20220810-dpp-worker-prod-0a021712 application_1661534748548_112961 container_1661534748548_112961_01_000057 2023-04-03 00:18:40 WARN  org.surfing.psc.consumer.PscBackendConsumer:143- Exception org.surfing.psc.shaded.org.apache.kafka.common.errors.WakeupException caught from the backend consumer: \n" +
+            "\n" +
+            "org.surfing.psc.shaded.org.apache.kafka.common.errors.WakeupException\n" +
+            "\tat org.surfing.psc.shaded.org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.maybeTriggerWakeup(ConsumerNetworkClient.java:490)\n" +
+            "\tat org.surfing.psc.shaded.org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:275)\n" +
+            "\tat org.surfing.psc.shaded.org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.poll(ConsumerNetworkClient.java:233)\n" +
+            "\tat org.surfing.psc.shaded.org.apache.kafka.clients.consumer.KafkaConsumer.pollForFetches(KafkaConsumer.java:1281)\n" +
+            "\tat org.surfing.psc.shaded.org.apache.kafka.clients.consumer.KafkaConsumer.poll(KafkaConsumer.java:1225)\n" +
+            "\tat org.surfing.psc.shaded.org.apache.kafka.clients.consumer.KafkaConsumer.poll(KafkaConsumer.java:1201)\n" +
+            "\tat org.surfing.psc.consumer.kafka.PscKafkaConsumer.lambda$poll$5(PscKafkaConsumer.java:230)\n" +
+            "\tat org.surfing.psc.consumer.PscBackendConsumer.executeBackendCallWithRetriesAndReturn(PscBackendConsumer.java:503)\n" +
+            "\tat org.surfing.psc.consumer.kafka.PscKafkaConsumer.poll(PscKafkaConsumer.java:229)\n" +
+            "\tat org.surfing.psc.consumer.PscConsumer.internalPoll(PscConsumer.java:719)\n" +
+            "\tat org.surfing.psc.consumer.PscConsumer.poll(PscConsumer.java:706)\n" +
+            "\tat org.surfing.flink.streaming.connectors.psc.internals.PscConsumerThread.run(PscConsumerThread.java:283)\n" +
+            "\n" +
+            "7bb2a2d939d533b88f29d\"},\"envoy-tcollector-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/tcollector:fa844fbb07d63f1c5fcce4e5e7e9a6fb5ce7ae2e\"},\"knox-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/ubuntu16.04:latest\"},\"logrotate-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/logrotate:bc62d4a49de9727e4380ea5fb2b0c4f2de823fe2\"},\"mail-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/postfix:c1e9fcb055afa6be649b34b60afe3a031773279c\"},\"mcrouter-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/mcrouter:dfb617b655c583620e3499b1bdf90dda36975d8b\"},\"metrics-exporter-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/kubemetricexporter:444f2abe230666d31bfed64d126bbca45196fb31\"},\"sds-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sds:73f991bd41dccbbf61c5c81348cc2844b627cdfd\"},\"varnish-rich-register-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/traffic-envoy-endpoint-register:abf609d556a8b68d19d96b0f85f72914763dc18b\"}},\"template\":{\"metadata\":{\"creationTimestamp\":null},\"spec\":{\"containers\":[{\"command\":[\"sleep\",\"60000\"],\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/python2.7.11:latest\",\"name\":\"py\",\"resources\":{\"requests\":{\"cpu\":\"40\",\"memory\":\"250Mi\"}}}]}}},\"status\":{\"condition\":\"Completed\",\"jobstatus\":{\"0\":{\"completionTime\":\"2021-11-02T09:38:26Z\",\"conditions\":[{\"lastProbeTime\":\"2021-11-02T09:38:26Z\",\"lastTransitionTime\":\"2021-11-02T09:38:26Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2021-11-01T16:58:08Z\",\"succeeded\":1}},\"jobstatussummary\":{\"0\":\"Complete\"},\"labelSelector\":\"pinterest.com/crd_name=scale-test1,pinterest.com/crd_type=PinterestJobSet\"}},{\"apiVersion\":\"pinterest.com/v1\",\"kind\":\"PinterestJobSet\",\"metadata\":{\"annotations\":{\"pinterest.com/identity\":\"nimbus.console.k8s.aws-us-east-1.k8s-use1-prod-shared-001.pinterestjobset.nimbus-monarch-sync-integ\",\"pinterest.com/nimbusuuid\":\"f362c98b-ce5b-4bf4-890a-f05b41b782b0\",\"pinterest.com/spiffe_id\":\"spiffe://pin220.com/k8s/console/nimbus-monarch-sync-integ\",\"workload.fed.pinterest.com/clusters\":\"fed-k8s-use1-prod-shared-001-1d\"},\"creationTimestamp\":\"2021-11-02T01:32:02Z\",\"generation\":2,\"labels\":{\"kubefed.io/managed\":\"true\"},\"name\":\"nimbus-monarch-sync-integ\",\"namespace\":\"console\",\"resourceVersion\":\"1497659633\",\"selfLink\":\"/apis/pinterest.com/v1/namespaces/console/pinterestjobsets/nimbus-monarch-sync-integ\",\"uid\":\"3279bfe0-ac9b-4789-8030-802e28be3410\"},\"spec\":{\"build\":{\"commit\":\"\",\"name\":\"\"},\"iamrole\":\"Console\",\"sidecarconfig\":{\"envoy\":{\"resources\":{\"limits\":{\"cpu\":\"2\",\"memory\":\"4G\"}},\"sds_resources\":{\"limits\":{\"cpu\":\"300m\",\"memory\":\"50Mi\"},\"requests\":{\"cpu\":\"300m\",\"memory\":\"50Mi\"}},\"service_register\":{\"resources\":{\"limits\":{\"cpu\":\"300m\",\"memory\":\"50Mi\"},\"requests\":{\"cpu\":\"300m\",\"memory\":\"50Mi\"}}}}},\"sidecarversions\":{\"envoy-endpoint-register-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sox-traffic-envoy-endpoint-register:65a8fcedef942eaebbf52ba079503acebd1cc2f3\"},\"envoy-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sox-traffic-envoy:ac3cec2db4e25eb93e4e0f269210957d70bb59d6\"},\"envoy-tcollector-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/tcollector:fa844fbb07d63f1c5fcce4e5e7e9a6fb5ce7ae2e\"},\"knox-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/ubuntu16.04:latest\"},\"logrotate-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/logrotate:bc62d4a49de9727e4380ea5fb2b0c4f2de823fe2\"},\"mail-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/postfix:c1e9fcb055afa6be649b34b60afe3a031773279c\"},\"mcrouter-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/mcrouter:dfb617b655c583620e3499b1bdf90dda36975d8b\"},\"metrics-exporter-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/kubemetricexporter:444f2abe230666d31bfed64d126bbca45196fb31\"},\"sds-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sds:73f991bd41dccbbf61c5c81348cc2844b627cdfd\"},\"varnish-rich-register-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/traffic-envoy-endpoint-register:abf609d556a8b68d19d96b0f85f72914763dc18b\"}},\"template\":{\"metadata\":{\"creationTimestamp\":null},\"spec\":{\"containers\":[{\"command\":[\"./bin/monarch-sync\",\"--send\",\"--url\",\"https://nimbus-integ.pinadmin.com/api/v2/platform/monarch/workflows\"],\"env\":[{\"name\":\"KNOX_SPINNER_TOKEN\",\"value\":\"spinner:api_token:spinner_users\"}],\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/nimbus-monarch-sync:f8848ecfcd02d4fd06065ceca771b686babaaba1\",\"name\":\"nimbus-monarch-sync\",\"resources\":{\"limits\":{\"cpu\":\"2\",\"memory\":\"4G\"},\"requests\":{\"cpu\":\"1\",\"memory\":\"513m\"}}}]}}},\"status\":{\"condition\":\"Completed\",\"jobstatus\":{\"0\":{\"completionTime\":\"2021-11-02T01:35:07Z\",\"conditions\":[{\"lastProbeTime\":\"2021-11-02T01:35:07Z\",\"lastTransitionTime\":\"2021-11-02T01:35:07Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2021-11-02T01:32:02Z\",\"succeeded\":1}},\"jobstatussummary\":{\"0\":\"Complete\"},\"labelSelector\":\"pinterest.com/crd_name=nimbus-monarch-sync-integ,pinterest.com/crd_type=PinterestJobSet\"}},{\"apiVersion\":\"pinterest.com/v1\",\"kind\":\"PinterestJobSet\",\"metadata\":{\"annotations\":{\"pinterest.com/identity\":\"nimbus.console.k8s.aws-us-east-1.k8s-use1-prod-shared-001.pinterestjobset.nimbus-pagerduty-sync-integ\",\"pinterest.com/nimbus_id\":\"nimbus://k8s/k8s-use1-prod-shared-001/console/nimbus-pagerduty-sync-integ\",\"pinterest.com/nimbusuuid\":\"00000000-0000-0000-0000-000000000000\",\"pinterest.com/spiffe_id\":\"spiffe://pin220.com/k8s/console/nimbus-pagerduty-sync-integ\",\"workload.fed.pinterest.com/clusters\":\"fed-k8s-use1-prod-shared-001-1d\"},\"creationTimestamp\":\"2022-03-04T19:06:16Z\",\"generation\":2,\"labels\":{\"kubefed.io/managed\":\"true\"},\"managedFields\":[{\"apiVersion\":\"pinterest.com/v1\",\"fieldsType\":\"FieldsV1\",\"fieldsV1\":{\"f:metadata\":{\"f:annotations\":{\".\":{},\"f:pinterest.com/identity\":{},\"f:pinterest.com/nimbus_id\":{},\"f:pinterest.com/nimbusuuid\":{},\"f:pinterest.com/spiffe_id\":{},\"f:workload.fed.pinterest.com/clusters\":{}},\"f:labels\":{\".\":{},\"f:kubefed.io/managed\":{}}},\"f:spec\":{\".\":{},\"f:build\":{\".\":{},\"f:commit\":{},\"f:name\":{}},\"f:nkim xenon-prod-001-20220810-dpp-worker-prod-0a021849 application_1661534748548_112961 container_1661534748548_112961_01_000047 2023-04-03 00:18:40 WARN  org.surfing.psc.consumer.PscBackendConsumer:143- Exception org.surfing.psc.shaded.org.apache.kafka.common.errors.WakeupException caught from the backend consumer: \n" +
+            "\n" +
+            "org.surfing.psc.shaded.org.apache.kafka.common.errors.WakeupException\n" +
+            "\tat org.surfing.psc.shaded.org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.maybeTriggerWakeup(ConsumerNetworkClient.java:490)\n" +
+            "\tat org.surfing.psc.shaded.org.apache.kafka.clients.consumer.KafkaConsumer.poll(KafkaConsumer.java:1213)\n" +
+            "\tiamrole\":{},\"f:sidecarconfig\":{\".\":{},\"f:envoy\":{\".\":{},\"f:resources\":{\".\":{},\"f:limits\":{\".\":{},\"f:cpu\":{},\"f:memory\":{}}},\"f:sds_resources\":{\".\":{},\"f:limits\":{\".\":{},\"f:cpu\":{},\"f:memory\":{}},\"f:requests\":{\".\":{},\"f:cpu\":{},\"f:memory\":{}}},\"f:service_register\":{\".\":{},\"f:resources\":{\".\":{},\"f:limits\":{\".\":{},\"f:cpu\":{},\"f:memory\":{}},\"f:requests\":{\".\":{},\"f:cpu\":{},\"f:memory\":{}}}}}},\"f:template\":{\".\":{},\"f:metadata\":{\".\":{},\"f:creationTimestamp\":{}},\"f:spec\":{\".\":{},\"f:containers\":{}}}}},\"manager\":\"controller-manager\",\"operation\":\"Update\",\"time\":\"2022-03-04T19:06:16Z\"},{\"apiVersion\":\"pinterest.com/v1\",\"fieldsType\":\"FieldsV1\",\"fieldsV1\":{\"f:spec\":{\"f:sidecarversions\":{\".\":{},\"f:envoy-endpoint-register-sidecar\":{\".\":{},\"f:image\":{}},\"f:envoy-sidecar\":{\".\":{},\"f:image\":{}},\"f:envoy-tcollector-sidecar\":{\".\":{},\"f:image\":{}},\"f:knox-sidecar\":{\".\":{},\"f:image\":{}},\"f:logrotate-sidecar\":{\".\":{},\"f:image\":{}},\"f:mail-sidecar\":{\".\":{},\"f:image\":{}},\"f:mcrouter-sidecar\":{\".\":{},\"f:image\":{}},\"f:metrics-exporter-sidecar\":{\".\":{},\"f:image\":{}},\"f:sds-sidecar\":{\".\":{},\"f:image\":{}},\"f:varnish-rich-register-sidecar\":{\".\":{},\"f:image\":{}}}},\"f:status\":{\"f:condition\":{},\"f:jobstatus\":{\"f:0\":{\"f:completionTime\":{},\"f:conditions\":{},\"f:succeeded\":{}}},\"f:jobstatussummary\":{\"f:0\":{}}}},\"manager\":\"jobsetcontroller\",\"operation\":\"Update\",\"time\":\"2022-03-04T19:09:26Z\"}],\"name\":\"nimbus-pagerduty-sync-integ\",\"namespace\":\"console\",\"resourceVersion\":\"1497659625\",\"selfLink\":\"/apis/pinterest.com/v1/namespaces/console/pinterestjobsets/nimbus-pagerduty-sync-integ\",\"uid\":\"d12b33b8-9505-4b72-9927-2bfcc2d997fb\"},\"spec\":{\"build\":{\"commit\":\"\",\"name\":\"\"},\"iamrole\":\"Console\",\"sidecarconfig\":{\"envoy\":{\"resources\":{\"limits\":{\"cpu\":\"2\",\"memory\":\"4G\"}},\"sds_resources\":{\"limits\":{\"cpu\":\"300m\",\"memory\":\"50Mi\"},\"requests\":{\"cpu\":\"300m\",\"memory\":\"50Mi\"}},\"service_register\":{\"resources\":{\"limits\":{\"cpu\":\"300m\",\"memory\":\"50Mi\"},\"requests\":{\"cpu\":\"300m\",\"memory\":\"50Mi\"}}}}},\"sidecarversions\":{\"envoy-endpoint-register-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sox-traffic-envoy-endpoint-register:65a8fcedef942eaebbf52ba079503acebd1cc2f3\"},\"envoy-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sox-traffic-envoy:85d8fa0ec50a2129ef2f02b2076a153703b1d661\"},\"envoy-tcollector-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/tcollector:fa844fbb07d63f1c5fcce4e5e7e9a6fb5ce7ae2e\"},\"knox-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/ubuntu18.04:latest\"},\"logrotate-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/logrotate:ec8eba07002fe3b548bb7c7abb932836a99df960\"},\"mail-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/postfix:c1e9fcb055afa6be649b34b60afe3a031773279c\"},\"mcrouter-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/mcrouter:8a5e74743131b37884be7c863599b2631f75a1bb\"},\"metrics-exporter-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/kubemetricexporter:444f2abe230666d31bfed64d126bbca45196fb31\"},\"sds-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sds:3e1224ecbec58708d4d7d847c1e971a832051398\"},\"varnish-rich-register-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/traffic-envoy-endpoint-register:abf609d556a8b68d19d96b0f85f72914763dc18b\"}},\"template\":{\"metadata\":{\"creationTimestamp\":null},\"spec\":{\"containers\":[{\"command\":[\"./bin/pagerduty-sync\",\"--send\",\"--url\",\"https://nimbus-integ.pinadmin.com/api/v2/platform/pagerduty/services\"],\"env\":[{\"name\":\"KNOX_PAGERDUTY_API_KEY\",\"value\":\"console:pagerduty_api_key\"}],\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/nimbus-pagerduty-sync:6284c2952418003cabcf238287b8cc25113099f7\",\"name\":\"nimbus-pagerduty-sync\",\"resources\":{\"limits\":{\"cpu\":\"2\",\"memory\":\"4G\"},\"requests\":{\"cpu\":\"1\",\"memory\":\"513m\"}}}]}}},\"status\":{\"condition\":\"Completed\",\"jobstatus\":{\"0\":{\"completionTime\":\"2022-03-04T19:09:26Z\",\"conditions\":[{\"lastProbeTime\":\"2022-03-04T19:09:26Z\",\"lastTransitionTime\":\"2022-03-04T19:09:26Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2022-03-04T19:06:16Z\",\"succeededat org.surfing.psc.shaded.org.apache.kafka.clients.consumer.KafkaConsumer.poll(KafkaConsumer.java:1201)\n" +
+            "\tat org.surfing.psc.consumer.kafka.PscKafkaConsumer.lambda$poll$5(PscKafkaConsumer.java:230)\n" +
+            "\tat org.surfing.psc.consumer.PscBackendConsumer.executeBackendCallWithRetriesAndReturn(PscBackendConsumer.java:503)\n" +
+            "\tat org.surfing.psc.consumer.kafka.PscKafkaConsumer.poll(PscKafkaConsumer.java:229)\n" +
+            "\tat org.surfing.psc.consumer.PscConsumer.internalPoll(PscConsumer.java:719)\n" +
+            "\tat org.surfing.psc.consumer.PscConsumer.poll(PscConsumer.java:706)\n" +
+            "\tat org.surfing.flink.streaming.connectors.psc.internals.PscConsumerThread.run(PscConsumerThread.java:283)\n" +
+            "\":1}},\"jobstatussummary\":{\"0\":\"Complete\"},\"labelSelector\":\"pinterest.com/crd_name=nimbus-pagerduty-sync-integ,pinterest.com/crd_type=PinterestJobSet\"}},{\"apiVersion\":\"pinterest.com/v1\",\"kind\":\"PinterestJobSet\",\"metadata\":{\"annotations\":{\"pinterest.com/identity\":\"nimbus.console.k8s.aws-us-east-1.k8s-use1-prod-shared-001.pinterestjobset.nimbus-s3-sync-integ\",\"pinterest.com/nimbus_id\":\"nimbus://k8s/k8s-use1-prod-shared-001/console/nimbus-s3-sync-integ\",\"pinterest.com/nimbusuuid\":\"a3c9b726-9f95-4c2c-b88e-bf2ddb9dc795\",\"pinterest.com/spiffe_id\":\"spiffe://pin220.com/k8s/console/nimbus-s3-sync-integ\",\"workload.fed.pinterest.com/clusters\":\"fed-k8s-use1-prod-shared-001-1d\"},\"creationTimestamp\":\"2022-02-07T23:01:10Z\",\"generation\":2,\"labels\":{\"kubefed.io/managed\":\"true\"},\"managedFields\":[{\"apiVersion\":\"pinterest.com/v1\",\"fieldsType\":\"FieldsV1\",\"fieldsV1\":{\"f:metadata\":{\"f:annotations\":{\".\":{},\"f:pinterest.com/identity\":{},\"f:pinterest.com/nimbus_id\":{},\"f:pinterest.com/nimbusuuid\":{},\"f:pinterest.com/spiffe_id\":{},\"f:workload.fed.pinterest.com/clusters\":{}},\"f:labels\":{\".\":{},\"f:kubefed.io/managed\":{}}},\"f:spec\":{\".\":{},\"f:build\":{\".\":{},\"f:commit\":{},\"f:name\":{}},\"f:iamrole\":{},\"f:sidecarconfig\":{\".\":{},\"f:envoy\":{\".\":{},\"f:resources\":{\".\":{},\"f:limits\":{\".\":{},\"f:cpu\":{},\"f:memory\":{}}},\"f:sds_resources\":{\".\":{},\"f:limits\":{\".\":{},\"f:cpu\":{},\"f:memory\":{}},\"f:requests\":{\".\":{},\"f:cpu\":{},\"f:memory\":{}}},\"f:service_register\":{\".\":{},\"f:resources\":{\".\":{},\"f:limits\":{\".\":{},\"f:cpu\":{},\"f:memory\":{}},\"f:requests\":{\".\":{},\"f:cpu\":{},\"f:memory\":{}}}}}},\"f:template\":{\".\":{},\"f:metadata\":{\".\":{},\"f:creationTimestamp\":{}},\"f:spec\":{\".\":{},\"f:containers\":{}}}}},\"manager\":\"controller-manager\",\"operation\":\"Update\",\"time\":\"2022-02-07T23:01:10Z\"},{\"apiVersion\":\"pinterest.com/v1\",\"fieldsType\":\"FieldsV1\",\"fieldsV1\":{\"f:spec\":{\"f:sidecarversions\":{\".\":{},\"f:envoy-endpoint-register-sidecar\":{\".\":{},\"f:image\":{}},\"f:envoy-sidecar\":{\".\":{},\"f:image\":{}},\"f:envoy-tcollector-sidecar\":{\".\":{},\"f:image\":{}},\"f:knox-sidecar\":{\".\":{},\"f:image\":{}},\"f:logrotate-sidecar\":{\".\":{},\"f:image\":{}},\"f:mail-sidecar\":{\".\":{},\"f:image\":{}},\"f:mcrouter-sidecar\":{\".\":{},\"f:image\":{}},\"f:metrics-exporter-sidecar\":{\".\":{},\"f:image\":{}},\"f:sds-sidecar\":{\".\":{},\"f:image\":{}},\"f:varnish-rich-register-sidecar\":{\".\":{},\"f:image\":{}}}},\"f:status\":{\".\":{},\"f:condition\":{},\"f:jobstatus\":{\".\":{},\"f:0\":{\".\":{},\"f:completionTime\":{},\"f:conditions\":{},\"f:startTime\":{},\"f:succeeded\":{}}},\"f:jobstatussummary\":{\".\":{},\"f:0\":{}},\"f:labelSelector\":{}}},\"manager\":\"jobsetcontroller\",\"operation\":\"Update\",\"time\":\"2022-02-07T23:03:50Z\"}],\"name\":\"nimbus-s3-sync-integ\",\"namespace\":\"console\",\"resourceVersion\":\"1497659628\",\"selfLink\":\"/apis/pinterest.com/v1/namespaces/console/pinterestjobsets/nimbus-s3-sync-integ\",\"uid\":\"955eb6b0-7a30-4e70-813c-4ee75a77fd3f\"},\"spec\":{\"build\":{\"commit\":\"\",\"name\":\"\"},\"iamrole\":\"Console\",\"sidecarconfig\":{\"envoy\":{\"resources\":{\"limits\":{\"cpu\":\"2\",\"memory\":\"4G\"}},\"sds_resources\":{\"limits\":{\"cpu\":\"300m\",\"memory\":\"50Mi\"},\"requests\":{\"cpu\":\"300m\",\"memory\":\"50Mi\"}},\"service_register\":{\"resources\":{\"limits\":{\"cpu\":\"300m\",\"memory\":\"50Mi\"},\"requests\":{\"cpu\":\"300m\",\"memory\":\"50Mi\"}}}}},\"sidecarversions\":{\"envoy-endpoint-register-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sox-traffic-envoy-endpoint-register:65a8fcedef942eaebbf52ba079503acebd1cc2f3\"},\"envoy-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sox-traffic-envoy:38637be058852d7acdfd51d012e1d47723766c71\"},\"envoy-tcollector-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/tcollector:fa844fbb07d63f1c5fcce4e5e7e9a6fb5ce7ae2e\"},\"knox-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/ubuntu16.04:latest\"},\"logrotate-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/logrotate:bc62d4a49de9727e4380ea5fb2b0c4f2de823fe2\"},\"mail-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/postfix:c1e9fcb055afa6be649b34b60afe3a031773279c\"},\"mcrouter-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/mcrouter:8a5e74743131b37884be7c863599\n" +
+            "b2631f75a1bb\"},\"metrics-exporter-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/kubemetricexporter:aaaaaa\"},\"sds-sidecar\":{\"image\":\"12345678.dkr.ecr.us-east-1.amazonaws.com/sds:aaaaaa\"},\"varnish-rich-register-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/traffic-envoy-endpoint-register:abf609d556a8b68d19d96b0f85f72914763dc18b\"}},\"template\":{\"metadata\":{\"creationTimestamp\":null},\"spec\":{\"containers\":[{\"command\":[\"./bin/s3-sync\",\"--send\",\"--url\",\"https://nimbus-integ.pinadmin.com/api/v2/platform/s3/buckets\"],\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/nimbus-s3-sync:1bed8ac264bfc37562c35486cb62787593ad67cf\",\"name\":\"nimbus-s3-sync\",\"resources\":{\"limits\":{\"cpu\":\"2\",\"memory\":\"4G\"},\"requests\":{\"cpu\":\"1\",\"memory\":\"513m\"}}}]}}},\"status\":{\"condition\":\"Completed\",\"jobstatus\":{\"0\":{\"completionTime\":\"2022-02-07T23:03:50Z\",\"conditions\":[{\"lastProbeTime\":\"2022-02-07T23:03:50Z\",\"lastTransitionTime\":\"2022-02-07T23:03:50Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2022-02-07T23:01:10Z\",\"succeeded\":1}},\"jobstatussummary\":{\"0\":\"Complete\"},\"labelSelector\":\"pinterest.com/crd_name=nimbus-s3-sync-integ,pinterest.com/crd_type=PinterestJobSet\"}},{\"apiVersion\":\"pinterest.com/v1\",\"kind\":\"PinterestJobSet\",\"metadata\":{\"annotations\":{\"pinterest.com/identity\":\"nimbus.console.k8s.aws-us-east-1.k8s-use1-prod-shared-001.pinterestjobset.nimbus-slack-sync-integ\",\"pinterest.com/nimbus_id\":\"nimbus://k8s/k8s-use1-prod-shared-001/console/nimbus-slack-sync-integ\",\"pinterest.com/nimbusuuid\":\"c122f5a6-368f-4aff-a599-afbef4289223\",\"pinterest.com/spiffe_id\":\"spiffe://pin220.com/k8s/console/nimbus-slack-sync-integ\",\"workload.fed.pinterest.com/clusters\":\"fed-k8s-use1-prod-shared-001-1d\"},\"creationTimestamp\":\"2022-03-04T18:58:08Z\",\"generation\":2,\"labels\":{\"kubefed.io/managed\":\"true\"},\"managedFields\":[{\"apiVersion\":\"pinterest.com/v1\",\"fieldsType\":\"FieldsV1\",\"fieldsV1\":{\"f:metadata\":{\"f:annotations\":{\".\":{},\"f:pinterest.com/identity\":{},\"f:pinterest.com/nimbus_id\":{},\"f:pinterest.com/nimbusuuid\":{},\"f:pinterest.com/spiffe_id\":{},\"f:workload.fed.pinterest.com/clusters\":{}},\"f:labels\":{\".\":{},\"f:kubefed.io/managed\":{}}},\"f:spec\":{\".\":{},\"f:build\":{\".\":{},\"f:commit\":{},\"f:name\":{}},\"f:iamrole\":{},\"f:sidecarconfig\":{\".\":{},\"f:envoy\":{\".\":{},\"f:resources\":{\".\":{},\"f:limits\":{\".\":{},\"f:cpu\":{},\"f:memory\":{}}},\"f:sds_resources\":{\".\":{},\"f:limits\":{\".\":{},\"f:cpu\":{},\"f:memory\":{}},\"f:requests\":{\".\":{},\"f:cpu\":{},\"f:memory\":{}}},\"f:service_register\":{\".\":{},\"f:resources\":{\".\":{},\"f:limits\":{\".\":{},\"f:cpu\":{},\"f:memory\":{}},\"f:requests\":{\".\":{},\"f:cpu\":{},\"f:memory\":{}}}}}},\"f:template\":{\".\":{},\"f:metadata\":{\".\":{},\"f:creationTimestamp\":{}},\"f:spec\":{\".\":{},\"f:containers\":{}}}}},\"manager\":\"controller-manager\",\"operation\":\"Update\",\"time\":\"2022-03-04T18:58:08Z\"},{\"apiVersion\":\"pinterest.com/v1\",\"fieldsType\":\"FieldsV1\",\"fieldsV1\":{\"f:spec\":{\"f:sidecarversions\":{\".\":{},\"f:envoy-endpoint-register-sidecar\":{\".\":{},\"f:image\":{}},\"f:envoy-sidecar\":{\".\":{},\"f:image\":{}},\"f:envoy-tcollector-sidecar\":{\".\":{},\"f:image\":{}},\"f:knox-sidecar\":{\".\":{},\"f:image\":{}},\"f:logrotate-sidecar\":{\".\":{},\"f:image\":{}},\"f:mail-sidecar\":{\".\":{},\"f:image\":{}},\"f:mcrouter-sidecar\":{\".\":{},\"f:image\":{}},\"f:metrics-exporter-sidecar\":{\".\":{},\"f:image\":{}},\"f:sds-sidecar\":{\".\":{},\"f:image\":{}},\"f:varnish-rich-register-sidecar\":{\".\":{},\"f:image\":{}}}},\"f:status\":{\".\":{},\"f:condition\":{},\"f:jobstatus\":{\".\":{},\"f:0\":{\".\":{},\"f:completionTime\":{},\"f:conditions\":{},\"f:startTime\":{},\"f:succeeded\":{}}},\"f:jobstatussummary\":{\".\":{},\"f:0\":{}},\"f:labelSelector\":{}}},\"manager\":\"jobsetcontroller\",\"operation\":\"Update\",\"time\":\"2022-03-04T19:01:25Z\"}],\"name\":\"nimbus-slack-sync-integ\",\"namespace\":\"console\",\"resourceVersion\":\"1497659629\",\"selfLink\":\"/apis/pinterest.com/v1/namespaces/console/pinterestjobsets/nimbus-slack-sync-integ\",\"uid\":\"c750e006-4224-4f78-882e-806538a183dd\"},\"spec\":{\"build\":{\"commit\":\"\",\"name\":\"\"},\"iamrole\":\"Console\",\"sidecarconfig\":{\"envoy\":{\"resources\":{\"limits\":{\"cpu\":\"2\",\"memory\":\"4G\"}},\"sds_resources\":{\"limits\":{\"cpu\":\"300m\",\"memory\":\"50Mi\"},\"requests\":{\"cpu\":\"300m\",\"memory\":\"50Mi\"}},\"service_register\":{\"resources\":{\"limits\":{\"cpu\":\"300m\",\"memory\":\"50Mi\"},\"requests\":{\"cpu\":\"300m\",\"memory\":\"50Mi\"}}}}},\"sidecarversions\":{\"envoy-endpoint-register-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sox-traffic-envoy-endpoint-register:65a8fcedef942eaebbf52ba079503acebd1cc2f3\"},\"envoy-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sox-traffic-envoy:85d8fa0ec50a2129ef2f02b2076a153703b1d661\"},\"envoy-tcollector-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/tcollector:fa844fbb07d63f1c5fcce4e5e7e9a6fb5ce7ae2e\"},\"knox-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/ubuntu18.04:latest\"},\"logrotate-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/logrotate:ec8eba07002fe3b548bb7c7abb932836a99df960\"},\"mail-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/postfix:c1e9fcb055afa6be649b34b60afe3a031773279c\"},\"mcrouter-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/mcrouter:8a5e74743131b37884be7c863599b2631f75a1bb\"},\"metrics-exporter-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/kubemetricexporter:444f2abe230666d31bfed64d126bbca45196fb31\"},\"sds-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sds:3e1224ecbec58708d4d7d847c1e971a832051398\"},\"varnish-rich-register-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/traffic-envoy-endpoint-register:abf609d556a8b68d19d96b0f85f72914763dc18b\"}},\"template\":{\"metadata\":{\"creationTimestamp\":null},\"spec\":{\"containers\":[{\"command\":[\"./bin/slack-sync\",\"--send\",\"--url\",\"https://nimbus-integ.pinadmin.com/api/v2/platform/slack/channels\"],\"env\":[{\"name\":\"KNOX_SLACKBOT_ACCESS_TOKEN\",\"value\":\"nimbus:slackbot:access_token:prod\"}],\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/nimbus-slack-sync:6284c2952418003cabcf238287b8cc25113099f7\",\"name\":\"nimbus-slack-sync\",\"resources\":{\"limits\":{\"cpu\":\"2\",\"memory\":\"4G\"},\"requests\":{\"cpu\":\"1\",\"memory\":\"513m\"}}}]}}},\"status\":{\"condition\":\"Completed\",\"jobstatus\":{\"0\":{\"completionTime\":\"2022-03-04T19:01:25Z\",\"conditions\":[{\"lastProbeTime\":\"2022-03-04T19:01:25Z\",\"lastTransitionTime\":\"2022-03-04T19:01:25Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2022-03-04T18:58:08Z\",\"succeeded\":1}},\"jobstatussummary\":{\"0\":\"Complete\"},\"labelSelector\":\"pinterest.com/crd_name=nimbus-slack-sync-integ,pinterest.com/crd_type=PinterestJobSet\"}},{\"apiVersion\":\"pinterest.com/v1\",\"kind\":\"PinterestJobSet\",\"metadata\":{\"annotations\":{\"pinterest.com/cluster-name\":\"k8s-use1-prod-shared-001\",\"pinterest.com/identity\":\"nimbus.content-modeling-pintext.k8s.aws-us-east-1.k8s-use1-prod-shared-001.pinterestjobset.anno-full-pin-text-v3-2021-10-01-pt\",\"pinterest.com/nimbusuuid\":\"8853249a-7ffd-46b8-9e5a-ba972fde99d1\",\"pinterest.com/spiffe_id\":\"spiffe://pin220.com/k8s/content-modeling-pintext/anno-full-pin-text-v3-2021-10-01-pt\",\"workload.fed.pinterest.com/clusters\":\"fed-k8s-use1-prod-shared-001-1d\"},\"creationTimestamp\":\"2021-10-02T13:22:38Z\",\"generation\":2,\"labels\":{\"kubefed.io/managed\":\"true\"},\"name\":\"anno-full-pin-text-v3-2021-10-01-pt\",\"namespace\":\"content-modeling-pintext\",\"resourceVersion\":\"715045268\",\"selfLink\":\"/apis/pinterest.com/v1/namespaces/content-modeling-pintext/pinterestjobsets/anno-full-pin-text-v3-2021-10-01-pt\",\"uid\":\"aab909e8-38e0-4a67-aba8-466f3f921fc3\"},\"spec\":{\"build\":{\"commit\":\"\",\"name\":\"\"},\"configmap\":{\"candidate_embedding_header\":\"text\",\"candidate_header\":\"text,raw_text\",\"candidate_path\":\"s3://pinterest-lasvegas/ads-retrieval/broadmatch/pintext_permanent/broadmatch_active_keywords/dt=2021-10-01/delta=FULL/lang=pt/\",\"embedding_type\":\"PIN_TEXT_V3\",\"index_type\":\"ivf_flat\",\"input_is_dir\":\"true\",\"language\":\"PT\",\"nearest_neighbor_num\":\"1000\",\"output_candidate_embedding_header\":\"raw_text,text,embedding\",\"output_header\":\"text,text:score\",\"output_path\":\"s3://pinterest-lasvegas/ads-retrieval/broadmatch/pintext_alt/broadmatch_query_keyword_mapping/delta=refreshed_annotation_full/ver=PIN_TEXT_V3/days=30/lang=pt/dt=2021-10-01/\",\"output_query_embedding_header\":\"raw_text,text,embedding\",\"output_query_embedding_path\":\"s3://pinterest-lasvegas/ads-retrieval/broadmatch/pintext_alt/broadmatch_query_embedding/ver=PIN_TEXT_V3/days=refreshed_annotation_30/lang=pt/dt=2021-10-01/\",\"query_embedding_header\":\"text\",\"query_header\":\"text,raw_text\",\"query_path\":\"s3://pinterest-lasvegas/ads-retrieval/broadmatch/pintext_permanent/related_pins_broadmatch_query_list/dt=2021-09-29/days=30/lang=pt/\",\"target\":\"embedding_knn\"},\"iamrole\":\"AdsRetrievalJob\",\"replicas\":10,\"retrylimit\":7,\"sidecarconfig\":{},\"sidecarversions\":{\"envoy-endpoint-register-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sox-traffic-envoy-endpoint-register:65a8fcedef942eaebbf52ba079503acebd1cc2f3\"},\"envoy-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sox-traffic-envoy:d8681d2b996165df72cbd21dc15b3e09d501691e\"},\"envoy-tcollector-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/tcollector:fa844fbb07d63f1c5fcce4e5e7e9a6fb5ce7ae2e\"},\"knox-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/ubuntu16.04:latest\"},\"logrotate-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/logrotate:bc62d4a49de9727e4380ea5fb2b0c4f2de823fe2\"},\"mail-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/postfix:c1e9fcb055afa6be649b34b60afe3a031773279c\"},\"mcrouter-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/mcrouter:1c98279ea29cb13f2758224711b465c4c8a64c66\"},\"metrics-exporter-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/kubemetricexporter:444f2abe230666d31bfed64d126bbca45196fb31\"},\"sds-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sds:73f991bd41dccbbf61c5c81348cc2844b627cdfd\"},\"varnish-rich-register-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/traffic-envoy-endpoint-register:abf609d556a8b68d19d96b0f85f72914763dc18b\"}},\"template\":{\"metadata\":{\"creationTimestamp\":null,\"name\":\"meta.anno.full.pin.text.v3.2021.10.01.pt\"},\"spec\":{\"containers\":[{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/content-modeling-pintext:25732a5983c0\",\"name\":\"anno-full-pin-text-v3-2021-10-01-pt\",\"resources\":{\"limits\":{\"cpu\":\"32\",\"memory\":\"55Gi\"},\"requests\":{\"cpu\":\"32\",\"memory\":\"55Gi\"}}}],\"restartPolicy\":\"OnFailure\"}}},\"status\":{\"condition\":\"Completed\",\"jobstatus\":{\"0\":{\"completionTime\":\"2021-10-02T14:07:41Z\",\"conditions\":[{\"lastProbeTime\":\"2021-10-02T14:07:41Z\",\"lastTransitionTime\":\"2021-10-02T14:07:41Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2021-10-02T13:22:38Z\",\"succeeded\":1},\"1\":{\"completionTime\":\"2021-10-02T14:05:01Z\",\"conditions\":[{\"lastProbeTime\":\"2021-10-02T14:05:01Z\",\"lastTransitionTime\":\"2021-10-02T14:05:01Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2021-10-02T13:22:38Z\",\"succeeded\":1},\"2\":{\"completionTime\":\"2021-10-02T14:06:11Z\",\"conditions\":[{\"lastProbeTime\":\"2021-10-02T14:06:11Z\",\"lastTransitionTime\":\"2021-10-02T14:06:11Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2021-10-02T13:22:38Z\",\"succeeded\":1},\"3\":{\"completionTime\":\"2021-10-02T14:05:22Z\",\"conditions\":[{\"lastProbeTime\":\"2021-10-02T14:05:22Z\",\"lastTransitionTime\":\"2021-10-02T14:05:22Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2021-10-02T13:22:38Z\",\"succeeded\":1},\"4\":{\"completionTime\":\"2021-10-02T14:05:56Z\",\"conditions\":[{\"lastProbeTime\":\"2021-10-02T14:05:56Z\",\"lastTransitionTime\":\"2021-10-02T14:05:56Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2021-10-02T13:22:38Z\",\"succeeded\":1},\"5\":{\"completionTime\":\"2021-10-02T14:05:12Z\",\"conditions\":[{\"lastProbeTime\":\"2021-10-02T14:05:12Z\",\"lastTransitionTime\":\"2021-10-02T14:05:12Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2021-10-02T13:22:39Z\",\"succeeded\":1},\"6\":{\"completionTime\":\"2021-10-02T14:05:37Z\",\"conditions\":[{\"lastProbeTime\":\"2021-10-02T14:05:37Z\",\"lastTransitionTime\":\"2021-10-02T14:05:37Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2021-10-02T13:22:39Z\",\"succeeded\":1},\"7\":{\"completionTime\":\"2021-10-02T14:05:04Z\",\"conditions\":[{\"lastProbeTime\":\"2021-10-02T14:05:04Z\",\"lastTransitionTime\":\"2021-10-02T14:05:04Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2021-10-02T13:22:39Z\",\"succeeded\":1},\"8\":{\"completionTime\":\"2021-10-02T14:07:01Z\",\"conditions\":[{\"lastProbeTime\":\"2021-10-02T14:07:01Z\",\"lastTransitionTime\":\"2021-10-02T14:07:01Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2021-10-02T13:22:39Z\",\"succeeded\":1},\"9\":{\"completionTime\":\"2021-10-02T14:06:15Z\",\"conditions\":[{\"lastProbeTime\":\"2021-10-02T14:06:15Z\",\"lastTransitionTime\":\"2021-10-02T14:06:15Z\",\"status\":\"True\",\"type\":\"Complete\"}],\"startTime\":\"2021-10-02T13:22:39Z\",\"succeeded\":1}},\"jobstatussummary\":{\"0\":\"Complete\",\"1\":\"Complete\",\"2\":\"Complete\",\"3\":\"Complete\",\"4\":\"Complete\",\"5\":\"Complete\",\"6\":\"Complete\",\"7\":\"Complete\",\"8\":\"Complete\",\"9\":\"Complete\"},\"labelSelector\":\"pinterest.com/crd_name=anno-full-pin-text-v3-2021-10-01-pt,pinterest.com/crd_type=PinterestJobSet\"}},{\"apiVersion\":\"pinterest.com/v1\",\"kind\":\"PinterestJobSet\",\"metadata\":{\"annotations\":{\"pinterest.com/cluster-name\":\"k8s-use1-prod-shared-001\",\"pinterest.com/identity\":\"nimbus.content-modeling-pintext.k8s.aws-us-east-1.k8s-use1-prod-shared-001.pinterestjobset.anno-full-pin-text-v3-2021-10-01-sv\",\"pinterest.com/nimbusuuid\":\"01ee2f18-a43b-459a-8e5a-c909ec4cfb69\",\"pinterest.com/spiffe_id\":\"spiffe://pin220.com/k8s/content-modeling-pintext/anno-full-pin-text-v3-2021-10-01-sv\",\"workload.fed.pinterest.com/clusters\":\"fed-k8s-use1-prod-shared-001-1d\"},\"creationTimestamp\":\"2021-10-02T13:18:36Z\",\"generation\":2,\"labels\":{\"kubefed.io/managed\":\"true\"},\"name\":\"anno-full-pin-text-v3-2021-10-01-sv\",\"namespace\":\"content-modeling-pintext\",\"resourceVersion\":\"715011327\",\"selfLink\":\"/apis/pinterest.com/v1/namespaces/content-modeling-pintext/pinterestjobsets/anno-full-pin-text-v3-2021-10-01-sv\",\"uid\":\"01dde7c1-3ba5-44b2-9198-8a0ab548a882\"},\"spec\":{\"build\":{\"commit\":\"\",\"name\":\"\"},\"configmap\":{\"candidate_embedding_header\":\"text\",\"candidate_header\":\"text,raw_text\",\"candidate_path\":\"s3://pinterest-lasvegas/ads-retrieval/broadmatch/pintext_permanent/broadmatch_active_keywords/dt=2021-10-01/delta=FULL/lang=sv/\",\"embedding_type\":\"PIN_TEXT_V3\",\"index_type\":\"ivf_flat\",\"input_is_dir\":\"true\",\"language\":\"SV\",\"nearest_neighbor_num\":\"1000\",\"output_candidate_embedding_header\":\"raw_text,text,embedding\",\"output_header\":\"text,text:score\",\"output_path\":\"s3://pinterest-lasvegas/ads-retrieval/broadmatch/pintext_alt/broadmatch_query_keyword_mapping/delta=refreshed_annotation_full/ver=PIN_TEXT_V3/days=30/lang=sv/dt=2021-10-01/\",\"output_query_embedding_header\":\"raw_text,text,embedding\",\"output_query_embedding_path\":\"s3://pinterest-lasvegas/ads-retrieval/broadmatch/pintext_alt/broadmatch_query_embedding/ver=PIN_TEXT_V3/days=refreshed_annotation_30/lang=sv/dt=2021-10-01/\",\"query_embedding_header\":\"text\",\"query_header\":\"text,raw_text\",\"query_path\":\"s3://pinterest-lasvegas/ads-retrieval/broadmatch/pintext_permanent/related_pins_broadmatch_query_list/dt=2021-09-29/days=30/lang=sv/\",\"target\":\"embedding_knn\"},\"iamrole\":\"AdsRetrievalJob\",\"replicas\":10,\"retrylimit\":7,\"sidecarconfig\":{},\"sidecarversions\":{\"envoy-endpoint-register-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sox-traffic-envoy-endpoint-register:65a8fcedef942eaebbf52ba079503acebd1cc2f3\"},\"envoy-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/sox-traffic-envoy:d8681d2b996165df72cbd21dc15b3e09d501691e\"},\"envoy-tcollector-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/tcollector:fa844fbb07d63f1c5fcce4e5e7e9a6fb5ce7ae2e\"},\"knox-sidecar\":{\"image\":\"998131032990.dkr.ecr.us-east-1.amazonaws.com/ubuntu16.04:latest\"},\"lo \n";
+
+    public void testCleanup() throws Exception
+    {
+        VarCharVector topic = new VarCharVector("topic", allocator);
+        VarCharVector payload = new VarCharVector("payload", allocator);
+        topic.allocateNew();
+        payload.allocateNew();
+        int count = 0;
+
+        topic.setSafe(count, "metric".getBytes(StandardCharsets.UTF_8));
+        payload.setSafe(count, metric_str.getBytes(StandardCharsets.UTF_8));
+        count++;
+        topic.setSafe(count, "log".getBytes(StandardCharsets.UTF_8));
+        payload.setSafe(count, log_str.getBytes(StandardCharsets.UTF_8));
+        count++;
+
+
+        topic.setValueCount(count);
+        payload.setValueCount(count);
+
+        List<FieldVector> vectors = Arrays.asList(topic, payload);
+        VectorSchemaRoot input = new VectorSchemaRoot(vectors);
+        input.setRowCount(count);
+        VectorSchemaRoot cleanupdoc = Cleanup.process(input);
+        /**
+         * filter both metric and log
+         */
+        //Assert.assertEquals(cleanupdoc.getRowCount(), 1);
+    }
+
+    public void testMabsMetric() throws Exception {
+        BigIntVector timestamp = new BigIntVector("timestamp", allocator);
+        VarCharVector service_tags = new VarCharVector("service_tags", allocator);
+        VarCharVector node_tags = new VarCharVector("node_tags", allocator);
+        MapVector counters = MapVector.empty("counters", allocator, false);
+        MapVector gauges = MapVector.empty("gauges", allocator, false);
+        MapVector histograms = MapVector.empty("histograms", allocator, false);
+        VarCharVector service_name = new VarCharVector("service_name", allocator);
+        MapVector double_counters = MapVector.empty("double_counters", allocator, false);
+
+        timestamp.allocateNew();
+        service_tags.allocateNew();
+        node_tags.allocateNew();
+        counters.allocateNew();
+        gauges.allocateNew();
+        histograms.allocateNew();
+        service_name.allocateNew();
+        double_counters.allocateNew();
+
+        timestamp.setSafe(0, 1);
+        service_tags.setSafe(0, new Text("a"));
+        node_tags.setSafe(0, new Text("a"));
+        service_name.setSafe(0, new Text("a"));
+
+        UnionMapWriter mapWriter = histograms.getWriter();
+        mapWriter.startMap();
+        for (int j = 0; j < 2; j++) {
+            mapWriter.startEntry();
+
+            byte[] bytes = new String("b").getBytes();
+            ArrowBuf tempBuf = allocator.buffer(bytes.length);
+            tempBuf.setBytes(0, bytes);
+            mapWriter.key().varChar().writeVarChar(0, bytes.length, tempBuf);
+            tempBuf.close();
+            mapWriter.value().varChar().writeNull();
+            mapWriter.endEntry();
+        }
+        mapWriter.endMap();
+
+        mapWriter = counters.getWriter();
+        mapWriter.startMap();
+        for (int j = 0; j < 2; j++) {
+            mapWriter.startEntry();
+            byte[] bytes = new String("b").getBytes();
+            ArrowBuf tempBuf = allocator.buffer(bytes.length);
+            tempBuf.setBytes(0, bytes);
+            mapWriter.key().varChar().writeVarChar(0, bytes.length, tempBuf);
+            tempBuf.close();
+            mapWriter.value().bigInt().writeBigInt(1);
+            mapWriter.endEntry();
+        }
+        mapWriter.endMap();
+
+        mapWriter = gauges.getWriter();
+        mapWriter.startMap();
+        for (int j = 0; j < 2; j++) {
+            mapWriter.startEntry();
+            byte[] bytes = new String("b").getBytes();
+            ArrowBuf tempBuf = allocator.buffer(bytes.length);
+            tempBuf.setBytes(0, bytes);
+            mapWriter.key().varChar().writeVarChar(0, bytes.length, tempBuf);
+            tempBuf.close();
+            mapWriter.value().float8().writeFloat8(0.1);
+            mapWriter.endEntry();
+        }
+        mapWriter.endMap();
+
+        mapWriter = double_counters.getWriter();
+        mapWriter.startMap();
+        for (int j = 0; j < 2; j++) {
+            mapWriter.startEntry();
+            byte[] bytes = new String("b").getBytes();
+            ArrowBuf tempBuf = allocator.buffer(bytes.length);
+            tempBuf.setBytes(0, bytes);
+            mapWriter.key().varChar().writeVarChar(0, bytes.length, tempBuf);
+            tempBuf.close();
+            mapWriter.value().float8().writeFloat8(0.1);
+            mapWriter.endEntry();
+        }
+        mapWriter.endMap();
+
+        timestamp.setValueCount(1);
+        service_tags.setValueCount(1);
+        node_tags.setValueCount(1);
+        counters.setValueCount(1);
+        gauges.setValueCount(1);
+        histograms.setValueCount(1);
+        service_name.setValueCount(1);
+        double_counters.setValueCount(1);
+
+        List<FieldVector> vectors = Arrays.asList(timestamp, service_tags, node_tags, counters, gauges, histograms, service_name, double_counters);
+        VectorSchemaRoot vectorSchemaRoot = new VectorSchemaRoot(vectors);
+        vectorSchemaRoot.setRowCount(1);
+        VectorSchemaRoot output = MabsMetric.process(vectorSchemaRoot);
+        System.out.println(output.getRowCount());
+    }
+
+    public void testAggregate() throws Exception {
+        VarCharVector jobId = new VarCharVector("jobid", allocator);
+        VarCharVector appId = new VarCharVector("appid", allocator);
+        VarCharVector type = new VarCharVector("type", allocator);
+        VarCharVector json = new VarCharVector("json", allocator);
+        jobId.allocateNew();
+        appId.allocateNew();
+        type.allocateNew();
+        json.allocateNew();
+        int count = 0;
+
+        /**
+         * metric
+         */
+        FlinkMetric metric = DrSquirrelUtils.constructFlinkMetric(metric_str);
+        metric.setApplicationId("b");
+        metric.setTimestamp(System.currentTimeMillis());
+
+        jobId.setSafe(count, metric.getJobId().getBytes(StandardCharsets.UTF_8));
+        appId.setSafe(count, metric.getApplicationId().getBytes(StandardCharsets.UTF_8));
+        type.setSafe(count, "metric".getBytes(StandardCharsets.UTF_8));
+        json.setSafe(count, mapper.writeValueAsString(metric).getBytes(StandardCharsets.UTF_8));
+        count++;
+
+        /**
+         * log
+         */
+        RawLog rawLog = DrSquirrelUtils.constructRawLog(log_str, "a");
+        rawLog.setApplicationId("b");
+        jobId.setSafe(count, new Text());
+        appId.setSafe(count, rawLog.getApplicationId().getBytes(StandardCharsets.UTF_8));
+        type.setSafe(count, "log".getBytes(StandardCharsets.UTF_8));
+        json.setSafe(count, mapper.writeValueAsString(rawLog).getBytes(StandardCharsets.UTF_8));
+        count++;
+
+        jobId.setValueCount(count);
+        appId.setValueCount(count);
+        type.setValueCount(count);
+        json.setValueCount(count);
+        List<FieldVector> vectors = Arrays.asList(jobId, appId, type, json);
+        VectorSchemaRoot vectorSchemaRoot = new VectorSchemaRoot(vectors);
+        vectorSchemaRoot.setRowCount(count);
+        VectorSchemaRoot snapshot = Aggregate.process(vectorSchemaRoot);
+        /**
+         * for a state of app b, a metric pass through and a placeholder
+         */
+        //Assert.assertEquals(snapshot.getRowCount(), 2);
+    }
+
+    public void testAggregateTTL() throws Exception {
+        VarCharVector jobId = new VarCharVector("jobid", allocator);
+        VarCharVector appId = new VarCharVector("appid", allocator);
+        VarCharVector type = new VarCharVector("type", allocator);
+        VarCharVector json = new VarCharVector("json", allocator);
+        jobId.allocateNew();
+        appId.allocateNew();
+        type.allocateNew();
+        json.allocateNew();
+        int count = 0;
+
+        /**
+         * metric
+         */
+        FlinkMetric metric = DrSquirrelUtils.constructFlinkMetric(metric_str);
+        metric.setApplicationId("b");
+        metric.setTimestamp(4);
+        metric.setCluster("b");
+
+        jobId.setSafe(count, metric.getJobId().getBytes(StandardCharsets.UTF_8));
+        appId.setSafe(count, metric.getApplicationId().getBytes(StandardCharsets.UTF_8));
+        type.setSafe(count, "metric".getBytes(StandardCharsets.UTF_8));
+        json.setSafe(count, mapper.writeValueAsString(metric).getBytes(StandardCharsets.UTF_8));
+        count++;
+
+        /**
+         * log
+         */
+        RawLog rawLog = DrSquirrelUtils.constructRawLog(log_str, "a");
+        rawLog.setApplicationId("b");
+        rawLog.setCluster("b");
+        jobId.setSafe(count, new Text());
+        appId.setSafe(count, rawLog.getApplicationId().getBytes(StandardCharsets.UTF_8));
+        type.setSafe(count, "log".getBytes(StandardCharsets.UTF_8));
+        json.setSafe(count, mapper.writeValueAsString(rawLog).getBytes(StandardCharsets.UTF_8));
+        count++;
+
+        jobId.setValueCount(count);
+        appId.setValueCount(count);
+        type.setValueCount(count);
+        json.setValueCount(count);
+        List<FieldVector> vectors = Arrays.asList(jobId, appId, type, json);
+        VectorSchemaRoot vectorSchemaRoot = new VectorSchemaRoot(vectors);
+        vectorSchemaRoot.setRowCount(count);
+        VectorSchemaRoot snapshot = Aggregate.process(vectorSchemaRoot);
+        //Assert.assertEquals(snapshot.getRowCount(), 3);
+
+        Aggregate.TTL = 1;
+        Thread.sleep(100);
+
+        jobId = new VarCharVector("jobid", allocator);
+        appId = new VarCharVector("appid", allocator);
+        type = new VarCharVector("type", allocator);
+        json = new VarCharVector("json", allocator);
+        jobId.allocateNew();
+        appId.allocateNew();
+        type.allocateNew();
+        json.allocateNew();
+        count = 0;
+
+        /**
+         * metric
+         */
+        metric = DrSquirrelUtils.constructFlinkMetric(metric_str);
+        metric.setApplicationId("c");
+        metric.setTimestamp(4);
+
+        jobId.setSafe(count, metric.getJobId().getBytes(StandardCharsets.UTF_8));
+        appId.setSafe(count, metric.getApplicationId().getBytes(StandardCharsets.UTF_8));
+        type.setSafe(count, "metric".getBytes(StandardCharsets.UTF_8));
+        json.setSafe(count, mapper.writeValueAsString(metric).getBytes(StandardCharsets.UTF_8));
+        count++;
+
+        jobId.setValueCount(count);
+        appId.setValueCount(count);
+        type.setValueCount(count);
+        json.setValueCount(count);
+        vectors = Arrays.asList(jobId, appId, type, json);
+        vectorSchemaRoot = new VectorSchemaRoot(vectors);
+        vectorSchemaRoot.setRowCount(count);
+
+        snapshot = Aggregate.process(vectorSchemaRoot);
+        /**
+         * app b state already pass TTL
+         */
+       // Assert.assertEquals(snapshot.getRowCount(), 2);
+    }
+
+
+    private static final ObjectMapper mapper = new ObjectMapper();
+
+    public void testJobInfo() throws Exception {
+        VarCharVector jobid_out = new VarCharVector("jobid", allocator);
+        VarCharVector type_out = new VarCharVector("type", allocator);
+        VarCharVector json_out = new VarCharVector("json", allocator);
+
+        jobid_out.allocateNew();
+        type_out.allocateNew();
+        json_out.allocateNew();
+        int count = 0;
+        /**
+         * state mock
+         */
+        State state = new State();
+        state.setUsername("a");
+        state.setJobId("b");
+        state.setApplicationId("c");
+        state.setJobName("e");
+        state.setCluster("d");
+        String json_str = mapper.writeValueAsString(state);
+        jobid_out.setSafe(count, new Text("b"));
+        type_out.setSafe(count, new Text("state"));
+        json_out.setSafe(count, new Text(json_str));
+        count++;
+        /**
+         * metric
+         */
+        FlinkMetric metric = new FlinkMetric();
+        metric.setApplicationId("c");
+        metric.setJobId("b");
+        metric.setJobName("e");
+        metric.setCluster("d");
+        metric.setName("uptime");
+        metric.setValue("1");
+        json_str = mapper.writeValueAsString(metric);
+        jobid_out.setSafe(count, new Text("b"));
+        type_out.setSafe(count, new Text("metric"));
+        json_out.setSafe(count, new Text(json_str));
+        count++;
+
+        jobid_out.setValueCount(count);
+        json_out.setValueCount(count);
+        List<FieldVector> vectors = Arrays.asList(jobid_out, type_out, json_out);
+        VectorSchemaRoot vectorSchemaRoot = new VectorSchemaRoot(vectors);
+        vectorSchemaRoot.setRowCount(count);
+        VectorSchemaRoot job = JobInfo.process(vectorSchemaRoot);
+
+        Assert.assertEquals(job.getRowCount(), 2);
+    }
+}

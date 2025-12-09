@@ -61,7 +61,7 @@ cmake --build build --target parquet_folder_tool
 ### Java
 
 ```java
-import com.pinterest.surfing.parquet.*;
+import org.surfing.parquet.*;
 import org.apache.arrow.memory.RootAllocator;
 
 try (BufferAllocator allocator = new RootAllocator()) {
@@ -79,7 +79,7 @@ try (BufferAllocator allocator = new RootAllocator()) {
 ```bash
 mvn -f surfing-parquet-java/pom.xml package
 java -cp surfing-parquet-java/target/surfing-parquet-java-1.0-SNAPSHOT-jar-with-dependencies.jar \
-  com.pinterest.surfing.parquet.ParquetFolderWriter /tmp/demo
+  org.surfing.parquet.ParquetFolderWriter /tmp/demo
 ```
 
 ### Python

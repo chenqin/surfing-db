@@ -93,7 +93,7 @@ mpiexec -np 2 ./build/MpiCoGroupTest
 
 # Java JNI benchmark
 java -Djava.library.path=build -cp surfingthriftjni/target/surfingthriftjni-1.0-SNAPSHOT.jar \
-  com.pinterest.drsquirrel.jni.JniDecodeBench
+  org.surfing.drsquirrel.jni.JniDecodeBench
 ```
 
 ## Architecture
@@ -121,16 +121,16 @@ java -Djava.library.path=build -cp surfingthriftjni/target/surfingthriftjni-1.0-
 **`surfingthriftjni/` - Unified JNI Module**
 - **Native:** `surfingthriftjni/native/src/thrift_decode_jni.cpp` - Thrift→Arrow JNI decoder with SIMD support
 - **Java APIs:**
-  - `com.pinterest.drsquirrel.jni.NativeThriftDecoder` - JNI decoder entry point
-  - `com.pinterest.drsquirrel.jni.NativeParquetIO` - JNI Parquet folder I/O
-  - `com.pinterest.surfing.parquet.*` - Pure Java Parquet utilities (fallback)
-  - `com.pinterest.surfing.config.MemoryConfig` - Memory/spilling configuration
+  - `org.surfing.drsquirrel.jni.NativeThriftDecoder` - JNI decoder entry point
+  - `org.surfing.drsquirrel.jni.NativeParquetIO` - JNI Parquet folder I/O
+  - `org.surfing.parquet.*` - Pure Java Parquet utilities (fallback)
+  - `org.surfing.config.MemoryConfig` - Memory/spilling configuration
 
 **`drsquirrel-java-project/` - Workflows & Benchmarks**
-- `com.pinterest.drsquirrel.jni.*` - MPI JNI runners (shuffle, cogroup load tests)
-- `com.pinterest.drsquirrel.flink.*` - Flink DataStream examples
-- `com.pinterest.drsquirrel.bench.*` - Benchmark harnesses
-- `com.pinterest.drsquirrel.tools.ThriftToParquet` - CLI converter
+- `org.surfing.drsquirrel.jni.*` - MPI JNI runners (shuffle, cogroup load tests)
+- `org.surfing.drsquirrel.flink.*` - Flink DataStream examples
+- `org.surfing.drsquirrel.bench.*` - Benchmark harnesses
+- `org.surfing.drsquirrel.tools.ThriftToParquet` - CLI converter
 
 ### Key Design Patterns
 
@@ -165,12 +165,12 @@ scripts/run_deep_event_bench.sh
 # 4-rank cogroup with generated data
 mpiexec -np 4 java -Djava.library.path=$PWD/build \
   -cp drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar \
-  com.pinterest.drsquirrel.jni.JniCogroupLoadRunner --two
+  org.surfing.drsquirrel.jni.JniCogroupLoadRunner --two
 
 # Cogroup with Thrift payloads
 mpiexec -np 4 java -Djava.library.path=$PWD/build \
   -cp drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar \
-  com.pinterest.drsquirrel.jni.JniCogroupLoadRunner --two \
+  org.surfing.drsquirrel.jni.JniCogroupLoadRunner --two \
   --thrift-path src/bench/deep_event.thrift \
   --thrift-struct DeepEvent \
   --payload-left /tmp/deep_left.bin \
@@ -192,7 +192,7 @@ mpiexec -np 4 java -Djava.library.path=$PWD/build \
 mvn -q -f drsquirrel-java-project/pom.xml -Darrow.version=12.0.0 package
 FLINK_HOME=/path/to/flink \
   "$FLINK_HOME/bin/flink" run \
-  --class com.pinterest.drsquirrel.flink.DeepEventDataStreamExample \
+  --class org.surfing.drsquirrel.flink.DeepEventDataStreamExample \
   drsquirrel-java-project/target/drsquirrel-java-1.0-SNAPSHOT-jar-with-dependencies.jar
 # Tune: -Ddeep.event.count=100000 -Ddeep.event.rate=20000
 ```

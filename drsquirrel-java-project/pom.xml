@@ -2,7 +2,7 @@
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>com.pinterest.drsquirrel</groupId>
+  <groupId>org.surfing</groupId>
   <artifactId>drsquirrel-java</artifactId>
   <version>1.0-SNAPSHOT</version>
   <packaging>jar</packaging>
@@ -21,7 +21,7 @@
   <dependencies>
     <!-- Depend on JNI + Thrift converter API moved to surfingthriftjni subproject -->
     <dependency>
-      <groupId>com.pinterest.surfing</groupId>
+      <groupId>org.surfing</groupId>
       <artifactId>surfingthriftjni</artifactId>
       <version>1.0-SNAPSHOT</version>
     </dependency>
@@ -177,7 +177,7 @@
               </descriptorRefs>
               <archive>
                 <manifest>
-                  <mainClass>com.pinterest.drsquirrel.spark.RapidsGroupBy</mainClass>
+                  <mainClass>org.surfing.spark.RapidsGroupBy</mainClass>
                 </manifest>
               </archive>
             </configuration>
@@ -219,7 +219,7 @@
             <phase>verify</phase>
             <goals><goal>java</goal></goals>
             <configuration>
-              <mainClass>com.pinterest.drsquirrel.bench.DeepEventGenerator</mainClass>
+              <mainClass>org.surfing.bench.DeepEventGenerator</mainClass>
               <arguments>
                 <argument>${project.build.directory}/deep_payloads.bin</argument>
                 <argument>20000</argument>
@@ -246,7 +246,7 @@ if [ -n "${iface}" ]; then IFACE_OPT="--mca btl_tcp_if_include ${iface}"; else I
 mpiexec -np ${np} --use-hwthread-cpus --oversubscribe --map-by core --bind-to core \
   ${IFACE_OPT} \
   java  -Djava.library.path= -cp  \
-  com.pinterest.drsquirrel.jni.JniShuffleLoadRunner ${mode} || true
+  org.surfing.jni.JniShuffleLoadRunner ${mode} || true
                       ]]>
                     </argument>
                   </arguments>
@@ -298,7 +298,7 @@ if [ -n "${iface}" ]; then IFACE_OPT="--mca btl_tcp_if_include ${iface}"; else I
 mpiexec -np ${np} --use-hwthread-cpus --oversubscribe --map-by core --bind-to core \
   ${IFACE_OPT} \
   java  -Djava.library.path= -cp  \
-  com.pinterest.drsquirrel.jni.JniNestedRunner ${mode} || true
+  org.surfing.jni.JniNestedRunner ${mode} || true
                       ]]>
                     </argument>
                   </arguments>
@@ -348,7 +348,7 @@ if [ -n "${iface}" ]; then IFACE_OPT="--mca btl_tcp_if_include ${iface}"; else I
 mpiexec -np ${np} --use-hwthread-cpus --oversubscribe --map-by core --bind-to core \
   ${IFACE_OPT} \
   java  -Djava.library.path= -cp  \
-  com.pinterest.drsquirrel.jni.JniCogroupLoadRunner ${mode} || true
+  org.surfing.jni.JniCogroupLoadRunner ${mode} || true
                       ]]>
                     </argument>
                   </arguments>

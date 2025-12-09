@@ -52,7 +52,7 @@
 ### BEFORE: Using Parquet from drsquirrel-java
 ```xml
 <dependency>
-  <groupId>com.pinterest.drsquirrel</groupId>
+  <groupId>org.surfing.drsquirrel</groupId>
   <artifactId>drsquirrel-java</artifactId>
   <version>1.0-SNAPSHOT</version>
 </dependency>
@@ -70,7 +70,7 @@
 ### AFTER: Using standalone Parquet module
 ```xml
 <dependency>
-  <groupId>com.pinterest.surfing</groupId>
+  <groupId>org.surfing</groupId>
   <artifactId>surfing-parquet-java</artifactId>
   <version>1.0-SNAPSHOT</version>
 </dependency>
@@ -113,8 +113,8 @@ mvn clean install  # ~1.5 minutes total
 ### BEFORE
 ```java
 // Old package
-import com.pinterest.drsquirrel.arrow.ParquetFolderReader;
-import com.pinterest.drsquirrel.arrow.ParquetFolderWriter;
+import org.surfing.drsquirrel.arrow.ParquetFolderReader;
+import org.surfing.drsquirrel.arrow.ParquetFolderWriter;
 
 // Usage (same)
 List<VectorSchemaRoot> roots = ParquetFolderReader.readFolder(
@@ -124,8 +124,8 @@ List<VectorSchemaRoot> roots = ParquetFolderReader.readFolder(
 ### AFTER
 ```java
 // New package (only change!)
-import com.pinterest.surfing.parquet.ParquetFolderReader;
-import com.pinterest.surfing.parquet.ParquetFolderWriter;
+import org.surfing.parquet.ParquetFolderReader;
+import org.surfing.parquet.ParquetFolderWriter;
 
 // Usage (identical API)
 List<VectorSchemaRoot> roots = ParquetFolderReader.readFolder(
@@ -168,7 +168,7 @@ Fix Parquet bug:
 ```xml
 <!-- Pull in 500MB of dependencies -->
 <dependency>
-  <groupId>com.pinterest.drsquirrel</groupId>
+  <groupId>org.surfing.drsquirrel</groupId>
   <artifactId>drsquirrel-java</artifactId>
 </dependency>
 ```
@@ -178,7 +178,7 @@ Fix Parquet bug:
 ```xml
 <!-- Pull in only 80MB -->
 <dependency>
-  <groupId>com.pinterest.surfing</groupId>
+  <groupId>org.surfing</groupId>
   <artifactId>surfing-parquet-java</artifactId>
 </dependency>
 ```
@@ -191,7 +191,7 @@ Fix Parquet bug:
 **BEFORE:**
 ```xml
 <dependency>
-  <groupId>com.pinterest.drsquirrel</groupId>
+  <groupId>org.surfing.drsquirrel</groupId>
   <artifactId>drsquirrel-java</artifactId>
 </dependency>
 ```
@@ -200,7 +200,7 @@ Fix Parquet bug:
 **AFTER:**
 ```xml
 <dependency>
-  <groupId>com.pinterest.surfing</groupId>
+  <groupId>org.surfing</groupId>
   <artifactId>surfingthriftjni</artifactId>
 </dependency>
 ```
@@ -213,7 +213,7 @@ Fix Parquet bug:
 **BEFORE:**
 ```xml
 <dependency>
-  <groupId>com.pinterest.drsquirrel</groupId>
+  <groupId>org.surfing.drsquirrel</groupId>
   <artifactId>drsquirrel-java</artifactId>
 </dependency>
 ```
@@ -222,7 +222,7 @@ Fix Parquet bug:
 **AFTER:**
 ```xml
 <dependency>
-  <groupId>com.pinterest.drsquirrel</groupId>
+  <groupId>org.surfing.drsquirrel</groupId>
   <artifactId>drsquirrel-java</artifactId>
 </dependency>
 ```
@@ -299,7 +299,7 @@ mvn test  # ~45 seconds
 ```xml
 <!-- In your-other-project -->
 <dependency>
-  <groupId>com.pinterest.drsquirrel</groupId>
+  <groupId>org.surfing.drsquirrel</groupId>
   <artifactId>drsquirrel-java</artifactId>
   <!-- 😞 Pulls in Flink, Spark, Kafka... -->
 </dependency>
@@ -311,7 +311,7 @@ May cause dependency conflicts!
 ```xml
 <!-- In your-other-project -->
 <dependency>
-  <groupId>com.pinterest.surfing</groupId>
+  <groupId>org.surfing</groupId>
   <artifactId>surfing-parquet-java</artifactId>
   <!-- 😊 Clean, minimal dependencies -->
 </dependency>
@@ -341,7 +341,7 @@ No conflicts!
 - [ ] Read MODULAR_BUILD.md
 - [ ] Read REFACTORING_SUMMARY.md
 - [ ] Update Maven dependencies
-- [ ] Update imports: `com.pinterest.drsquirrel.arrow` → `com.pinterest.surfing.parquet`
+- [ ] Update imports: `org.surfing.drsquirrel.arrow` → `org.surfing.parquet`
 - [ ] Build: `mvn clean install`
 - [ ] Run tests
 - [ ] Update CI/CD pipelines (if applicable)
