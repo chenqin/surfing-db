@@ -18,3 +18,6 @@ libtorch-cxx11-abi-shared-with-deps-1.13.1+cu117.zip
 libtorch/
 surfing-db-java/.idea/compiler.xml
 surfing-db-java/.idea/workspace.xml
+
+# Local JDK installs
+.jdks/
