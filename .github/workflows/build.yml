@@ -1,0 +1,75 @@
+name: Build (native + Java)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    env:
+      JAVA_VERSION: '11'
+      ARROW_PREFIX: ${{ runner.temp }}/arrow-12-install
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            build-essential cmake ninja-build pkg-config git curl ca-certificates \
+            openjdk-11-jdk maven \
+            libopenmpi-dev openmpi-bin \
+            libssl-dev libboost-dev libgoogle-glog-dev \
+            pybind11-dev libcurl4-openssl-dev zlib1g-dev libzstd-dev liblz4-dev libsnappy-dev libbrotli-dev \
+            libthrift-dev librdkafka-dev flex bison lsb-release wget gnupg
+
+      - name: Install Arrow C++ (APT, fallback to source)
+        run: |
+          set -euo pipefail
+          # Try APT first
+          CODENAME=$(lsb_release --codename --short)
+          wget -q -O /tmp/apache-arrow-apt-source.deb "https://apache.jfrog.io/artifactory/arrow/ubuntu/apache-arrow-apt-source-latest-${CODENAME}.deb" || \
+            wget -q -O /tmp/apache-arrow-apt-source.deb "https://packages.apache.org/artifactory/arrow/ubuntu/apache-arrow-apt-source-latest-noble.deb" || true
+          if [ -f /tmp/apache-arrow-apt-source.deb ]; then
+            sudo apt-get install -y /tmp/apache-arrow-apt-source.deb || true
+            sudo apt-get update -y || true
+            if sudo apt-get install -y libarrow-dev libparquet-dev libarrow-compute-dev libarrow-dataset-dev; then
+              echo "Using APT Arrow"
+              exit 0
+            fi
+          fi
+          echo "Falling back to Arrow source build"
+          ARROW_VERSION=12.0.0
+          TARBALL="apache-arrow-${ARROW_VERSION}.tar.gz"
+          cd "${RUNNER_TEMP}"
+          curl -fL --retry 3 --retry-delay 2 -o "${TARBALL}" "https://archive.apache.org/dist/arrow/arrow-${ARROW_VERSION}/${TARBALL}"
+          tar -xzf "${TARBALL}"
+          cd "apache-arrow-${ARROW_VERSION}/cpp"
+          cmake -S . -B build -GNinja \
+            -DARROW_PARQUET=ON -DARROW_DATASET=ON -DARROW_ACERO=ON \
+            -DARROW_WITH_ZLIB=ON -DARROW_WITH_ZSTD=ON -DARROW_WITH_LZ4=ON -DARROW_WITH_SNAPPY=ON \
+            -DARROW_CSV=ON -DARROW_JSON=ON \
+            -DCMAKE_INSTALL_PREFIX="${ARROW_PREFIX}" \
+            -DARROW_BUILD_SHARED=OFF -DARROW_BUILD_STATIC=ON \
+            -DARROW_BUILD_TESTS=OFF -DARROW_BUILD_BENCHMARKS=OFF
+          cmake --build build
+          cmake --install build
+          echo "ARROW_HOME=${ARROW_PREFIX}" >> $GITHUB_ENV
+          echo "${ARROW_PREFIX}/lib" >> $GITHUB_PATH
+
+      - name: Build native + Java
+        run: |
+          ./scripts/build_install.sh --no-sudo --arrow-prefix "${ARROW_PREFIX}"
+
+      - name: Run tests
+        run: ./scripts/run_tests.sh
