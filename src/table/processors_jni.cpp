@@ -27,21 +27,21 @@ static void ensure_mpi() {
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_pinterest_drsquirrel_jni_NativeProcessors_mpiRank(JNIEnv* env, jclass) {
+Java_org_surfing_drsquirrel_jni_NativeProcessors_mpiRank(JNIEnv* env, jclass) {
   (void)env;
   ensure_mpi();
   int rank = 0; MPI_Comm_rank(MPI_COMM_WORLD, &rank); return rank;
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_pinterest_drsquirrel_jni_NativeProcessors_mpiWorld(JNIEnv* env, jclass) {
+Java_org_surfing_drsquirrel_jni_NativeProcessors_mpiWorld(JNIEnv* env, jclass) {
   (void)env;
   ensure_mpi();
   int world = 1; MPI_Comm_size(MPI_COMM_WORLD, &world); return world;
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_pinterest_drsquirrel_jni_NativeProcessors_shuffle(
+Java_org_surfing_drsquirrel_jni_NativeProcessors_shuffle(
     JNIEnv* env, jclass,
     jlong schema_in_addr, jlong array_in_addr,
     jstring jfield_name, jboolean j_one_sided,
@@ -101,7 +101,7 @@ Java_com_pinterest_drsquirrel_jni_NativeProcessors_shuffle(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_pinterest_drsquirrel_jni_NativeProcessors_cogroup(
+Java_org_surfing_drsquirrel_jni_NativeProcessors_cogroup(
     JNIEnv* env, jclass,
     jlong schema_in_left_addr, jlong array_in_left_addr,
     jlong schema_in_right_addr, jlong array_in_right_addr,
@@ -180,7 +180,7 @@ Java_com_pinterest_drsquirrel_jni_NativeProcessors_cogroup(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_pinterest_drsquirrel_jni_NativeProcessors_finalizeMPI(JNIEnv* env, jclass) {
+Java_org_surfing_drsquirrel_jni_NativeProcessors_finalizeMPI(JNIEnv* env, jclass) {
   (void)env;
   if (!g_mpi_started || g_mpi_finalized) return;
   int initialized = 0;
@@ -198,7 +198,7 @@ Java_com_pinterest_drsquirrel_jni_NativeProcessors_finalizeMPI(JNIEnv* env, jcla
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_pinterest_drsquirrel_jni_NativeProcessors_broadcastString(JNIEnv* env, jclass, jstring jmsg) {
+Java_org_surfing_drsquirrel_jni_NativeProcessors_broadcastString(JNIEnv* env, jclass, jstring jmsg) {
   ensure_mpi();
   int rank = 0; MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   // Convert to bytes on rank 0
@@ -223,7 +223,7 @@ Java_com_pinterest_drsquirrel_jni_NativeProcessors_broadcastString(JNIEnv* env, 
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_pinterest_drsquirrel_jni_NativeProcessors_barrier(JNIEnv*, jclass) {
+Java_org_surfing_drsquirrel_jni_NativeProcessors_barrier(JNIEnv*, jclass) {
   ensure_mpi();
   MPI_Barrier(MPI_COMM_WORLD);
 }

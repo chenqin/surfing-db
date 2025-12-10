@@ -223,7 +223,7 @@ int main(int argc, char** argv) {
       record_batch_not_full.notify_one();
 
       auto keyed_metric = processors::jni(
-        ret, "com/pinterest/drsquirrel/MabsMetric", env, node->rank);
+        ret, "org/surfing/drsquirrel/MabsMetric", env, node->rank);
       
       std::unique_lock<std::mutex> lock1(jni_mutex);
       jni_batch.insert(jni_batch.end(), keyed_metric.begin(), keyed_metric.end());

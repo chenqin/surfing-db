@@ -186,21 +186,21 @@ int main(int argc, char* argv[]) {
     // m3.insert(m3.end(), m4.begin(), m4.end());
 
     auto signal_metric =
-        processors::jni({m1}, "com/pinterest/drsquirrel/Cleanup", node->env, node->rank);
+        processors::jni({m1}, "org/surfing/drsquirrel/Cleanup", node->env, node->rank);
     auto signal_log =
-        processors::jni({m3}, "com/pinterest/drsquirrel/Cleanup", node->env, node->rank);
+        processors::jni({m3}, "org/surfing/drsquirrel/Cleanup", node->env, node->rank);
 
     signal_metric.insert(signal_metric.end(), signal_log.begin(),
                          signal_log.end());
     auto app_signals = processors::shuffle(signal_metric, "appid", partitioner,
                                            true, node->rank, node->world);
     auto app_state = processors::jni(
-        app_signals, "com/pinterest/drsquirrel/Aggregate", node->env, node->rank);
+        app_signals, "org/surfing/drsquirrel/Aggregate", node->env, node->rank);
 
     auto job_signals = processors::shuffle(app_state, "jobid", partitioner,
                                            true, node->rank, node->world);
     auto job_info = processors::jni(
-        job_signals, "com/pinterest/drsquirrel/JobInfo", node->env, node->rank);
+        job_signals, "org/surfing/drsquirrel/JobInfo", node->env, node->rank);
 */
     size_t global_row_count = 0;
     MPI_Allreduce(&local_row_count, &global_row_count, 1, MPI_UNSIGNED_LONG,

@@ -44,7 +44,7 @@ static std::vector<std::string> JArrayToStringVector(JNIEnv* env, jobjectArray a
 } // namespace
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_com_pinterest_drsquirrel_jni_NativeKafkaConnector_create(
+Java_org_surfing_drsquirrel_jni_NativeKafkaConnector_create(
     JNIEnv* env, jclass, jstring jname, jint jbatch, jint jinterval,
     jobjectArray jtopics, jstring jserverset, jstring jgroupid, jboolean jpii) {
   (void)jname; // unused
@@ -79,7 +79,7 @@ Java_com_pinterest_drsquirrel_jni_NativeKafkaConnector_create(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_pinterest_drsquirrel_jni_NativeKafkaConnector_destroy(
+Java_org_surfing_drsquirrel_jni_NativeKafkaConnector_destroy(
     JNIEnv*, jclass, jlong jhandle) {
   auto* handle = reinterpret_cast<KafkaJNIHandle*>(jhandle);
   if (!handle) return;
@@ -87,7 +87,7 @@ Java_com_pinterest_drsquirrel_jni_NativeKafkaConnector_destroy(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_pinterest_drsquirrel_jni_NativeKafkaConnector_pollOnce(
+Java_org_surfing_drsquirrel_jni_NativeKafkaConnector_pollOnce(
     JNIEnv* env, jclass, jlong jhandle, jlong schema_out_addr, jlong array_out_addr) {
   auto* h = reinterpret_cast<KafkaJNIHandle*>(jhandle);
   if (!h) return;

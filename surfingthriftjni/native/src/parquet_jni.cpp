@@ -168,7 +168,7 @@ arrow::Status WriteParquetFolderInternal(
 
 // JNI: Read Parquet folder
 extern "C" JNIEXPORT void JNICALL
-Java_com_pinterest_drsquirrel_jni_NativeParquetIO_readFolder(
+Java_org_surfing_drsquirrel_jni_NativeParquetIO_readFolder(
     JNIEnv* env, jclass,
     jstring jfolderPath,
     jlong schema_out_addr, jlong array_out_addr) {
@@ -195,7 +195,7 @@ Java_com_pinterest_drsquirrel_jni_NativeParquetIO_readFolder(
 
 // JNI: Write Parquet folder
 extern "C" JNIEXPORT void JNICALL
-Java_com_pinterest_drsquirrel_jni_NativeParquetIO_writeFolder(
+Java_org_surfing_drsquirrel_jni_NativeParquetIO_writeFolder(
     JNIEnv* env, jclass,
     jlong schema_addr, jlong array_addr,
     jstring jfolderPath, jstring jprefix, jint numFiles) {

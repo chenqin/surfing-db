@@ -65,7 +65,7 @@ static std::vector<uint8_t> BuildValidityBitmap(const std::vector<uint8_t>& vali
 
 // JNI decode (byte[][] path)
 extern "C" JNIEXPORT void JNICALL
-Java_com_pinterest_drsquirrel_jni_NativeThriftDecoder_decode(
+Java_org_surfing_drsquirrel_jni_NativeThriftDecoder_decode(
     JNIEnv* env, jclass,
     jobjectArray jpayloads, jstring jpath, jstring jstruct,
     jlong schema_out_addr, jlong array_out_addr) {
@@ -1062,7 +1062,7 @@ env->ReleasePrimitiveArrayCritical(arr, bytes, JNI_ABORT); env->DeleteLocalRef(a
 
 // Minimal stub for direct ByteBuffer path; real implementation is integrated separately.
 extern "C" JNIEXPORT void JNICALL
-Java_com_pinterest_drsquirrel_jni_NativeThriftDecoder_decodeFromDirect(
+Java_org_surfing_drsquirrel_jni_NativeThriftDecoder_decodeFromDirect(
     JNIEnv* env, jclass,
     jobjectArray jbuffers, jstring, jstring,
     jlong schema_out_addr, jlong array_out_addr) {
